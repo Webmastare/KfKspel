@@ -93,7 +93,7 @@
       </div>
     </div>
     <!-- Hide Overlay to show only the game -->
-    <button class="close-btn" @click="showWelcomeCard = !showWelcomeCard">×</button>
+    <button class="close-btn" @click="showWelcomeCard = !showWelcomeCard">x</button>
   </div>
 </template>
 
