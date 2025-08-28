@@ -30,23 +30,23 @@
         <div class="game-grid">
           <div class="game-card">
             <h3>2048</h3>
-            <button class="play-btn" @click="navigateToGame('2048')">Spela</button>
+            <router-link to="/2048" class="play-btn">Spela</router-link>
           </div>
           <div class="game-card">
             <h3>Minesweeper</h3>
-            <button class="play-btn" @click="navigateToGame('minesweeper')">Spela</button>
+            <router-link to="/minesweeper" class="play-btn">Spela</router-link>
           </div>
           <div class="game-card">
             <h3>KfKblock</h3>
-            <button class="play-btn" @click="navigateToGame('kfkblock')">Spela</button>
+            <router-link to="/kfkblock" class="play-btn">Spela</router-link>
           </div>
           <div class="game-card">
             <h3>KfKbandvagn</h3>
-            <button class="play-btn" @click="navigateToGame('kfkbandvagn')">Kommer Snart</button>
+            <button class="play-btn disabled">Kommer Snart</button>
           </div>
           <div class="game-card">
             <h3>Snake</h3>
-            <button class="play-btn" @click="navigateToGame('snake')">Kommer Snart</button>
+            <button class="play-btn disabled">Kommer Snart</button>
           </div>
 
           <div class="game-card special">
@@ -136,12 +136,6 @@ onMounted(() => {
     })
   }
 })
-
-function navigateToGame(game: string) {
-  // This will depend on your router setup
-  console.log(`Navigate to ${game}`)
-  // router.push(`/games/${game}`)
-}
 
 function toggleSnakeView() {
   showSnakeDetails.value = !showSnakeDetails.value
@@ -295,6 +289,9 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
     transition: all 0.3s ease;
     font-size: 1rem;
     pointer-events: auto; /* Ensure buttons are interactive */
+    text-decoration: none; /* For router-link styling */
+    display: inline-block; /* For router-link to behave like button */
+    text-align: center;
 
     &:hover {
       transform: scale(1.05);
@@ -303,6 +300,18 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
 
     &:active {
       transform: scale(0.95);
+    }
+
+    &.disabled {
+      background: var(--button-bg);
+      color: var(--text-secondary);
+      cursor: not-allowed;
+      opacity: 0.6;
+
+      &:hover {
+        transform: none;
+        box-shadow: none;
+      }
     }
   }
 

@@ -9,6 +9,8 @@
 </template>
 
 <style>
+@import '@/styles/generalGames.scss';
+
 * {
   box-sizing: border-box;
   margin: 0;

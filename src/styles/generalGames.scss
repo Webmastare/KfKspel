@@ -1,0 +1,62 @@
+:root {
+  // Light Theme (default) - Green and Black-Grey Palette
+  --bg-color: #f5f7f5;
+  --text-color: #2d3748;
+  --app-container-bg: #ffffff;
+  --canvas-border-color: #4a5568;
+  --canvas-bg-color: #e8f5e8;
+  --canvas-grid-color: #d4d4d8;
+  --canvas-glow-color: rgba(34, 197, 94, 0.3);
+  --sidebar-bg-color: #f8fafc;
+  --sidebar-text-color: #4a5568;
+  --sidebar-value-color: #1f2937;
+  --controls-bg-color: #f1f5f9;
+  --modal-bg-color: #ffffff;
+  --modal-text-color: #2d3748;
+  --modal-header-color: #059669;
+  --button-text-color: #ffffff;
+  --button-left-bg: #6b728055;
+  --button-left-hover-bg: #4b556366;
+  --button-rotate-bg: #16a34a55;
+  --button-rotate-hover-bg: #15803d66;
+  --button-down-bg: #ca8a0455;
+  --button-down-hover-bg: #a1620766;
+  --button-hard-drop-bg: #dc2626;
+  --button-hard-drop-hover-bg: #b91c1c;
+  --button-modal-action-bg: #16a34a;
+  --button-modal-action-hover-bg: #15803d;
+  --sidebar-bg: #374151;
+  --sidebar-hover-bg: #4b5563;
+  --sidebar-text: #ffffff;
+}
+
+.dark-theme {
+  // Dark Theme - Deep Green and Black-Grey Palette
+  --bg-color: #0f1419;
+  --text-color: #e2e8f0;
+  --app-container-bg: #1e293b;
+  --canvas-border-color: #374151;
+  --canvas-bg-color: #111827;
+  --canvas-grid-color: #374151;
+  --canvas-glow-color: rgba(34, 197, 94, 0.4);
+  --sidebar-bg-color: #1f2937;
+  --sidebar-text-color: #9ca3af;
+  --sidebar-value-color: #f9fafb;
+  --controls-bg-color: #1f2937;
+  --modal-bg-color: #1e293b;
+  --modal-text-color: #f1f5f9;
+  --modal-header-color: #22c55e;
+  --button-left-bg: #4b556355;
+  --button-left-hover-bg: #37415166;
+  --button-rotate-bg: #16a34a55;
+  --button-rotate-hover-bg: #15803d66;
+  --button-down-bg: #eab30855;
+  --button-down-hover-bg: #ca8a0466;
+  --button-hard-drop-bg: #ef4444;
+  --button-hard-drop-hover-bg: #dc2626;
+  --button-modal-action-bg: #16a34a;
+  --button-modal-action-hover-bg: #15803d;
+  --sidebar-bg: #374151;
+  --sidebar-hover-bg: #4b5563;
+  --sidebar-text: #e2e8f0;
+}

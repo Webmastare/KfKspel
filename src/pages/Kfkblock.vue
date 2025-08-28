@@ -42,6 +42,11 @@
                         <span v-else-if="gamePaused && pauseTimer > 0"> {{ pauseTimer.toFixed(1) }} </span>
                         <span v-else> Pausa </span>
                     </button>
+                    <button @click="cycleControlsMode" class="sidebar-btn">
+                        <span v-if="controlsMode === 0">Dölj</span>
+                        <span v-else-if="controlsMode === 1">Pilar</span>
+                        <span v-else>Knappar</span>
+                    </button>
                     <button @click="toggleInfo" class="sidebar-btn">
                         <span v-if="infoShown"> Dölj Info </span>
                         <span v-else> Visa Info </span>
@@ -52,20 +57,53 @@
                     <canvas id="nextPieceCanvas"></canvas>
                 </div>
             </div>
-
-            <div class="canvas-container">
-                <div v-if="showModal" class="modal">
-                    <div class="modal-content">
-                        <h2 v-if="gameOver">{{ getGameOverMessage() }}</h2>
-                        <p v-if="gameOver">Poäng: {{ score }}</p>
-                        <p v-if="gameOver">Nivå: {{ level }}</p>
-                        <p v-if="gameOver">Rader: {{ linesCleared }}</p>
-                        <button @click="startGame" class="btn-modal-action">
-                            {{ gameOver || !gameStarted ? (gameStarted ? 'Spela Igen' : 'Starta Spelet') : 'Fortsätt' }}
+            <div class="canvas-outer-wrapper">
+                <div class="canvas-container">
+                    <div v-if="showModal" class="modal">
+                        <div class="modal-content">
+                            <h2 v-if="gameOver">{{ getGameOverMessage() }}</h2>
+                            <p v-if="gameOver">Poäng: {{ score }}</p>
+                            <p v-if="gameOver">Nivå: {{ level }}</p>
+                            <p v-if="gameOver">Rader: {{ linesCleared }}</p>
+                            <button @click="startGame" class="btn-modal-action">
+                                {{ gameOver || !gameStarted ? (gameStarted ? 'Spela Igen' : 'Starta Spelet') : 'Fortsätt' }}
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Canvas Overlay Controls -->
+                    <div class="canvas-overlay-controls">
+                        <!-- Rotate Button - Top Left -->
+                        <button @click="rotate" class="overlay-btn rotate-btn" :class="{ 'hidden-mode': controlsMode === 0, 'arrow-mode': controlsMode === 1, 'full-mode': controlsMode === 2 }">
+                            <span v-if="controlsMode === 1">↻</span>
+                            <span v-else>Rotera</span>
+                        </button>
+                        
+                        <!-- Left Button - Middle Left -->
+                        <button @click="moveLeft" class="overlay-btn left-btn" :class="{ 'hidden-mode': controlsMode === 0, 'arrow-mode': controlsMode === 1, 'full-mode': controlsMode === 2 }">
+                            <span v-if="controlsMode === 1">←</span>
+                            <span v-else>Vänster</span>
+                        </button>
+                        
+                        <!-- Right Button - Middle Right -->
+                        <button @click="moveRight" class="overlay-btn right-btn" :class="{ 'hidden-mode': controlsMode === 0, 'arrow-mode': controlsMode === 1, 'full-mode': controlsMode === 2 }">
+                            <span v-if="controlsMode === 1">→</span>
+                            <span v-else>Höger</span>
+                        </button>
+                        
+                        <!-- Down Button - Bottom Middle -->
+                        <button @click="softDrop" class="overlay-btn down-btn" :class="{ 'hidden-mode': controlsMode === 0, 'arrow-mode': controlsMode === 1, 'full-mode': controlsMode === 2 }">
+                            <span v-if="controlsMode === 1">↓</span>
+                            <span v-else>Ner</span>
                         </button>
                     </div>
-                </div>
-                <canvas id="tetrisCanvas"></canvas>
+                    
+                    <canvas id="tetrisCanvas"></canvas>
+                </div>    
+                <!-- Hard Drop Button - Always visible below canvas -->
+                <button @click="hardDrop" class="hard-drop-btn">
+                    Släpp
+                </button>
             </div>
             
             <div class="sidebar">
@@ -96,16 +134,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="controls">
-            <button @click="moveLeft" class="btn-left">Vänster</button>
-            <button @click="rotate" class="btn-rotate">Rotera</button>
-            <button @click="moveRight" class="btn-right">Höger</button>
-            <button @click="softDrop" class="btn-down wide">Ner</button>
-            <button @click="hardDrop" class="btn-hard-drop wide">
-                Släpp
-            </button>
         </div>
 
         <!-- Information Section -->
@@ -232,6 +260,7 @@ const canvasHeight = ref(ROWS * BASE_BLOCK_SIZE);
 const isDarkMode = ref(false);
 const infoShown = ref(false);
 const showLeaderboard = ref(false);
+const controlsMode = ref(1); // 0: hidden, 1: arrows only, 2: full buttons
 
 const leaderBoardData = ref([]);
 
@@ -316,6 +345,10 @@ function toggleLeaderboard() {
     showLeaderboard.value = !showLeaderboard.value;
 }
 
+function cycleControlsMode() {
+    controlsMode.value = (controlsMode.value + 1) % 3;
+}
+
 function setInitialTheme() {
     const storedTheme = localStorage.getItem('theme');
     const prefersDarkQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -353,19 +386,21 @@ function debounce(func, delay) {
 function adjustCanvasSize() {
     console.log("Adjusting canvas size...");
     const appContainer = document.getElementById('app-container');
-    const controls = document.querySelector(".controls");
+    const hardDropBtn = document.querySelector(".hard-drop-btn");
+    const leaderboard = document.querySelector(".leaderboard-container");
     const sidebar = document.querySelector(".sidebar");
 
-    const controlsHeight = controls ? controls.offsetHeight : 120; // Fallback
-    const sidebarWidth = sidebar ? sidebar.offsetWidth : 180; // Fallback to CSS width (ensure CSS has width:180px for .sidebar)
+    const hardDropBtnHeight = hardDropBtn ? hardDropBtn.offsetHeight + 10 : 50; // Include gap
+    const leaderboardHeight = leaderboard ? leaderboard.offsetHeight : 0;
+    const sidebarWidth = sidebar ? sidebar.offsetWidth : 180; // Fallback to CSS width
     const gameLayoutGap = 20; // As defined in .game-layout CSS for gap
     const appContainerVPadding = 10 * 2; // app-container padding top+bottom
     const appContainerHPadding = 10 * 2; // app-container padding left+right
-    const verticalGapsAroundControls = 15 * 2; // From #app-container gap
+    const verticalGapsAroundGame = 15 * 3; // From #app-container gap (title, leaderboard, game, info)
 
-    const availableHeightForGame = window.innerHeight - controlsHeight - appContainerVPadding - verticalGapsAroundControls;
+    const availableHeightForGame = window.innerHeight - hardDropBtnHeight - leaderboardHeight - appContainerVPadding - verticalGapsAroundGame;
     const appContainerContentWidth = appContainer.offsetWidth - appContainerHPadding;
-    const availableWidthForCanvas = appContainerContentWidth - sidebarWidth - gameLayoutGap;
+    const availableWidthForCanvas = appContainerContentWidth - (sidebarWidth * 2) - (gameLayoutGap * 2);
 
     let newBlockSizeByHeight = Math.floor(availableHeightForGame / ROWS);
     let newBlockSizeByWidth = Math.floor(availableWidthForCanvas / COLS);
