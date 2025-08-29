@@ -1,6 +1,7 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@supabase/functions-js@^2.4.5": "2.4.5",
     "npm:@tsconfig/node22@^22.0.2": "22.0.2",
     "npm:@types/jsdom@^21.1.7": "21.1.7",
     "npm:@types/node@^22.16.5": "22.18.0",
@@ -25,6 +26,11 @@
     "npm:vue-router@^4.5.1": "4.5.1_vue@3.5.20__typescript@5.8.3_typescript@5.8.3",
     "npm:vue-tsc@^3.0.4": "3.0.6_typescript@5.8.3",
     "npm:vue@^3.5.18": "3.5.20_typescript@5.8.3"
+  },
+  "jsr": {
+    "@supabase/functions-js@2.4.5": {
+      "integrity": "ead2df253fe0c3b0b682c5f25076978ab62c10afff4d04222451a90ba512c394"
+    }
   },
   "npm": {
     "@ampproject/remapping@2.3.0": {
@@ -2857,6 +2863,9 @@
     }
   },
   "workspace": {
+    "dependencies": [
+      "jsr:@supabase/functions-js@^2.4.5"
+    ],
     "packageJson": {
       "dependencies": [
         "npm:@tsconfig/node22@^22.0.2",
