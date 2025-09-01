@@ -345,24 +345,13 @@ entrypoint = "./functions/hello-world/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/hello-world/*.html" ]
 
-[functions.KfKbandvagn]
+[functions.kfkblock]
 enabled = true
 verify_jwt = true
-import_map = "./functions/KfKbandvagn/deno.json"
+import_map = "./functions/kfkblock/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/KfKbandvagn/index.ts"
+entrypoint = "./functions/kfkblock/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/KfKbandvagn/*.html" ]
-
-[functions.KfKblock]
-enabled = true
-verify_jwt = true
-import_map = "./functions/KfKblock/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/KfKblock/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/KfKblock/*.html" ]
+# static_files = [ "./functions/kfkblock/*.html" ]

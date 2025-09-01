@@ -4,43 +4,45 @@
     <div v-if="gameMessage" class="game-message" :class="{ show: showMessage }">
       {{ gameMessage }}
     </div>
-    
+
     <!-- Debug Overlay -->
     <div v-if="props.debugMode && debugInfo" class="debug-overlay">
       <h3>Shortcut Info</h3>
-      
+
       <div class="debug-section">
         <h4>Snake State</h4>
         <div class="debug-row">Snake Length: {{ debugInfo.snakeLength }}</div>
         <div class="debug-row">Snake Ratio: {{ debugInfo.snakeRatio.toFixed(3) }}</div>
         <div class="debug-row">Max Snake Length: {{ debugInfo.maxSnakeLength }}</div>
       </div>
-      
+
       <div class="debug-section">
         <h4>Shortcut Thresholds</h4>
         <div class="debug-row">Shortcut Threshold: {{ debugInfo.shortcutThreshold }}</div>
-        <div class="debug-row">Length Check Passed: {{ debugInfo.lengthCheckPassed ? 'YES' : 'NO' }}</div>
+        <div class="debug-row">
+          Length Check Passed: {{ debugInfo.lengthCheckPassed ? 'YES' : 'NO' }}
+        </div>
       </div>
-      
+
       <div class="debug-section">
         <h4>Distance Analysis</h4>
         <div class="debug-row">Distance to Food (Hamilton): {{ debugInfo.minDistToFood }}</div>
         <div class="debug-row">Min Required Savings: {{ debugInfo.minRequiredSavings }}</div>
       </div>
-      
+
       <div class="debug-section">
         <h4>Neighbor Analysis</h4>
         <div class="debug-row">Valid Neighbors: {{ debugInfo.validNeighbors }}</div>
         <div class="debug-row">Snake Body In: {{ debugInfo.snakeBodyIn }}</div>
       </div>
-      
+
       <div class="debug-section">
         <h4>Statistics</h4>
         <div class="debug-row">Shortcuts Taken: {{ debugInfo.shortcutsTaken }}</div>
         <div class="debug-row">Total Moves: {{ debugInfo.totalMoves }}</div>
         <div class="debug-row">Shortcut Rate: {{ debugInfo.shortcutRate.toFixed(2) }}%</div>
       </div>
-      
+
       <div class="debug-section">
         <h4>Last Decision</h4>
         <div class="debug-row decision" :class="debugInfo.lastDecision.type">
@@ -72,55 +74,65 @@ const props = withDefaults(defineProps<Props>(), {
   visualPath: true,
   showGeneration: true,
   generationDelay: 50,
-  debugMode: false
+  debugMode: false,
 })
 
 // Watch for prop changes
-watch(() => props.visualCycle, (newVal: boolean) => {
-  // Update global visualization flag
-  if (typeof window !== 'undefined') {
-    ;(window as any).visualCycle = newVal
-  }
-})
+watch(
+  () => props.visualCycle,
+  (newVal: boolean) => {
+    // Update global visualization flag
+    if (typeof window !== 'undefined') {
+      ;(window as any).visualCycle = newVal
+    }
+  },
+)
 
-watch(() => props.visualPath, (newVal: boolean) => {
-  // Update global visualization flag
-  if (typeof window !== 'undefined') {
-    ;(window as any).visualPath = newVal
-  }
-})
+watch(
+  () => props.visualPath,
+  (newVal: boolean) => {
+    // Update global visualization flag
+    if (typeof window !== 'undefined') {
+      ;(window as any).visualPath = newVal
+    }
+  },
+)
 
-watch(() => props.showGeneration, async (newVal: boolean) => {
-  // Regenerate the maze and Hamiltonian path with new visualization setting
-  if (GM && GM.hamilDone) {
-    await regenerateGamePaths()
-  } else if (props.autoStart) {
-    // If game hasn't been initialized yet but autoStart is enabled, start it
-    await startGame()
-  }
-})
+watch(
+  () => props.showGeneration,
+  async (newVal: boolean) => {
+    // Regenerate the maze and Hamiltonian path with new visualization setting
+    if (GM && GM.hamilDone) {
+      await regenerateGamePaths()
+    } else if (props.autoStart) {
+      // If game hasn't been initialized yet but autoStart is enabled, start it
+      await startGame()
+    }
+  },
+)
 
-watch(() => props.fps, (newVal: number) => {
-  // Update FPS - ensure we clear any existing interval first
-  if (intervalID) {
-    clearInterval(intervalID)
-    intervalID = 0 // Reset to ensure it's properly cleared
-  }
-  
-  // Only restart interval if game is running (not game over)
-  if (!gameOver && GM && GM.hamilDone) {
-    intervalID = setInterval(preUpdate, 1000 / newVal)
-  }
-})
+watch(
+  () => props.fps,
+  (newVal: number) => {
+    // Update FPS - ensure we clear any existing interval first
+    if (intervalID) {
+      clearInterval(intervalID)
+      intervalID = 0 // Reset to ensure it's properly cleared
+    }
+
+    // Only restart interval if game is running (not game over)
+    if (!gameOver && GM && GM.hamilDone) {
+      intervalID = setInterval(preUpdate, 1000 / newVal)
+    }
+  },
+)
 
 // Template refs
 const snakeCanvas = ref<HTMLCanvasElement>()
 
 // Theme state - Initialize from system preference
 const isDarkTheme = ref(
-  typeof window !== 'undefined' 
-    ? window.matchMedia('(prefers-color-scheme: dark)').matches 
-    : false
+  typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false,
 )
 
 // Game state
@@ -160,7 +172,7 @@ const themeColors = {
     mazeUnvisited: '#f5f5f5',
     mazeCurrent: '#d32f2f',
     mazeWall: '#333333',
-    textColor: '#333333'
+    textColor: '#333333',
   },
   dark: {
     background: '#121212',
@@ -171,8 +183,8 @@ const themeColors = {
     mazeUnvisited: '#2a2a2a',
     mazeCurrent: '#f44336',
     mazeWall: '#e0e0e0',
-    textColor: '#e0e0e0'
-  }
+    textColor: '#e0e0e0',
+  },
 }
 
 // Game variables
@@ -185,7 +197,7 @@ let lastTime = performance.now()
 let frameCount = 0
 
 let context: CanvasRenderingContext2D
-let intervalID: number
+let intervalID: any
 let animationFrameId: number
 
 // Snake
@@ -195,7 +207,6 @@ let snakeY: number
 
 // Food
 let food: number[] = []
-
 
 // Game Master instance
 let GM: GameMaster
@@ -234,7 +245,7 @@ class GameMaster {
   }
 
   sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms))
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
   setup() {
@@ -285,9 +296,10 @@ class GameMaster {
       }
     }
     // Create starting point
-    this.mazeStart = this.mazeGrid[Math.floor(Math.random() * this.mazeGrid.length)][
-      Math.floor(Math.random() * this.mazeGrid[0].length)
-    ]
+    this.mazeStart =
+      this.mazeGrid[Math.floor(Math.random() * this.mazeGrid.length)][
+        Math.floor(Math.random() * this.mazeGrid[0].length)
+      ]
     // Start maze generation
     this.mazePath = [this.mazeStart]
     this.mazeStart.visited = true
@@ -332,7 +344,7 @@ class GameMaster {
       context.fillText('Generating Maze...', blockSize * 0.5, blockSize * 0.9)
       await this.sleep(props.generationDelay)
     }
-    const unvisitedNeighbors = node.neighbors.filter(neighbor => !neighbor.visited)
+    const unvisitedNeighbors = node.neighbors.filter((neighbor) => !neighbor.visited)
     if (unvisitedNeighbors.length > 0) {
       const nextCell = unvisitedNeighbors[Math.floor(Math.random() * unvisitedNeighbors.length)]
       nextCell.visited = true
@@ -355,7 +367,7 @@ class GameMaster {
     this.drawMaze()
 
     const theme = getCurrentTheme()
-    
+
     // Draw the grid
     context.strokeStyle = theme.gridLine
     context.lineWidth = 1
@@ -371,7 +383,7 @@ class GameMaster {
       context.lineTo(columns * blockSize, i * blockSize)
       context.stroke()
     }
-    
+
     // Draw visited cells in the Hamiltonian path
     context.fillStyle = theme.mazeVisited
     for (const spot of this.hamilPath) {
@@ -380,11 +392,11 @@ class GameMaster {
           spot.x * blockSize + 2,
           spot.y * blockSize + 2,
           blockSize - 4,
-          blockSize - 4
+          blockSize - 4,
         )
       }
     }
-    
+
     // Draw the current Hamiltonian path so far
     if (this.hamilPath.length > 1) {
       context.strokeStyle = '#4466bb'
@@ -392,19 +404,16 @@ class GameMaster {
       context.beginPath()
       context.moveTo(
         this.hamilPath[0].x * blockSize + blockSize / 2,
-        this.hamilPath[0].y * blockSize + blockSize / 2
+        this.hamilPath[0].y * blockSize + blockSize / 2,
       )
-      
+
       for (let i = 1; i < this.hamilPath.length; i++) {
         const spot = this.hamilPath[i]
-        context.lineTo(
-          spot.x * blockSize + blockSize / 2,
-          spot.y * blockSize + blockSize / 2
-        )
+        context.lineTo(spot.x * blockSize + blockSize / 2, spot.y * blockSize + blockSize / 2)
       }
       context.stroke()
     }
-    
+
     // Highlight the current node being processed
     if (currentNode) {
       context.fillStyle = theme.mazeCurrent
@@ -412,83 +421,91 @@ class GameMaster {
         currentNode.x * blockSize + 1,
         currentNode.y * blockSize + 1,
         blockSize - 2,
-        blockSize - 2
+        blockSize - 2,
       )
     }
-    
+
     // Add title text
     context.fillStyle = theme.textColor
     context.font = `${Math.max(12, blockSize * 0.8)}px Arial`
     context.textAlign = 'left'
-    context.fillText(`Generating Hamiltonian Cycle... (${this.hamilPath.length}/${rows * columns})`, blockSize * 0.5, blockSize * 0.9)
+    context.fillText(
+      `Generating Hamiltonian Cycle... (${this.hamilPath.length}/${rows * columns})`,
+      blockSize * 0.5,
+      blockSize * 0.9,
+    )
   }
 
   drawMaze(currentNode: any = null) {
     // Clear canvas with transparent background
     const theme = getCurrentTheme()
     context.clearRect(0, 0, columns * blockSize, rows * blockSize)
-    
+
     // Calculate the scale factor to map maze coordinates to full grid
     const mazeRows = Math.floor(rows / 2)
     const mazeCols = Math.floor(columns / 2)
     const scaleX = columns / mazeCols
     const scaleY = rows / mazeRows
-    
+
     // Draw all maze cells
     for (const row of this.mazeGrid) {
       for (const cell of row) {
         // Map maze coordinates to full grid coordinates
         const fullGridX = cell.x * scaleX
         const fullGridY = cell.y * scaleY
-        
+
         if (cell === currentNode) {
           // Highlight the current cell being processed
           context.fillStyle = theme.mazeCurrent
-            context.fillRect(
-            fullGridX * blockSize, 
-            fullGridY * blockSize, 
-            scaleX * blockSize, 
-            scaleY * blockSize
-            )
+          context.fillRect(
+            fullGridX * blockSize,
+            fullGridY * blockSize,
+            scaleX * blockSize,
+            scaleY * blockSize,
+          )
         } else if (cell.visited) {
           // Show visited cells
           context.fillStyle = theme.mazeVisited
           context.fillRect(
-          fullGridX * blockSize, 
-          fullGridY * blockSize, 
-          scaleX * blockSize, 
-          scaleY * blockSize
-        )
-        }    
-        
+            fullGridX * blockSize,
+            fullGridY * blockSize,
+            scaleX * blockSize,
+            scaleY * blockSize,
+          )
+        }
+
         // Draw walls for the maze cell
         context.strokeStyle = theme.mazeWall
         context.lineWidth = 2
         context.beginPath()
-        
+
         const x = fullGridX * blockSize
         const y = fullGridY * blockSize
         const w = scaleX * blockSize
         const h = scaleY * blockSize
-        
+
         // Draw walls based on the maze cell's wall configuration
-        if (cell.walls[0]) { // Top wall
+        if (cell.walls[0]) {
+          // Top wall
           context.moveTo(x, y)
           context.lineTo(x + w, y)
         }
-        if (cell.walls[1]) { // Left wall
+        if (cell.walls[1]) {
+          // Left wall
           context.moveTo(x, y)
           context.lineTo(x, y + h)
         }
-        if (cell.walls[2]) { // Bottom wall
+        if (cell.walls[2]) {
+          // Bottom wall
           context.moveTo(x, y + h)
           context.lineTo(x + w, y + h)
         }
-        if (cell.walls[3]) { // Right wall
+        if (cell.walls[3]) {
+          // Right wall
           context.moveTo(x + w, y)
           context.lineTo(x + w, y + h)
         }
-        
+
         context.stroke()
       }
     }
@@ -497,7 +514,7 @@ class GameMaster {
   removeWalls(node: Spot, nextNode: Spot) {
     const dx = nextNode.x - node.x
     const dy = nextNode.y - node.y
-    
+
     if (dx === 1) {
       // Moving Right
       node.walls[3] = false // Node's Right wall
@@ -523,42 +540,45 @@ class GameMaster {
     return (currentNodeIndex + 1) % this.hamilPath.length
   }
 
-  isShortcutSafe(fromIndex: number, toIndex: number): { safetyCheckPassed: boolean; snakeBodyIn: number } {
+  isShortcutSafe(
+    fromIndex: number,
+    toIndex: number,
+  ): { safetyCheckPassed: boolean; snakeBodyIn: number } {
     // Use temporal collision detection: simulate snake movement and check for collisions
-    let snakeBodyIn = rows * columns // Start with max possible distance 
+    let snakeBodyIn = rows * columns // Start with max possible distance
     for (let bodySegmentIndex = 0; bodySegmentIndex < snakeBody.length; bodySegmentIndex++) {
-        const bodyPart = snakeBody[bodySegmentIndex]
-        
-        // Convert body part position to grid coordinates
-        const bodyGridX = Math.floor(bodyPart[0] / blockSize)
-        const bodyGridY = Math.floor(bodyPart[1] / blockSize)
-        
-        // Get the Hamiltonian path index for this body part
-        const bodyNode = this.grid[bodyGridY][bodyGridX]
-        const bodyCurrentIndex = this.hamilPath.indexOf(bodyNode)
+      const bodyPart = snakeBody[bodySegmentIndex]
 
-        // Calculate the distance from the head to this body part along the path
-        let distanceFromHead = this.getDistance(toIndex, bodyCurrentIndex)
-        if (distanceFromHead === 0) {
-            // This is the head itself - no collision
-            continue
-        }
-        
-        // How many moves until the body is no longer at this position, add 5% buffer
-        const movesToSnakeFree = Math.ceil(snakeBody.length * 1.05) - bodySegmentIndex
-        if (distanceFromHead < snakeBodyIn) {
-            // Track the closest body part in the path
-            snakeBodyIn = distanceFromHead
-        }
-        // Check if the body part will have moved before we reach this position
-        if (movesToSnakeFree > distanceFromHead) {
-            //console.log('Not Safe: Body part at', bodyCurrentIndex, 'will still be here in', distanceFromHead, 'moves (frees in', movesToSnakeFree, ')');
-            return {safetyCheckPassed: false, snakeBodyIn} // Collision will occur
-        }
+      // Convert body part position to grid coordinates
+      const bodyGridX = Math.floor(bodyPart[0] / blockSize)
+      const bodyGridY = Math.floor(bodyPart[1] / blockSize)
+
+      // Get the Hamiltonian path index for this body part
+      const bodyNode = this.grid[bodyGridY][bodyGridX]
+      const bodyCurrentIndex = this.hamilPath.indexOf(bodyNode)
+
+      // Calculate the distance from the head to this body part along the path
+      let distanceFromHead = this.getDistance(toIndex, bodyCurrentIndex)
+      if (distanceFromHead === 0) {
+        // This is the head itself - no collision
+        continue
+      }
+
+      // How many moves until the body is no longer at this position, add 5% buffer
+      const movesToSnakeFree = Math.ceil(snakeBody.length * 1.05) - bodySegmentIndex
+      if (distanceFromHead < snakeBodyIn) {
+        // Track the closest body part in the path
+        snakeBodyIn = distanceFromHead
+      }
+      // Check if the body part will have moved before we reach this position
+      if (movesToSnakeFree > distanceFromHead) {
+        //console.log('Not Safe: Body part at', bodyCurrentIndex, 'will still be here in', distanceFromHead, 'moves (frees in', movesToSnakeFree, ')');
+        return { safetyCheckPassed: false, snakeBodyIn } // Collision will occur
+      }
     }
     // No collisions detected - shortcut is safe
     //console.log('Safe: No body parts will collide, closest is', snakeBodyIn);
-    return {safetyCheckPassed: true, snakeBodyIn}
+    return { safetyCheckPassed: true, snakeBodyIn }
   }
 
   getDistance(fromIndex: number, toIndex: number): number {
@@ -632,7 +652,7 @@ class GameMaster {
       return false
     }
 
-    const unvisitedGridNeighbors = node.neighbors.filter(neighbor => !neighbor.visited)
+    const unvisitedGridNeighbors = node.neighbors.filter((neighbor) => !neighbor.visited)
     const rankedPossibleMoves: [number, Spot, number][] = []
 
     if (unvisitedGridNeighbors.length > 0) {
@@ -659,10 +679,10 @@ class GameMaster {
               currentMovingDirection === 1
                 ? 0
                 : currentMovingDirection === 0
-                ? 1
-                : currentMovingDirection === 3
-                ? 2
-                : 3
+                  ? 1
+                  : currentMovingDirection === 3
+                    ? 2
+                    : 3
           }
         } else if (dy === -1) {
           // Trying to move Up
@@ -678,10 +698,10 @@ class GameMaster {
               currentMovingDirection === 3
                 ? 0
                 : currentMovingDirection === 2
-                ? 1
-                : currentMovingDirection === 1
-                ? 2
-                : 3
+                  ? 1
+                  : currentMovingDirection === 1
+                    ? 2
+                    : 3
           }
         } else if (dx === 1) {
           // Trying to move Right
@@ -697,10 +717,10 @@ class GameMaster {
               currentMovingDirection === 2
                 ? 0
                 : currentMovingDirection === 1
-                ? 1
-                : currentMovingDirection === 0
-                ? 2
-                : 3
+                  ? 1
+                  : currentMovingDirection === 0
+                    ? 2
+                    : 3
           }
         } else if (dx === -1) {
           // Trying to move Left
@@ -716,10 +736,10 @@ class GameMaster {
               currentMovingDirection === 0
                 ? 0
                 : currentMovingDirection === 3
-                ? 1
-                : currentMovingDirection === 2
-                ? 2
-                : 3
+                  ? 1
+                  : currentMovingDirection === 2
+                    ? 2
+                    : 3
           }
         }
 
@@ -749,7 +769,7 @@ class GameMaster {
 
   draw() {
     const theme = getCurrentTheme()
-    
+
     if (props.visualPath && this.snakePath && this.snakePath.length > 0) {
       context.fillStyle = theme.snakePath
       for (const spot of this.snakePath) {
@@ -757,7 +777,7 @@ class GameMaster {
           spot.x * blockSize + blockSize * 0.25,
           spot.y * blockSize + blockSize * 0.25,
           blockSize * 0.5,
-          blockSize * 0.5
+          blockSize * 0.5,
         )
       }
     }
@@ -768,21 +788,21 @@ class GameMaster {
       context.beginPath()
       context.moveTo(
         this.hamilPath[0].x * blockSize + blockSize / 2,
-        this.hamilPath[0].y * blockSize + blockSize / 2
+        this.hamilPath[0].y * blockSize + blockSize / 2,
       )
-      
+
       for (let i = 1; i < this.hamilPath.length; i++) {
         const spot = this.hamilPath[i]
-        context.lineTo(
-          spot.x * blockSize + blockSize / 2,
-          spot.y * blockSize + blockSize / 2
-        )
+        context.lineTo(spot.x * blockSize + blockSize / 2, spot.y * blockSize + blockSize / 2)
       }
 
-      if (this.hamilPath[this.hamilPath.length - 1].nextNode === this.hamilStart && this.hamilStart) {
+      if (
+        this.hamilPath[this.hamilPath.length - 1].nextNode === this.hamilStart &&
+        this.hamilStart
+      ) {
         context.lineTo(
           this.hamilStart.x * blockSize + blockSize / 2,
-          this.hamilStart.y * blockSize + blockSize / 2
+          this.hamilStart.y * blockSize + blockSize / 2,
         )
       }
       context.stroke()
@@ -815,7 +835,7 @@ function initializeCanvas() {
 
   blockSize = Math.max(
     1,
-    Math.min(Math.floor(canvasWidth / columns), Math.floor(canvasHeight / rows))
+    Math.min(Math.floor(canvasWidth / columns), Math.floor(canvasHeight / rows)),
   )
 
   canvas.width = columns * blockSize * ratio
@@ -837,9 +857,9 @@ async function startGame() {
     cancelAnimationFrame(animationFrameId)
     animationFrameId = 0
   }
-  
+
   initializeCanvas()
-  
+
   GM = new GameMaster()
   await GM.genMaze()
 
@@ -851,7 +871,7 @@ async function startGame() {
     gameOver = false // Ensure game is not in game over state
 
     placeFood()
-    
+
     // Start the game loops
     intervalID = setInterval(preUpdate, 1000 / props.fps)
     animationFrameId = requestAnimationFrame(gameDrawLoop)
@@ -871,21 +891,21 @@ async function regenerateGamePaths() {
     cancelAnimationFrame(animationFrameId)
     animationFrameId = 0 // Reset to ensure it's properly cleared
   }
-  
+
   // Store current game state
   const currentScore = score
   const currentGameOver = gameOver
   const wasRunning = !gameOver && !currentGameOver // Check if game was actually running
-  
+
   // Clear canvas before regeneration
   if (context) {
     context.clearRect(0, 0, columns * blockSize, rows * blockSize)
   }
-  
+
   // Regenerate the maze and Hamiltonian path
   GM = new GameMaster()
   await GM.genMaze()
-  
+
   if (GM.hamilDone) {
     // Reset to starting position with current score preserved
     const startNode = GM.hamilPath[0]
@@ -894,10 +914,10 @@ async function regenerateGamePaths() {
     snakeBody = [] // Reset snake body for safety
     score = currentScore // Preserve score
     gameOver = currentGameOver
-    
+
     // Place new food
     placeFood()
-    
+
     // Update snake path for visualization
     if (food) {
       const foodGridX = Math.floor(food[0] / blockSize)
@@ -911,18 +931,20 @@ async function regenerateGamePaths() {
         if (currentNodeIndex !== -1 && foodNodeIndex !== -1) {
           GM.snakePath = GM.hamilPath.slice(currentNodeIndex, foodNodeIndex + 1)
           if (currentNodeIndex > foodNodeIndex) {
-            GM.snakePath = GM.hamilPath.slice(currentNodeIndex).concat(GM.hamilPath.slice(0, foodNodeIndex + 1))
+            GM.snakePath = GM.hamilPath
+              .slice(currentNodeIndex)
+              .concat(GM.hamilPath.slice(0, foodNodeIndex + 1))
           }
         }
       }
     }
-    
+
     // Only restart the game loop if it was actually running before and game is not over
     if (wasRunning && !gameOver) {
       // Ensure we don't have any existing intervals before starting a new one
       if (intervalID) clearInterval(intervalID)
       intervalID = setInterval(preUpdate, 1000 / props.fps)
-      
+
       if (animationFrameId) cancelAnimationFrame(animationFrameId)
       animationFrameId = requestAnimationFrame(gameDrawLoop)
     } else {
@@ -951,62 +973,67 @@ function preUpdate() {
 }
 
 function update() {
-    const currentTime = performance.now()
-    const deltaTime = currentTime - lastTime
-    frameCount++
+  const currentTime = performance.now()
+  const deltaTime = currentTime - lastTime
+  frameCount++
 
-    if (deltaTime >= 1000) {
-        frameCount = 0
-        lastTime = currentTime
-    }
+  if (deltaTime >= 1000) {
+    frameCount = 0
+    lastTime = currentTime
+  }
 
-    if (gameOver || !GM.hamilDone) {
-        return
-    }
+  if (gameOver || !GM.hamilDone) {
+    return
+  }
 
-    // Move snake
-    for (let i = snakeBody.length - 1; i > 0; i--) {
-        snakeBody[i] = snakeBody[i - 1]
-    }
-    if (snakeBody.length) {
-        snakeBody[0] = [snakeX, snakeY]
-    }
+  // Move snake
+  for (let i = snakeBody.length - 1; i > 0; i--) {
+    snakeBody[i] = snakeBody[i - 1]
+  }
+  if (snakeBody.length) {
+    snakeBody[0] = [snakeX, snakeY]
+  }
 
-  
-    if (typeof snakeX === 'undefined' || typeof snakeY === 'undefined' || typeof food === 'undefined') {
-        return
-    }
+  if (
+    typeof snakeX === 'undefined' ||
+    typeof snakeY === 'undefined' ||
+    typeof food === 'undefined'
+  ) {
+    return
+  }
 
-    const currentGridX = Math.floor(snakeX / blockSize)
-    const currentGridY = Math.floor(snakeY / blockSize)
+  const currentGridX = Math.floor(snakeX / blockSize)
+  const currentGridY = Math.floor(snakeY / blockSize)
 
-    if (currentGridX < 0 || currentGridX >= columns || currentGridY < 0 || currentGridY >= rows) {
-        return
-    }
+  if (currentGridX < 0 || currentGridX >= columns || currentGridY < 0 || currentGridY >= rows) {
+    return
+  }
 
-    const currentNode = GM.grid[currentGridY][currentGridX]
-    const foodGridX = Math.floor(food[0] / blockSize)
-    const foodGridY = Math.floor(food[1] / blockSize)
+  const currentNode = GM.grid[currentGridY][currentGridX]
+  const foodGridX = Math.floor(food[0] / blockSize)
+  const foodGridY = Math.floor(food[1] / blockSize)
 
-    if (foodGridX < 0 || foodGridX >= columns || foodGridY < 0 || foodGridY >= rows) {
-        const newFoodX = Math.floor(Math.random() * columns) * blockSize
-        const newFoodY = Math.floor(Math.random() * rows) * blockSize
-        const newFoodNode = GM.grid[Math.floor(newFoodY / blockSize)][Math.floor(newFoodX / blockSize)]
-        findAndMoveSnake(currentNode, newFoodNode)
-    } else {
-        const foodNode = GM.grid[foodGridY][foodGridX]
-        findAndMoveSnake(currentNode, foodNode)
-    }
-  
+  if (foodGridX < 0 || foodGridX >= columns || foodGridY < 0 || foodGridY >= rows) {
+    const newFoodX = Math.floor(Math.random() * columns) * blockSize
+    const newFoodY = Math.floor(Math.random() * rows) * blockSize
+    const newFoodNode = GM.grid[Math.floor(newFoodY / blockSize)][Math.floor(newFoodX / blockSize)]
+    findAndMoveSnake(currentNode, newFoodNode)
+  } else {
+    const foodNode = GM.grid[foodGridY][foodGridX]
+    findAndMoveSnake(currentNode, foodNode)
+  }
 
   // Food consumption
   if (snakeX === food[0] && snakeY === food[1]) {
     let lastSnake = snakeBody.length > 0 ? snakeBody[snakeBody.length - 1] : [snakeX, snakeY]
-    let lastNode = GM.grid[Math.floor(lastSnake[1] / blockSize)][Math.floor(lastSnake[0] / blockSize)]
+    let lastNode =
+      GM.grid[Math.floor(lastSnake[1] / blockSize)][Math.floor(lastSnake[0] / blockSize)]
     let lastNodeIndex = GM.hamilPath.indexOf(lastNode)
 
     if (lastNodeIndex === -1) {
-      lastNodeIndex = GM.hamilPath.indexOf(GM.grid[Math.floor(snakeY / blockSize)][Math.floor(snakeX / blockSize)])
+      lastNodeIndex = GM.hamilPath.indexOf(
+        GM.grid[Math.floor(snakeY / blockSize)][Math.floor(snakeX / blockSize)],
+      )
     }
 
     let newSnakeNodeIndex = (lastNodeIndex - 1 + GM.hamilPath.length) % GM.hamilPath.length
@@ -1030,7 +1057,9 @@ function update() {
         if (currentNodeIndex !== -1 && foodNodeIndex !== -1) {
           GM.snakePath = GM.hamilPath.slice(currentNodeIndex, foodNodeIndex + 1)
           if (currentNodeIndex > foodNodeIndex) {
-            GM.snakePath = GM.hamilPath.slice(currentNodeIndex).concat(GM.hamilPath.slice(0, foodNodeIndex + 1))
+            GM.snakePath = GM.hamilPath
+              .slice(currentNodeIndex)
+              .concat(GM.hamilPath.slice(0, foodNodeIndex + 1))
           }
         }
       }
@@ -1069,15 +1098,13 @@ function findAndMoveSnake(currentNode: Spot, foodNode: Spot) {
   // Final safety check: ensure the next move won't cause collision
   const nextX = nextNode.x * blockSize
   const nextY = nextNode.y * blockSize
-  
+
   // Check if next position would collide with snake body
-  const wouldCollide = snakeBody.some(bodyPart => 
-    bodyPart[0] === nextX && bodyPart[1] === nextY
-  )
-  
+  const wouldCollide = snakeBody.some((bodyPart) => bodyPart[0] === nextX && bodyPart[1] === nextY)
+
   if (wouldCollide) {
     // Emergency: fall back to Hamiltonian cycle
-    console.warn('Collision detected, falling back to safe path')
+    // console.warn('Collision detected, falling back to safe path')
     nextNum = GM.getEmergencyMove(currentNodeIndex)
     nextNode = GM.hamilPath[nextNum]
   }
@@ -1093,7 +1120,7 @@ function findAndMoveSnake(currentNode: Spot, foodNode: Spot) {
 
 function draw() {
   const theme = getCurrentTheme()
-  
+
   // Clear canvas with transparent background
   context.clearRect(0, 0, columns * blockSize, rows * blockSize)
 
@@ -1113,25 +1140,29 @@ function draw() {
     context.fillRect(snakeBody[i][0], snakeBody[i][1], blockSize, blockSize)
   }*/
   // Start at the first segment
-  const body = [[snakeX, snakeY], ...snakeBody];
+  const body = [[snakeX, snakeY], ...snakeBody]
   context.beginPath()
   context.moveTo(body[0][0] + blockSize / 2, body[0][1] + blockSize / 2)
 
-    // Draw lines between segments
-    for (let i = 1; i < body.length; i++) {
-        let dist = Math.sqrt((body[i][0]-body[i-1][0])**2 + (body[i][1]-body[i-1][1])**2);
-        if (dist <= blockSize * 1.5) {
-            context.lineTo(body[i][0] + blockSize / 2, body[i][1] + blockSize / 2);
-        } else {
-            context.moveTo(body[i][0] + blockSize / 2, body[i][1] + blockSize / 2);
-        }
+  // Draw lines between segments
+  for (let i = 1; i < body.length; i++) {
+    let dist = Math.sqrt((body[i][0] - body[i - 1][0]) ** 2 + (body[i][1] - body[i - 1][1]) ** 2)
+    if (dist <= blockSize * 1.5) {
+      context.lineTo(body[i][0] + blockSize / 2, body[i][1] + blockSize / 2)
+    } else {
+      context.moveTo(body[i][0] + blockSize / 2, body[i][1] + blockSize / 2)
     }
-    context.lineWidth = blockSize / 1.1; // Thickness of the snake
-    context.strokeStyle = "rgba(40, 200, 60, 1)"; // Snake color
-    context.stroke();
-    context.fillStyle = "rgba(40, 170, 50, 1)";
-    context.fillRect(body[0][0] + 0.02*blockSize, body[0][1] + 0.02*blockSize, blockSize - 0.04*blockSize, blockSize - 0.04*blockSize);
-
+  }
+  context.lineWidth = blockSize / 1.1 // Thickness of the snake
+  context.strokeStyle = 'rgba(40, 200, 60, 1)' // Snake color
+  context.stroke()
+  context.fillStyle = 'rgba(40, 170, 50, 1)'
+  context.fillRect(
+    body[0][0] + 0.02 * blockSize,
+    body[0][1] + 0.02 * blockSize,
+    blockSize - 0.04 * blockSize,
+    blockSize - 0.04 * blockSize,
+  )
 
   if (gameOver) {
     updateGameMessage(`Hur hände detta... den dog :((`, true)
@@ -1162,7 +1193,8 @@ function checkIntersection(): boolean {
 }
 
 function getDistance(num: number, targetNum: number): number {
-  if (!GM.grid || GM.grid.length === 0 || !GM.hamilPath || GM.hamilPath.length === 0) return Infinity
+  if (!GM.grid || GM.grid.length === 0 || !GM.hamilPath || GM.hamilPath.length === 0)
+    return Infinity
   return GM.getDistance(num, targetNum)
 }
 
@@ -1185,7 +1217,7 @@ function findShortcut(currentNode: Spot, foodNode: Spot): Spot | null {
   if (!nextNode) {
     nextNode = GM.hamilPath[(currentNodeIndex + 1) % GM.hamilPath.length]
   }
-  
+
   const nextNodeIndex = GM.hamilPath.indexOf(nextNode)
   const hamiltonianDistToFood = getDistance(nextNodeIndex, foodIndex)
 
@@ -1193,10 +1225,10 @@ function findShortcut(currentNode: Spot, foodNode: Spot): Spot | null {
   const maxSnakeLength = rows * columns
   const snakeRatio = (snakeBody.length + 1) / maxSnakeLength
   const minRequiredSavings = Math.min(Math.max(1, Math.floor((snakeBody.length + 1) * 0.05)), 7) // Reduced threshold
-  
+
   // Simplified threshold: allow shortcuts for small snakes
   const allowShortcuts = snakeRatio < 0.8 // Allow shortcuts until 80% full
-  
+
   let bestNode = nextNode
   let decisionType: 'shortcut' | 'hamiltonian' | 'skip' = 'hamiltonian'
   let decisionReason = 'Following Hamiltonian path (default)'
@@ -1206,29 +1238,29 @@ function findShortcut(currentNode: Spot, foodNode: Spot): Spot | null {
   if (allowShortcuts) {
     // Get all valid neighbors and calculate their potential savings
     const shortcutCandidates = currentNode.neighbors
-      .map(neighbor => {
+      .map((neighbor) => {
         const neighborIndex = GM.hamilPath.indexOf(neighbor)
         if (neighborIndex === -1 || neighborIndex === currentNodeIndex) return null
-        
+
         const shortcutDistToFood = getDistance(neighborIndex, foodIndex)
         const savings = hamiltonianDistToFood - shortcutDistToFood
-        
+
         return {
           node: neighbor,
           index: neighborIndex,
           distanceToFood: shortcutDistToFood,
-          savings: savings
+          savings: savings,
         }
       })
-      .filter(candidate => candidate !== null && candidate.savings >= minRequiredSavings)
+      .filter((candidate) => candidate !== null && candidate.savings >= minRequiredSavings)
       .sort((a, b) => b!.savings - a!.savings) // Sort by savings (best first)
 
     // Test each candidate in order of savings
     for (const candidate of shortcutCandidates) {
       const { node: neighbor, index: neighborIndex, savings, distanceToFood } = candidate!
-      
+
       // Is this shortcut safe?
-      const {safetyCheckPassed, snakeBodyIn} = GM.isShortcutSafe(currentNodeIndex, neighborIndex)
+      const { safetyCheckPassed, snakeBodyIn } = GM.isShortcutSafe(currentNodeIndex, neighborIndex)
       if (snakeBodyInTot > snakeBodyIn) {
         // Track the closest body part in the path
         snakeBodyInTot = snakeBodyIn
@@ -1236,7 +1268,7 @@ function findShortcut(currentNode: Spot, foodNode: Spot): Spot | null {
 
       // Store analysis for debug
       validNeighbors++
-      
+
       // Take the first safe shortcut we find
       if (safetyCheckPassed) {
         decisionType = 'shortcut'
@@ -1250,7 +1282,7 @@ function findShortcut(currentNode: Spot, foodNode: Spot): Spot | null {
         decisionReason = `Best shortcut fails path check (would save ${savings} steps)`
       }
     }
-    
+
     if (shortcutCandidates.length === 0) {
       decisionReason = `No shortcuts available (savings ≥${minRequiredSavings} needed)`
     }
@@ -1276,11 +1308,11 @@ function findShortcut(currentNode: Spot, foodNode: Spot): Spot | null {
       shortcutRate: GM.totalMoves > 0 ? (GM.shortcutsTaken / GM.totalMoves) * 100 : 0,
       lastDecision: {
         type: decisionType,
-        reason: decisionReason
-      }
+        reason: decisionReason,
+      },
     }
   }
-  
+
   return bestNode
 }
 
@@ -1289,7 +1321,7 @@ function checkGameOver() {
   if (intersects) {
     gameOver = true
   }
-  
+
   if (GM.hamilDone && snakeBody.length + 1 >= rows * columns) {
     gameOver = true
   }
@@ -1304,12 +1336,21 @@ function checkGameOver() {
 function placeFood() {
   if (gameOver) return
   // Get free spaces not occupied by snake
-  const freeSpaces: number[][] = GM.grid.flat().map(cell => [cell.x, cell.y])
-    .filter(pos => {
+  const freeSpaces: number[][] = GM.grid
+    .flat()
+    .map((cell) => [cell.x, cell.y])
+    .filter((pos) => {
       const x = pos[0] * blockSize
       const y = pos[1] * blockSize
-      return !snakeBody.some(body => body[0] === x && body[1] === y) &&
-             !(typeof snakeX !== 'undefined' && typeof snakeY !== 'undefined' && snakeX === x && snakeY === y)
+      return (
+        !snakeBody.some((body) => body[0] === x && body[1] === y) &&
+        !(
+          typeof snakeX !== 'undefined' &&
+          typeof snakeY !== 'undefined' &&
+          snakeX === x &&
+          snakeY === y
+        )
+      )
     })
 
   const randomIndex = Math.floor(Math.random() * freeSpaces.length)
@@ -1329,20 +1370,20 @@ onMounted(() => {
   if (typeof window !== 'undefined') {
     ;(window as any).visualCycle = props.visualCycle
     ;(window as any).visualPath = props.visualPath
-    
+
     // Listen for system theme changes
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     const handleThemeChange = (e: MediaQueryListEvent) => {
       isDarkTheme.value = e.matches
     }
     mediaQuery.addEventListener('change', handleThemeChange)
-    
+
     // Clean up listener on unmount
     onUnmounted(() => {
       mediaQuery.removeEventListener('change', handleThemeChange)
     })
   }
-  
+
   if (props.autoStart) {
     startGame()
   }
@@ -1372,7 +1413,7 @@ defineExpose({
       cancelAnimationFrame(animationFrameId)
       animationFrameId = 0
     }
-  }
+  },
 })
 </script>
 
@@ -1477,21 +1518,21 @@ defineExpose({
 
     h3 {
       margin: 0 0 15px 0;
-      color: #4CAF50;
+      color: #4caf50;
       font-size: 14px;
-      border-bottom: 1px solid #4CAF50;
+      border-bottom: 1px solid #4caf50;
       padding-bottom: 5px;
     }
 
     h4 {
       margin: 10px 0 5px 0;
-      color: #FFC107;
+      color: #ffc107;
       font-size: 12px;
     }
 
     .debug-section {
       margin-bottom: 15px;
-      border-left: 2px solid #2196F3;
+      border-left: 2px solid #2196f3;
       padding-left: 10px;
 
       &:last-child {
@@ -1510,17 +1551,17 @@ defineExpose({
 
         &.shortcut {
           background-color: rgba(76, 175, 80, 0.3);
-          border: 1px solid #4CAF50;
+          border: 1px solid #4caf50;
         }
 
         &.hamiltonian {
           background-color: rgba(33, 150, 243, 0.3);
-          border: 1px solid #2196F3;
+          border: 1px solid #2196f3;
         }
 
         &.skip {
           background-color: rgba(255, 193, 7, 0.3);
-          border: 1px solid #FFC107;
+          border: 1px solid #ffc107;
         }
       }
     }
@@ -1541,32 +1582,32 @@ defineExpose({
     border: 1px solid #ccc;
 
     h3 {
-      color: #2E7D32;
-      border-bottom: 1px solid #2E7D32;
+      color: #2e7d32;
+      border-bottom: 1px solid #2e7d32;
     }
 
     h4 {
-      color: #F57C00;
+      color: #f57c00;
     }
 
     .debug-section {
-      border-left: 2px solid #1976D2;
+      border-left: 2px solid #1976d2;
     }
 
     .debug-row.decision {
       &.shortcut {
         background-color: rgba(76, 175, 80, 0.2);
-        border: 1px solid #2E7D32;
+        border: 1px solid #2e7d32;
       }
 
       &.hamiltonian {
         background-color: rgba(33, 150, 243, 0.2);
-        border: 1px solid #1976D2;
+        border: 1px solid #1976d2;
       }
 
       &.skip {
         background-color: rgba(255, 193, 7, 0.2);
-        border: 1px solid #F57C00;
+        border: 1px solid #f57c00;
       }
     }
 

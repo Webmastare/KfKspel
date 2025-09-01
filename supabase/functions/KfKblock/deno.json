@@ -1,3 +1,7 @@
 {
-  "imports": {}
+  "imports": {
+    "hono": "jsr:@hono/hono@^4.9.5",
+    "supabase-js": "jsr:@supabase/supabase-js@^2.56.0",
+    "app": "../_shared/app.ts"
+  }
 }

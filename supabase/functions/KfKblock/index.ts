@@ -1,18 +1,28 @@
-// The main entry point for the Supabase Edge Function that handles
-// the KfKblock score database interactions.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { Hono } from "https://deno.land/x/hono/mod.ts";
+import { createClient } from "jsr:@supabase/supabase-js";
+import { createApp } from "../_shared/app.ts";
 
-const app = new Hono();
+const functionName = "kfkblock";
+const app = createApp(`/${functionName}`);
 
 // Initialize Supabase client
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.37.0";
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const _anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabaseUrl = Deno.env.get("SB_URL") ?? Deno.env.get("SUPABASE_URL")!;
+const _anonKey = Deno.env.get("SB_ANON_KEY") ??
+  Deno.env.get("SUPABASE_ANON_KEY")!;
+const serviceKey = Deno.env.get("SB_SERVICE_ROLE_KEY") ??
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(supabaseUrl, serviceKey);
 
-app.get("/kfkblock-scores", async (_req: Request) => {
+app.get("/", (c: any) => {
+  console.log("Root endpoint called");
+  console.log("Request method:", c.req.method);
+  console.log("Request URL:", c.req.url);
+  console.log("Request path:", c.req.path);
+  return c.json({ message: "KfKblock Edge Function is running!" });
+});
+
+app.get("/kfkblock-scores", async (c: any) => {
+  console.log("Fetching KfKblock scores...");
   // Get data from Supabase table
   const { data, error } = await supabase
     .from("KfKblockScores")
@@ -20,22 +30,16 @@ app.get("/kfkblock-scores", async (_req: Request) => {
 
   if (error) {
     console.error("Error fetching KfKblock scores:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to fetch scores" }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return c.json({ error: "Failed to fetch scores" }, 500);
   }
 
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+  return c.json(data, 200);
 });
 
-app.post("/kfkblock-scores", async (req: Request) => {
+app.post("/kfkblock-scores", async (c: any) => {
   try {
     // Parse request body
-    const reqBody = await req.json();
+    const reqBody = await c.req.json();
     const {
       playerID = null,
       RealName = null,
@@ -54,13 +58,10 @@ app.post("/kfkblock-scores", async (req: Request) => {
     if (calcKey !== Key && Key !== "not yet set") {
       console.log("Something is not right", playerID, RealName, Score, Other);
       console.log("Key calc:", calcKey, "Key gotten:", Key);
-      return new Response(
-        JSON.stringify({
-          message: "Fusk detekterat, inte tillagd",
-          cheat: true,
-        }),
-        { status: 418, headers: { "Content-Type": "application/json" } },
-      );
+      return c.json({
+        message: "Fusk detekterat, inte tillagd",
+        cheat: true,
+      }, 418);
     }
 
     // Insert data into Supabase table
@@ -78,21 +79,29 @@ app.post("/kfkblock-scores", async (req: Request) => {
 
     if (error) {
       console.error("Error inserting KfKblock score:", error);
-      return new Response(
-        JSON.stringify({ error: "Failed to insert score" }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
+      return c.json({ error: "Failed to insert score" }, 500);
     }
 
-    return new Response(JSON.stringify(data), {
-      status: 201,
-      headers: { "Content-Type": "application/json" },
-    });
+    return c.json(data, 201);
   } catch (err) {
     console.error("Error parsing request body:", err);
-    return new Response(
-      JSON.stringify({ error: "Invalid request body" }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
-    );
+    return c.json({ error: "Invalid request body" }, 400);
   }
 });
+
+// Catch-all route for debugging
+app.all("*", (c: any) => {
+  console.log("Unmatched route called:");
+  console.log("Method:", c.req.method);
+  console.log("URL:", c.req.url);
+  console.log("Path:", c.req.path);
+  return c.json({
+    error: "Route not found",
+    method: c.req.method,
+    path: c.req.path,
+    url: c.req.url,
+  }, 404);
+});
+
+// Export the Hono app as a Deno serve handler
+Deno.serve(app.fetch);

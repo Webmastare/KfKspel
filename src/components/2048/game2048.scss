@@ -12,7 +12,9 @@
   background-color: var(--bg-color);
   color: var(--text-color);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  transition: background-color 0.3s, color 0.3s;
+  transition:
+    background-color 0.3s,
+    color 0.3s;
 
   .game-header {
     text-align: center;
@@ -127,7 +129,7 @@
         font-weight: 500;
         color: var(--text-color);
 
-        input[type="checkbox"] {
+        input[type='checkbox'] {
           width: 18px;
           height: 18px;
           accent-color: var(--modal-header-color);
@@ -239,7 +241,9 @@
         text-align: center;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         color: var(--modal-text-color);
-        transition: background-color 0.3s, color 0.3s;
+        transition:
+          background-color 0.3s,
+          color 0.3s;
         max-width: 90%;
 
         h2 {
@@ -337,7 +341,8 @@
 
 // Pulse animation for load game section
 @keyframes pulse-glow {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
   50% {

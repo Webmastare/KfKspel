@@ -3,7 +3,7 @@
     <!-- Theme Toggle -->
     <div class="theme-toggle">
       <label class="toggle-switch">
-        <input type="checkbox" v-model="isDarkTheme">
+        <input type="checkbox" v-model="isDarkTheme" />
         <span class="slider">
           <span class="toggle-icon">{{ isDarkTheme ? '🌙' : '☀️' }}</span>
         </span>
@@ -11,11 +11,11 @@
     </div>
     <!-- Background Snake Game -->
     <div class="background-game">
-      <HamiltonianSnake 
-        :auto-start="true" 
-        :fps="snakeFps" 
-        :visual-cycle="visualizationOptions.cycle" 
-        :visual-path="visualizationOptions.path" 
+      <HamiltonianSnake
+        :auto-start="true"
+        :fps="snakeFps"
+        :visual-cycle="visualizationOptions.cycle"
+        :visual-path="visualizationOptions.path"
         :show-generation="visualizationOptions.generation"
         :generation-delay="10"
         :debug-mode="debugMode"
@@ -26,7 +26,12 @@
     <div class="overlay-content" :style="{ display: showWelcomeCard ? '' : 'none' }">
       <div class="welcome-card" v-if="showWelcomeCard">
         <h1 class="title">Välkommen till KfKSpel</h1>
-        <p class="subtitle">Prova våra spel! <br> Tips: Logga in för att spara dina framsteg!</p>
+        <p class="subtitle">
+          Välkommen till spelhörnan! Här kommer det upp något nytt spel ibland när någon i
+          webmästeriet pallar. Har du förslag eller är intresserad av att hjälpa till? Sök
+          webmästeriet!
+        </p>
+        <p class="subtitle">Tips: Logga in för att spara dina framsteg!</p>
         <div class="game-grid">
           <div class="game-card">
             <h3>2048</h3>
@@ -52,37 +57,42 @@
           <div class="game-card special">
             <h3>Hamiltonian Snake</h3>
             <button class="play-btn" @click="toggleSnakeView">
-              {{ showSnakeDetails ? 'Visa Detaljer' : 'Dölj Detaljer' }}
+              {{ !showSnakeDetails ? 'Visa Detaljer' : 'Dölj Detaljer' }}
             </button>
           </div>
         </div>
 
         <div v-if="showSnakeDetails" class="snake-info">
           <div class="snake-controls">
-            <button @click="toggleVisualization('cycle')" 
-                    :class="{ active: visualizationOptions.cycle }">
+            <button
+              @click="toggleVisualization('cycle')"
+              :class="{ active: visualizationOptions.cycle }"
+            >
               Show Hamiltonian Cycle
             </button>
-            <button @click="toggleVisualization('path')" 
-                    :class="{ active: visualizationOptions.path }">
+            <button
+              @click="toggleVisualization('path')"
+              :class="{ active: visualizationOptions.path }"
+            >
               Show Snake Path
             </button>
-            <button @click="toggleVisualization('generation')" 
-                    :class="{ active: visualizationOptions.generation }">
+            <button
+              @click="toggleVisualization('generation')"
+              :class="{ active: visualizationOptions.generation }"
+            >
               Show Generation Process
             </button>
-            <button @click="debugMode = !debugMode" 
-                    :class="{ active: debugMode, debug: true }">
+            <button @click="debugMode = !debugMode" :class="{ active: debugMode, debug: true }">
               Shortcuts Info
             </button>
             <div class="fps-control">
               <label for="fps">Snake Speed (FPS): </label>
-              <input 
-                type="range" 
-                name="fps" 
-                id="fps" 
-                min="1" 
-                max="1000" 
+              <input
+                type="range"
+                name="fps"
+                id="fps"
+                min="1"
+                max="1000"
                 v-model.number="snakeFps"
                 class="fps-slider"
               />
@@ -110,15 +120,13 @@ const debugMode = ref(false)
 const visualizationOptions = reactive({
   cycle: false,
   path: false,
-  generation: false
+  generation: false,
 })
 const showWelcomeCard = ref(true)
 
 // Dark mode detection from system preference
 const isDarkTheme = ref(
-  typeof window !== 'undefined' 
-    ? window.matchMedia('(prefers-color-scheme: dark)').matches 
-    : false
+  typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false,
 )
 
 // Listen for system theme changes
@@ -129,7 +137,7 @@ onMounted(() => {
       isDarkTheme.value = e.matches
     }
     mediaQuery.addEventListener('change', handleThemeChange)
-    
+
     // Clean up listener on unmount
     onUnmounted(() => {
       mediaQuery.removeEventListener('change', handleThemeChange)
@@ -147,7 +155,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
 </script>
 
 <style lang="scss" scoped>
-@use "@/styles/variables" as *;
+@use '@/styles/variables' as *;
 
 .landing-page {
   position: relative;
@@ -388,7 +396,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
       &.active {
         background: #27ae60;
         border-color: #229954;
-        
+
         &:hover {
           background: #229954;
         }
@@ -402,7 +410,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
     gap: 0.5rem;
     margin-left: auto;
     pointer-events: auto; /* Ensure FPS control is interactive */
-    
+
     label {
       color: var(--control-text);
       font-weight: 500;
@@ -490,92 +498,92 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
   font-size: 1.2rem;
   font-weight: bold;
   pointer-events: auto; /* Ensure close button is interactive */
-  
+
   &:hover {
     background: var(--button-hover);
     transform: scale(1.05);
   }
-  
+
   &:active {
     transform: scale(0.95);
   }
 }
 
 .theme-toggle {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    z-index: 3000;
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 3000;
 
-    .toggle-switch {
-      position: relative;
-      display: inline-block;
-      width: 60px;
-      height: 34px;
-      cursor: pointer;
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+    cursor: pointer;
 
-      input {
-        opacity: 0;
-        width: 0;
-        height: 0;
+    input {
+      opacity: 0;
+      width: 0;
+      height: 0;
 
-        &:checked + .slider {
-          background-color: #2196F3;
-
-          &:before {
-            transform: translateX(26px);
-          }
-
-          .toggle-icon {
-            transform: translateX(26px);
-          }
-        }
-      }
-
-      .slider {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: #ccc;
-        transition: 0.4s;
-        border-radius: 34px;
-        display: flex;
-        align-items: center;
-        padding: 0 4px;
+      &:checked + .slider {
+        background-color: #2196f3;
 
         &:before {
-          position: absolute;
-          content: "";
-          height: 26px;
-          width: 26px;
-          background-color: white;
-          transition: 0.4s;
-          border-radius: 50%;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          transform: translateX(26px);
         }
 
         .toggle-icon {
-          position: absolute;
-          font-size: 16px;
-          transition: 0.4s;
-          z-index: 1;
-          line-height: 1;
-          height: 26px;
-          width: 26px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 50%;
+          transform: translateX(26px);
         }
       }
+    }
 
-      &:hover .slider {
-        box-shadow: 0 0 8px rgba(0,0,0,0.3);
+    .slider {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: 0.4s;
+      border-radius: 34px;
+      display: flex;
+      align-items: center;
+      padding: 0 4px;
+
+      &:before {
+        position: absolute;
+        content: '';
+        height: 26px;
+        width: 26px;
+        background-color: white;
+        transition: 0.4s;
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      .toggle-icon {
+        position: absolute;
+        font-size: 16px;
+        transition: 0.4s;
+        z-index: 1;
+        line-height: 1;
+        height: 26px;
+        width: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
       }
     }
+
+    &:hover .slider {
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+    }
   }
+}
 
 // Responsive design
 @media (max-width: 768px) {
