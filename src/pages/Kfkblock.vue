@@ -34,8 +34,36 @@
       </div>
     </div>
 
+    <!-- Mobile controls bar - shows on small screens -->
+    <div class="mobile-controls-bar">
+      <div class="mobile-top-row">
+        <div class="mobile-score-info">
+          <span class="mobile-score">{{ score }}p</span>
+          <span class="mobile-level">Nivå {{ level }}</span>
+        </div>
+        <div class="mobile-btn-container">
+          <button @click="toggleTheme" class="mobile-btn">
+            <span v-if="isDarkMode">☀️</span>
+            <span v-else>🌙</span>
+          </button>
+          <button @click="togglePause" class="mobile-btn">
+            <span v-if="gamePaused && pauseTimer == 0">▶️</span>
+            <span v-else-if="gamePaused && pauseTimer > 0">{{ pauseTimer.toFixed(1) }}</span>
+            <span v-else>⏸️</span>
+          </button>
+          <button @click="cycleControlsMode" class="mobile-btn">
+            <span v-if="controlsMode === 0">🎮</span>
+            <span v-else-if="controlsMode === 1">🔤</span>
+            <span v-else>🔘</span>
+          </button>
+          <button @click="toggleInfo" class="mobile-btn">ℹ️</button>
+        </div>
+      </div>
+    </div>
+
     <div class="game-layout">
-      <div class="sidebar">
+      <!-- Desktop sidebar - hidden on mobile -->
+      <div class="sidebar desktop-only">
         <div class="sidebar-btn-container">
           <button @click="toggleTheme" class="sidebar-btn">
             <span v-if="isDarkMode">☀️</span>
@@ -58,88 +86,99 @@
         </div>
         <div class="next-piece-container">
           <span class="info-label">Next</span>
-          <canvas id="nextPieceCanvas"></canvas>
+          <canvas class="kfkblock-canvas" id="nextPieceCanvas"></canvas>
         </div>
       </div>
+
       <div class="canvas-outer-wrapper">
-        <div class="canvas-container">
-          <AddPlayerForm
-            v-if="showModal"
-            :score="score"
-            :level="level"
-            :linesCleared="linesCleared"
-            :gameData="gameDataForSubmission"
-            :gameOver="gameOver"
-            :gameStarted="gameStarted"
-            @close="showAddPlayerForm = false"
-            @startGame="startGame"
-          />
-          <!-- Canvas Overlay Controls -->
-          <div class="canvas-overlay-controls">
-            <!-- Rotate Button - Top Left -->
-            <button
-              @click="rotate"
-              class="overlay-btn rotate-btn"
-              :class="{
-                'hidden-mode': controlsMode === 0,
-                'arrow-mode': controlsMode === 1,
-                'full-mode': controlsMode === 2,
-              }"
-            >
-              <span v-if="controlsMode === 1">↻</span>
-              <span v-else>Rotera</span>
-            </button>
+        <div class="canvas-and-next-container">
+          <div class="canvas-container">
+            <AddPlayerForm
+              v-if="showModal"
+              :score="score"
+              :level="level"
+              :linesCleared="linesCleared"
+              :gameData="gameDataForSubmission"
+              :gameOver="gameOver"
+              :gameStarted="gameStarted"
+              @close="showAddPlayerForm = false"
+              @startGame="startGame"
+            />
+            <!-- Canvas Overlay Controls -->
+            <div class="canvas-overlay-controls">
+              <!-- Rotate Button - Top Left -->
+              <button
+                @click="rotate"
+                class="overlay-btn rotate-btn"
+                :class="{
+                  'hidden-mode': controlsMode === 0,
+                  'arrow-mode': controlsMode === 1,
+                  'full-mode': controlsMode === 2,
+                }"
+              >
+                <span v-if="controlsMode === 1">↻</span>
+                <span v-else>Rotera</span>
+              </button>
 
-            <!-- Left Button - Middle Left -->
-            <button
-              @click="moveLeft"
-              class="overlay-btn left-btn"
-              :class="{
-                'hidden-mode': controlsMode === 0,
-                'arrow-mode': controlsMode === 1,
-                'full-mode': controlsMode === 2,
-              }"
-            >
-              <span v-if="controlsMode === 1">←</span>
-              <span v-else>Vänster</span>
-            </button>
+              <!-- Left Button - Middle Left -->
+              <button
+                @click="moveLeft"
+                class="overlay-btn left-btn"
+                :class="{
+                  'hidden-mode': controlsMode === 0,
+                  'arrow-mode': controlsMode === 1,
+                  'full-mode': controlsMode === 2,
+                }"
+              >
+                <span v-if="controlsMode === 1">←</span>
+                <span v-else>Vänster</span>
+              </button>
 
-            <!-- Right Button - Middle Right -->
-            <button
-              @click="moveRight"
-              class="overlay-btn right-btn"
-              :class="{
-                'hidden-mode': controlsMode === 0,
-                'arrow-mode': controlsMode === 1,
-                'full-mode': controlsMode === 2,
-              }"
-            >
-              <span v-if="controlsMode === 1">→</span>
-              <span v-else>Höger</span>
-            </button>
+              <!-- Right Button - Middle Right -->
+              <button
+                @click="moveRight"
+                class="overlay-btn right-btn"
+                :class="{
+                  'hidden-mode': controlsMode === 0,
+                  'arrow-mode': controlsMode === 1,
+                  'full-mode': controlsMode === 2,
+                }"
+              >
+                <span v-if="controlsMode === 1">→</span>
+                <span v-else>Höger</span>
+              </button>
 
-            <!-- Down Button - Bottom Middle -->
-            <button
-              @click="softDrop"
-              class="overlay-btn down-btn"
-              :class="{
-                'hidden-mode': controlsMode === 0,
-                'arrow-mode': controlsMode === 1,
-                'full-mode': controlsMode === 2,
-              }"
-            >
-              <span v-if="controlsMode === 1">↓</span>
-              <span v-else>Ner</span>
-            </button>
+              <!-- Down Button - Bottom Middle -->
+              <button
+                @click="softDrop"
+                class="overlay-btn down-btn"
+                :class="{
+                  'hidden-mode': controlsMode === 0,
+                  'arrow-mode': controlsMode === 1,
+                  'full-mode': controlsMode === 2,
+                }"
+              >
+                <span v-if="controlsMode === 1">↓</span>
+                <span v-else>Ner</span>
+              </button>
+            </div>
+
+            <canvas class="kfkblock-canvas" id="tetrisCanvas"></canvas>
           </div>
 
-          <canvas id="tetrisCanvas"></canvas>
+          <!-- Mobile next piece - shows on small screens -->
+          <div class="mobile-next-piece">
+            <span class="mobile-next-label">Next</span>
+            <canvas class="kfkblock-canvas" id="nextPieceCanvasMobile"></canvas>
+          </div>
         </div>
+
         <!-- Hard Drop Button - Always visible below canvas -->
         <button @click="hardDrop" class="hard-drop-btn">Släpp</button>
       </div>
 
-      <div class="sidebar">
+      <!-- Desktop sidebar - hidden on mobile -->
+      <div class="sidebar desktop-only">
         <div class="game-info">
           <div class="info-item">
             <span class="info-label">Poäng</span>
@@ -165,6 +204,28 @@
             <span class="info-label">Använda Block</span>
             <span class="info-value">{{ blocksUsed }}</span>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile stats - shows below everything on small screens -->
+    <div class="mobile-stats">
+      <div class="mobile-stats-grid">
+        <div class="mobile-stat-item">
+          <span class="mobile-stat-label">Rader</span>
+          <span class="mobile-stat-value">{{ levelClearedRows }}</span>
+        </div>
+        <div class="mobile-stat-item">
+          <span class="mobile-stat-label">Totala</span>
+          <span class="mobile-stat-value">{{ linesCleared }}</span>
+        </div>
+        <div class="mobile-stat-item">
+          <span class="mobile-stat-label">Tid</span>
+          <span class="mobile-stat-value">{{ formattedTime }}</span>
+        </div>
+        <div class="mobile-stat-item">
+          <span class="mobile-stat-label">Block</span>
+          <span class="mobile-stat-value">{{ blocksUsed }}</span>
         </div>
       </div>
     </div>
@@ -308,6 +369,7 @@ const dropSpeeds = [48, 43, 38, 33, 28, 23, 18, 13, 8, 6, 5, 4, 4, 3, 2, 2, 1]
 // --- Reactive State ---
 const ctx = ref(null)
 const nextCtx = ref(null)
+const nextCtxMobile = ref(null)
 const board = ref([])
 const currentPiece = ref(null)
 const nextPieces = ref([]) // Array of next 3 pieces
@@ -335,6 +397,7 @@ const infoShown = ref(false)
 const showLeaderboard = ref(false)
 const showAddPlayerForm = ref(false)
 const controlsMode = ref(1) // 0: hidden, 1: arrows only, 2: full buttons
+const isMobile = ref(false)
 
 const leaderBoardData = ref([])
 
@@ -377,7 +440,7 @@ function refreshDisplay() {
       currentPiece.value,
       intersects,
       nextPieces.value,
-      nextCtx.value,
+      isMobile.value ? nextCtxMobile.value : nextCtx.value,
     )
   } else {
     // Game not started or game over - draw empty/final board and next pieces
@@ -391,8 +454,11 @@ function refreshDisplay() {
       COLS,
       ROWS,
     )
-    if (nextPieces.value.length > 0 && nextCtx.value) {
-      drawNextPieces(nextPieces.value, nextCtx.value, blockSize.value, isDarkMode.value)
+    if (nextPieces.value.length > 0) {
+      const nextCanvas = isMobile.value ? nextCtxMobile.value : nextCtx.value
+      if (nextCanvas) {
+        drawNextPieces(nextPieces.value, nextCanvas, blockSize.value, isDarkMode.value)
+      }
     }
   }
 }
@@ -484,27 +550,57 @@ function debounce(func, delay) {
 
 function adjustCanvasSize() {
   console.log('Adjusting canvas size...')
+
+  // Check if we're on mobile
+  isMobile.value = window.innerWidth <= 768
+
   const appContainer = document.getElementById('app-container')
   const hardDropBtn = document.querySelector('.hard-drop-btn')
   const leaderboard = document.querySelector('.leaderboard-container')
-  const sidebar = document.querySelector('.sidebar')
+  const mobileControls = document.querySelector('.mobile-controls-bar')
+  const mobileStats = document.querySelector('.mobile-stats')
 
-  const hardDropBtnHeight = hardDropBtn ? hardDropBtn.offsetHeight + 10 : 50 // Include gap
+  const hardDropBtnHeight = hardDropBtn ? hardDropBtn.offsetHeight + 10 : 50
   const leaderboardHeight = leaderboard ? leaderboard.offsetHeight : 0
-  const sidebarWidth = sidebar ? sidebar.offsetWidth : 180 // Fallback to CSS width
-  const gameLayoutGap = 20 // As defined in .game-layout CSS for gap
-  const appContainerVPadding = 10 * 2 // app-container padding top+bottom
-  const appContainerHPadding = 10 * 2 // app-container padding left+right
-  const verticalGapsAroundGame = 15 * 3 // From #app-container gap (title, leaderboard, game, info)
+  const mobileControlsHeight = mobileControls ? mobileControls.offsetHeight + 10 : 0
+  const mobileStatsHeight = mobileStats ? mobileStats.offsetHeight + 10 : 0
+  const appContainerVPadding = 10 * 2
+  const appContainerHPadding = 10 * 2
+  const verticalGapsAroundGame = 15 * 3
 
-  const availableHeightForGame =
-    window.innerHeight -
-    hardDropBtnHeight -
-    leaderboardHeight -
-    appContainerVPadding -
-    verticalGapsAroundGame
-  const appContainerContentWidth = appContainer.offsetWidth - appContainerHPadding
-  const availableWidthForCanvas = appContainerContentWidth - sidebarWidth * 2 - gameLayoutGap * 2
+  let availableHeightForGame, availableWidthForCanvas
+
+  if (isMobile.value) {
+    // Mobile layout calculations
+    availableHeightForGame =
+      window.innerHeight -
+      hardDropBtnHeight -
+      leaderboardHeight -
+      mobileControlsHeight -
+      mobileStatsHeight -
+      appContainerVPadding -
+      verticalGapsAroundGame
+
+    // On mobile, canvas takes most of the width, leaving space for next piece
+    const appContainerContentWidth = appContainer.offsetWidth - appContainerHPadding
+    const nextPieceWidth = 4 * 25 + 20 // Smaller next piece + gap
+    availableWidthForCanvas = appContainerContentWidth - nextPieceWidth
+  } else {
+    // Desktop layout calculations (existing logic)
+    const sidebar = document.querySelector('.sidebar')
+    const sidebarWidth = sidebar ? sidebar.offsetWidth : 180
+    const gameLayoutGap = 20
+
+    availableHeightForGame =
+      window.innerHeight -
+      hardDropBtnHeight -
+      leaderboardHeight -
+      appContainerVPadding -
+      verticalGapsAroundGame
+
+    const appContainerContentWidth = appContainer.offsetWidth - appContainerHPadding
+    availableWidthForCanvas = appContainerContentWidth - sidebarWidth * 2 - gameLayoutGap * 2
+  }
 
   let newBlockSizeByHeight = Math.floor(availableHeightForGame / ROWS)
   let newBlockSizeByWidth = Math.floor(availableWidthForCanvas / COLS)
@@ -517,15 +613,25 @@ function adjustCanvasSize() {
   canvasWidth.value = COLS * blockSize.value
   canvasHeight.value = ROWS * blockSize.value
 
+  // Set up main canvas
   const mainCanvas = document.getElementById('tetrisCanvas')
   if (mainCanvas) {
     mainCanvas.width = canvasWidth.value
     mainCanvas.height = canvasHeight.value
   }
+
+  // Set up next piece canvases
   const nextCanvas = document.getElementById('nextPieceCanvas')
   if (nextCanvas) {
     nextCanvas.width = 4 * blockSize.value
     nextCanvas.height = 8 * blockSize.value
+  }
+
+  const nextCanvasMobile = document.getElementById('nextPieceCanvasMobile')
+  if (nextCanvasMobile) {
+    const mobileNextSize = Math.min(blockSize.value, 25) // Smaller on mobile
+    nextCanvasMobile.width = 4 * mobileNextSize
+    nextCanvasMobile.height = 8 * mobileNextSize
   }
 
   // Refresh display after canvas size changes
@@ -538,6 +644,9 @@ function initializeCanvases() {
 
   const nextCanvasEl = document.getElementById('nextPieceCanvas')
   if (nextCanvasEl) nextCtx.value = nextCanvasEl.getContext('2d')
+
+  const nextCanvasMobileEl = document.getElementById('nextPieceCanvasMobile')
+  if (nextCanvasMobileEl) nextCtxMobile.value = nextCanvasMobileEl.getContext('2d')
 
   adjustCanvasSize() // Call after contexts are set
   window.addEventListener('resize', debounce(adjustCanvasSize, 100))
@@ -686,7 +795,7 @@ function gameLoop() {
     currentPiece.value,
     intersects,
     nextPieces.value,
-    nextCtx.value,
+    isMobile.value ? nextCtxMobile.value : nextCtx.value,
   )
 }
 function startGameTimer() {

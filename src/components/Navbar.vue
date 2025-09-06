@@ -1,6 +1,6 @@
 <template>
   <nav>
-    <router-link to="/">Home</router-link>
+    <router-link to="/">Hem</router-link>
     <router-link to="/kfkblock">KfKblock</router-link>
     <router-link to="/minesweeper">Minesweeper</router-link>
     <router-link to="/2048">2048</router-link>

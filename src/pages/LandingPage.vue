@@ -51,7 +51,7 @@
           </div>
           <div class="game-card">
             <h3>Snake</h3>
-            <button class="play-btn disabled">Kommer Snart</button>
+            <router-link to="/snake" class="play-btn">Spela</router-link>
           </div>
 
           <div class="game-card special">
