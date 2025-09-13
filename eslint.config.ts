@@ -24,5 +24,20 @@ export default defineConfigWithVueTs(
     ...pluginVitest.configs.recommended,
     files: ['src/**/__tests__/*'],
   },
+  
+  // Game-specific TypeScript rules
+  {
+    name: 'app/typescript-rules',
+    files: ['**/*.{ts,mts,tsx,vue}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/prefer-const': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'warn',
+      'vue/multi-word-component-names': 'off', // Allow single-word component names for game components
+      'vue/component-definition-name-casing': ['error', 'PascalCase'],
+    },
+  },
+  
   skipFormatting,
 )

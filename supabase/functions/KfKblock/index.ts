@@ -1,19 +1,15 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js";
+import { createServiceClient } from "../_shared/auth.ts";
 import { createApp } from "../_shared/app.ts";
+import { Context } from "hono";
 
 const functionName = "kfkblock";
 const app = createApp(`/${functionName}`);
 
 // Initialize Supabase client
-const supabaseUrl = Deno.env.get("SB_URL") ?? Deno.env.get("SUPABASE_URL")!;
-const _anonKey = Deno.env.get("SB_ANON_KEY") ??
-  Deno.env.get("SUPABASE_ANON_KEY")!;
-const serviceKey = Deno.env.get("SB_SERVICE_ROLE_KEY") ??
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const supabase = createClient(supabaseUrl, serviceKey);
+const supabase = createServiceClient();
 
-app.get("/", (c: any) => {
+app.get("/", (c: Context) => {
   console.log("Root endpoint called");
   console.log("Request method:", c.req.method);
   console.log("Request URL:", c.req.url);
@@ -21,7 +17,7 @@ app.get("/", (c: any) => {
   return c.json({ message: "KfKblock Edge Function is running!" });
 });
 
-app.get("/kfkblock-scores", async (c: any) => {
+app.get("/kfkblock-scores", async (c: Context) => {
   console.log("Fetching KfKblock scores...");
   // Get data from Supabase table
   const { data, error } = await supabase
@@ -36,7 +32,7 @@ app.get("/kfkblock-scores", async (c: any) => {
   return c.json(data, 200);
 });
 
-app.post("/kfkblock-scores", async (c: any) => {
+app.post("/kfkblock-scores", async (c: Context) => {
   try {
     // Parse request body
     const reqBody = await c.req.json();
