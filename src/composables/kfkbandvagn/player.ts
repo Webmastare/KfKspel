@@ -16,6 +16,7 @@ export interface Player {
     lives: number; // Health/hearts (0 = dead)
     tokens: number; // Action points (Hp in Swedish)
     range: number; // Attack/interaction range
+    taken_tank: boolean; // Whether the tank is taken
     color: string; // Player color (hex format)
 }
 

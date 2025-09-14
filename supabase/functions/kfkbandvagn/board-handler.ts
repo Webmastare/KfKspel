@@ -8,8 +8,8 @@ import {
   createErrorResponse,
   createSuccessResponse,
 } from "../_shared/validation.ts";
-import { ERROR_CODES } from "../_shared/types.ts";
-import type { GameLog, Player } from "../_shared/types.ts";
+import { ERROR_CODES } from "./types.ts";
+import type { GameLog, Player } from "./types.ts";
 
 // Handle board shrinking (called by cron job)
 export async function handleBoardShrink(_request: Request): Promise<Response> {
@@ -18,11 +18,11 @@ export async function handleBoardShrink(_request: Request): Promise<Response> {
 
     console.log("Starting board shrink process");
 
-    // Get current board data
+    // Get current board data for active board
     const { data: boardData, error: boardError } = await supabase
       .from("KfKbandvagnBoard")
       .select("*")
-      .eq("board_id", "f53")
+      .eq("active_board", true)
       .single();
 
     if (boardError) {
@@ -45,7 +45,7 @@ export async function handleBoardShrink(_request: Request): Promise<Response> {
       `Shrinking board from ${boardSize.rows}x${boardSize.columns} to ${effectiveRows}x${effectiveCols}`,
     );
 
-    // Update board shrink level
+    // Update board shrink level with active board flag
     const nextShrinkTime = new Date();
     nextShrinkTime.setDate(nextShrinkTime.getDate() + 1); // Next shrink in 24 hours
 
@@ -55,7 +55,7 @@ export async function handleBoardShrink(_request: Request): Promise<Response> {
         shrink: newShrink,
         next_shrink: nextShrinkTime.toISOString(),
       })
-      .eq("board_id", "f53");
+      .eq("active_board", true);
 
     if (updateBoardError) {
       console.error("Error updating board:", updateBoardError);
@@ -154,7 +154,7 @@ export async function handleBoardShrink(_request: Request): Promise<Response> {
     const { error: logError } = await supabase
       .from("KfKbandvagnBoard")
       .update({ logs: updatedLogs })
-      .eq("board_id", "f53");
+      .eq("active_board", true);
 
     if (logError) {
       console.error("Error updating logs:", logError);
@@ -250,7 +250,7 @@ export async function handleTokenDistribution(
     const { data: boardData, error: boardError } = await supabase
       .from("KfKbandvagnBoard")
       .select("logs")
-      .eq("board_id", "f53")
+      .eq("active_board", true)
       .single();
 
     if (!boardError && boardData) {
@@ -263,7 +263,7 @@ export async function handleTokenDistribution(
       const { error: logError } = await supabase
         .from("KfKbandvagnBoard")
         .update({ logs: updatedLogs })
-        .eq("board_id", "f53");
+        .eq("active_board", true);
 
       if (logError) {
         console.error("Error updating logs:", logError);
@@ -299,7 +299,7 @@ export async function handleHeartSpawn(_request: Request): Promise<Response> {
     const { data: boardData, error: boardError } = await supabase
       .from("KfKbandvagnBoard")
       .select("*")
-      .eq("board_id", "f53")
+      .eq("active_board", true)
       .single();
 
     if (boardError) {
@@ -361,7 +361,9 @@ export async function handleHeartSpawn(_request: Request): Promise<Response> {
     const spawnedHearts = [];
 
     for (
-      let i = 0; i < Math.min(heartsToSpawn, availablePositions.length); i++
+      let i = 0;
+      i < Math.min(heartsToSpawn, availablePositions.length);
+      i++
     ) {
       const randomIndex = Math.floor(Math.random() * availablePositions.length);
       const position = availablePositions.splice(randomIndex, 1)[0];
@@ -392,7 +394,7 @@ export async function handleHeartSpawn(_request: Request): Promise<Response> {
     const { error: logError } = await supabase
       .from("KfKbandvagnBoard")
       .update({ logs: updatedLogs })
-      .eq("board_id", "f53");
+      .eq("active_board", true);
 
     if (logError) {
       console.error("Error updating logs:", logError);

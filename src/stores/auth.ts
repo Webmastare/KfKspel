@@ -65,7 +65,7 @@ export const useAuthStore = defineStore("auth", {
       return await supabase.auth.signUp({
         email,
         password,
-        options: { data: meta },
+        options: meta ? { data: meta } : {},
       });
     },
 
@@ -94,7 +94,7 @@ export const useAuthStore = defineStore("auth", {
 
     async createProfile(profile: Partial<Profile>) {
       console.log("Creating profile:", profile);
-      if (!this.user) return;
+      if (!this.user) return null;
       const { data, error } = await supabase
         .from("user_profiles")
         .insert({
@@ -109,6 +109,7 @@ export const useAuthStore = defineStore("auth", {
       if (error) return error;
       this.profile = data as Profile;
       console.log("Created profile:", this.profile);
+      return data;
     },
 
     // Complete signup process - call this after profile creation

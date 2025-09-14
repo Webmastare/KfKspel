@@ -47,7 +47,7 @@
           </div>
           <div class="game-card">
             <h3>KfKbandvagn</h3>
-            <button class="play-btn disabled">Kommer Snart</button>
+            <router-link to="/kfkbandvagn" class="play-btn">Spela</router-link>
           </div>
           <div class="game-card">
             <h3>Snake</h3>

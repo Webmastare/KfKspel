@@ -8,12 +8,8 @@ import {
   createErrorResponse,
   createSuccessResponse,
 } from "../_shared/validation.ts";
-import { ERROR_CODES } from "../_shared/types.ts";
-import type {
-  BoardData,
-  GameStateResponse,
-  PlayerResponse,
-} from "../_shared/types.ts";
+import { ERROR_CODES } from "./types.ts";
+import type { BoardData, GameStateResponse, PlayerResponse } from "./types.ts";
 
 // Handle getting game state (equivalent to /getKfKbandvagn)
 export async function handleGetGameState(_request: Request): Promise<Response> {

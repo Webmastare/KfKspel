@@ -3,6 +3,11 @@
  */
 
 import type { Player, Position } from "./player";
+import type {
+    ActionRequest,
+    CreatePlayerRequest,
+    LoginRequest,
+} from "./apiHandler";
 
 // Valid game action types
 export type GameActionType = "move" | "shot" | "range" | "life";
@@ -332,4 +337,48 @@ export function validateUpgradeAction(
     return {
         isValid: true,
     };
+}
+
+// API related types and functions
+
+import { supabase } from "@/utils/supabase";
+import type { GameLog } from "./board";
+import { makeRequest } from "./apiHandler";
+
+// Re-export API types from apiHandler for consistency
+export type {
+    ActionRequest,
+    CreatePlayerRequest,
+    LoginRequest,
+} from "./apiHandler";
+
+/**
+ * Create a new player
+ */
+export async function createPlayer(
+    request: CreatePlayerRequest,
+): Promise<Player> {
+    return makeRequest<Player>("/auth/create", "POST", request);
+}
+
+/**
+ * Login existing player
+ */
+export async function loginPlayer(request: LoginRequest): Promise<Player> {
+    return makeRequest<Player>("/auth/login", "POST", request);
+}
+
+/**
+ * Perform a game action
+ */
+export async function performAction(
+    action: ActionRequest,
+): Promise<{ updatedData: Player; shotData?: Player; updatedLogs: GameLog }> {
+    return makeRequest<
+        { updatedData: Player; shotData?: Player; updatedLogs: GameLog }
+    >(
+        "/game/action",
+        "POST",
+        action,
+    );
 }

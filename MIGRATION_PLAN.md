@@ -86,10 +86,9 @@ Create `src/composables/kfkbandvagn/imageProcessor.ts`:
 ```
 supabase/functions/
 ├── _shared/
-│   ├── types.ts
 │   ├── auth.ts
-│   ├── validation.ts
-│   └── cors.ts
+│   └── validation.ts
+│
 └── kfkbandvagn/
     ├── board-handler.ts
     ├── game-state.ts
@@ -102,48 +101,48 @@ supabase/functions/
 
 #### `board-handler`
 
-- [ ] A new function that should be called from a cronjob in supabase
-- [ ] Handles shrinking of board and token distribution to players
-- [ ] Two endpoints one that shrinks the board and one that gives all players one new token
-- [ ] Implement a way to determine how much to shrink based on the size of the board and then a new column in the table that holds the value for the next shrinking. Shrink once a day.
+- [x] A new function that should be called from a cronjob in supabase
+- [x] Handles shrinking of board and token distribution to players
+- [x] Two endpoints one that shrinks the board and one that gives all players one new token
+- [x] Implement a way to determine how much to shrink based on the size of the board and then a new column in the table that holds the value for the next shrinking. Shrink once a day.
 
 #### `game-state`
 
-- [ ] Replace `/getKfKbandvagn` endpoint
-- [ ] Handle player data and board data fetching from the two tables
-- [ ] Add proper TypeScript types for responses
-- [ ] Implement caching for better performance
+- [x] Replace `/getKfKbandvagn` endpoint
+- [x] Handle player data and board data fetching from the two tables
+- [x] Add proper TypeScript types for responses
+- [x] Implement caching for better performance
 
 #### `game-actions`
 
-- [ ] Replace `/doActionKfKbandvagn` endpoint
-- [ ] Handle move, shot, range, and life actions
-- [ ] Add server-side validation for all actions
-- [ ] Implement proper error handling
+- [x] Replace `/doActionKfKbandvagn` endpoint
+- [x] Handle move, shot, range, and life actions
+- [x] Add server-side validation for all actions
+- [x] Implement proper error handling
 
 #### `auth-handlers`
 
-- [ ] Replace `/loginKfKbandvagn` and `/createKfKbandvagn` endpoints
-- [ ] Handle authentication and player creation
-- [ ] Use supabase auth together with the game
-- [ ] Login is handled by the auth but authenticed users need to create a player
-- [ ] Add proper user session management somewhat handled by JWTs but include refreshing of board and player data.
+- [x] Replace `/loginKfKbandvagn` and `/createKfKbandvagn` endpoints
+- [x] Handle authentication and player creation
+- [x] Use supabase auth together with the game
+- [x] Login is handled by the auth but authenticed users need to create a player
+- [x] Add proper user session management somewhat handled by JWTs but include refreshing of board and player data.
 
 #### `admin-tools`
 
-- [ ] Admin-only functions for game management
-- [ ] Board reset functionality
-- [ ] Player management and moderation tools
-- [ ] Game statistics and analytics endpoints
-- [ ] Bulk operations for testing and maintenance
+- [x] Admin-only functions for game management
+- [x] Board reset functionality
+- [x] Player management and moderation tools
+- [x] Game statistics and analytics endpoints
+- [x] Bulk operations for testing and maintenance
 
 ### Step 7: Shared Utilities
 
 Create `supabase/functions/_shared/`:
 
-- [ ] `auth.ts` - JWT validation and user authentication
-- [ ] `validation.ts` - Input validation functions and schemas
-- [ ] `types.ts` - Shared TypeScript types between client and server
+- [x] `auth.ts` - JWT validation and user authentication
+- [x] `validation.ts` - Input validation functions and schemas
+- [x] `types.ts` - Shared TypeScript types between client and server
 
 ### Step 8: Rate Limiting and Security
 

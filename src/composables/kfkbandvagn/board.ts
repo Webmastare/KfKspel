@@ -1,8 +1,8 @@
 /**
- * Game board types and utilities for KfKbandvagn game
+ * Game board types, utilities and API calls for KfKbandvagn game
  */
-
-import type { Position } from "./player";
+import { type GameStateResponse, makeRequest } from "./apiHandler";
+import type { Player, Position } from "./player";
 
 // Game log interface
 export interface GameLog {
@@ -16,10 +16,13 @@ export interface GameLog {
 
 // Game board interface
 export interface GameBoard {
+    board_id: string;
     rows: number;
     cols: number;
     shrink: number; // Current shrink level
-    nextShrink?: string; // Timestamp for next shrink
+    upgrades?: Record<string, unknown>;
+    time_to_shrink?: string; // Timestamp for next shrink
+    logs: GameLog[];
 }
 
 // Board cell interface
@@ -193,4 +196,25 @@ export function getRecentLogs(
         const logTime = new Date(log.timestamp);
         return logTime >= cutoffTime;
     });
+}
+
+// API related types and functions
+
+// Re-export API types from apiHandler
+export type { BoardData, GameStateResponse } from "./apiHandler";
+
+/**
+ * Get current game state (board data and player data)
+ */
+export async function getGameState(): Promise<GameStateResponse> {
+    return makeRequest<GameStateResponse>(
+        "/game/state",
+        "GET",
+        undefined,
+    );
+}
+
+// Get game statistics
+export async function getGameStats(): Promise<unknown> {
+    return makeRequest<unknown>("/game/stats", "GET", undefined);
 }

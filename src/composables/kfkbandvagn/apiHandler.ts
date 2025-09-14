@@ -1,10 +1,25 @@
 /**
- * API handler types and utilities for KfKbandvagn game
+ * Centralized API handler for KfKbandvagn game
+ * Handles all HTTP requests with proper error handling and validation
  */
 
+import { supabase } from "@/utils/supabase";
 import type { Player, PlayerCreationData } from "./player";
-import type { GameState } from "./board";
-import type { GameAction } from "./gameActions";
+import type { GameLog, GameState } from "./board";
+import type { GameAction, GameActionType } from "./gameActions";
+
+// Custom error class for API errors
+export class BandvagnAPIError extends Error {
+    code?: string | undefined;
+    status?: number | undefined;
+
+    constructor(message: string, code?: string, status?: number) {
+        super(message);
+        this.name = "BandvagnAPIError";
+        this.code = code;
+        this.status = status;
+    }
+}
 
 // API Response types
 export interface ApiResponse<T = unknown> {
@@ -38,10 +53,20 @@ export interface PlayerCreationResponse {
     created: boolean;
 }
 
+export interface BoardData {
+    size: {
+        rows: number;
+        columns: number;
+    };
+    shrink: number;
+    upgrades?: Record<string, unknown>;
+    time_to_shrink?: string;
+    logs: GameLog[];
+}
+
 export interface GameStateResponse {
-    players: Player[];
-    gameState: GameState;
-    userPlayer: Player | null;
+    playerData: Player[];
+    boardData: BoardData;
 }
 
 export interface ActionResponse {
@@ -53,8 +78,7 @@ export interface ActionResponse {
 
 // Request payload types
 export interface LoginRequest {
-    email: string;
-    password: string;
+    user_id: string;
 }
 
 export interface CreateAccountRequest {
@@ -64,14 +88,16 @@ export interface CreateAccountRequest {
 }
 
 export interface CreatePlayerRequest {
-    playerData: PlayerCreationData;
+    user_id: string;
+    playerID: string;
+    color: string;
 }
 
 export interface ActionRequest {
     user_id: string;
-    action: GameAction["action"];
-    moveDirection?: GameAction["moveDirection"];
-    targetUUID?: GameAction["targetUUID"];
+    action: GameActionType;
+    moveDirection?: { row: number; col: number };
+    targetUUID?: string;
 }
 
 // Known API error codes
@@ -111,18 +137,13 @@ export type ApiErrorCode = typeof API_ERROR_CODES[keyof typeof API_ERROR_CODES];
  */
 export function createSuccessResponse<T>(
     data: T,
-    message?: string,
+    message = "Success",
 ): ApiResponse<T> {
-    const response: ApiResponse<T> = {
+    return {
         success: true,
+        message,
         data,
     };
-
-    if (message !== undefined) {
-        response.message = message;
-    }
-
-    return response;
 }
 
 /**
@@ -244,4 +265,95 @@ export function validateActionRequest(obj: unknown): obj is ActionRequest {
         typeof request.action === "string" &&
         ["move", "shot", "range", "life"].includes(request.action as string)
     );
+}
+
+// Make authenticated request to Edge Functions
+export async function makeRequest<T>(
+    endpoint: string,
+    method: "GET" | "POST" = "GET",
+    body?: unknown,
+): Promise<T> {
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+    };
+
+    try {
+        const invokeOptions: any = {
+            method,
+            headers,
+        };
+
+        // Only add body if it exists
+        if (body) {
+            invokeOptions.body = JSON.stringify(body);
+        }
+
+        const { data, error } = await supabase.functions.invoke(
+            `kfkbandvagn${endpoint}`,
+            invokeOptions,
+        );
+
+        if (error) {
+            console.error("Edge Function error:", error);
+            throw new BandvagnAPIError(
+                error.message || "Request failed",
+                error.name,
+                error.status,
+            );
+        }
+
+        // Handle API response format
+        if (data && typeof data === "object") {
+            // If response has success field and it's false, it's an error
+            if ("success" in data && data.success === false) {
+                const errorData = data as ApiResponse;
+                throw new BandvagnAPIError(
+                    errorData.error?.message || errorData.message ||
+                        "Request failed",
+                    errorData.error?.code,
+                );
+            }
+
+            // Return the data field if it exists, otherwise return the whole response
+            return ("data" in data ? data.data : data) as T;
+        }
+
+        return data as T;
+    } catch (error) {
+        if (error instanceof BandvagnAPIError) {
+            throw error;
+        }
+
+        console.error("API request failed:", error);
+        throw new BandvagnAPIError(
+            error instanceof Error ? error.message : "Unknown API error",
+        );
+    }
+}
+
+// Helper to format error messages for user display
+export function formatAPIError(error: unknown): string {
+    if (error instanceof BandvagnAPIError) {
+        // Map error codes to Swedish messages
+        const errorMessages: Record<string, string> = {
+            "no_player_found": "Ingen spelare hittades",
+            "no_free_tanks": "Inga lediga tanks",
+            "missing_tokens": "Inte nog med tokens",
+            "invalid_action": "Ogiltigt drag",
+            "not_in_range": "Inte inom räckvidd",
+            "player_already_dead": "Spelaren är redan död",
+            "invalid_session": "Session har gått ut, logga in igen",
+            "validation_error": "Ogiltiga data",
+            "internal_error": "Serverfel, försök igen",
+        };
+
+        return errorMessages[error.code || ""] || error.message ||
+            "Ett fel uppstod";
+    }
+
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    return "Ett oväntat fel uppstod";
 }

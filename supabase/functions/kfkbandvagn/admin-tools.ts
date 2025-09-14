@@ -56,7 +56,7 @@ export async function handleGameReset(_request: Request): Promise<Response> {
         logs: [resetLogEntry],
         next_shrink: null,
       })
-      .eq("board_id", "f53");
+      .eq("active_board", true);
 
     if (resetBoardError) {
       console.error("Error resetting board:", resetBoardError);
@@ -102,7 +102,7 @@ export async function handleAdminStats(_request: Request): Promise<Response> {
     const { data: boardData, error: boardError } = await supabase
       .from("KfKbandvagnBoard")
       .select("*")
-      .eq("board_id", "f53")
+      .eq("active_board", true)
       .single();
 
     if (boardError) {

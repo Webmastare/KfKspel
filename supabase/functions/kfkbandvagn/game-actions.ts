@@ -12,14 +12,14 @@ import {
   validateActionRequest,
   validateMoveDirection,
 } from "../_shared/validation.ts";
-import { ERROR_CODES, TOKEN_COSTS } from "../_shared/types.ts";
+import { ERROR_CODES, TOKEN_COSTS } from "./types.ts";
 import type {
   ActionRequest,
   ActionResponse,
   GameLog,
   Player,
   Position,
-} from "../_shared/types.ts";
+} from "./types.ts";
 
 // Add a log entry to the game board
 async function addBandvagnLog(
@@ -37,11 +37,11 @@ async function addBandvagnLog(
   };
 
   try {
-    // Fetch the current logs for the board
+    // Fetch the current logs for the active board
     const { data, error: fetchError } = await supabase
       .from("KfKbandvagnBoard")
       .select("logs")
-      .eq("board_id", "f53")
+      .eq("active_board", true)
       .single();
 
     if (fetchError) {
@@ -61,7 +61,7 @@ async function addBandvagnLog(
     const { error: updateError } = await supabase
       .from("KfKbandvagnBoard")
       .update({ logs: updatedLogs })
-      .eq("board_id", "f53");
+      .eq("active_board", true);
 
     if (updateError) {
       console.error("Error updating logs:", updateError);

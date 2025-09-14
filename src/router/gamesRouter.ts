@@ -15,6 +15,11 @@ export default [
         component: () => import("@/pages/KfKblock.vue"),
     },
     {
+        path: "/kfkbandvagn",
+        name: "KfKbandvagn",
+        component: () => import("@/pages/Kfkbandvagn.vue"),
+    },
+    {
         path: "/snake",
         name: "Snake",
         component: () => import("@/pages/Snake.vue"),
