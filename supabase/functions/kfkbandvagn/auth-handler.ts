@@ -14,7 +14,7 @@ import { ERROR_CODES } from "./types.ts";
 import type { CreatePlayerRequest, LoginRequest } from "./types.ts";
 
 // Handle player creation (equivalent to /createKfKbandvagn)
-export async function handleCreatePlayer(request: Request): Promise<Response> {
+export async function handleCreatePlayer(request: Request) {
   try {
     const body = await request.json();
     const createData: CreatePlayerRequest = validateCreatePlayerRequest(body);
@@ -84,7 +84,7 @@ export async function handleCreatePlayer(request: Request): Promise<Response> {
 }
 
 // Handle player login (equivalent to /loginKfKbandvagn)
-export async function handleLogin(request: Request): Promise<Response> {
+export async function handleLogin(request: Request) {
   try {
     const body = await request.json();
     const loginData: LoginRequest = validateLoginRequest(body);
@@ -135,9 +135,7 @@ export async function handleLogin(request: Request): Promise<Response> {
 }
 
 // Create new users for testing (equivalent to /createNewUsersKfKbandvagn)
-export async function handleCreateTestUsers(
-  _request: Request,
-): Promise<Response> {
+export async function handleCreateTestUsers() {
   try {
     const supabase = createServiceClient();
 

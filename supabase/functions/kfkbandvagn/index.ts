@@ -39,15 +39,13 @@ app.get("/", (c: Context) => {
 app.post("/auth/create", async (c: Context) => {
   const reqBody = await c.req.json();
   const response = await handleCreatePlayer(reqBody);
-  c.res = response;
-  return c.res;
+  return c.json(response, 201);
 });
 
 app.post("/auth/login", async (c: Context) => {
   const reqBody = await c.req.json();
   const response = await handleLogin(reqBody);
-  c.res = response;
-  return c.res;
+  return c.json(response, 200);
 });
 
 // Protected game endpoints (require authentication)
@@ -61,13 +59,12 @@ app.get("/game/state", async (c: Context) => {
       ERROR_CODES.INVALID_SESSION,
       "Invalid or expired session",
     );
-    return response;
+    return c.json(response, 401);
   }
   console.log("User is valid, proceeding to get game state");
   const response = await handleGetGameState();
   console.log("Game state response:", response);
-  c.res = response;
-  return c.res;
+  return c.json(response, 200);
 });
 
 app.get("/game/stats", async (c: Context) => {
@@ -78,11 +75,10 @@ app.get("/game/stats", async (c: Context) => {
       ERROR_CODES.INVALID_SESSION,
       "Invalid or expired session",
     );
-    return response;
+    return c.json(response, 401);
   }
   const response = await handleGetGameStats();
-  c.res = response;
-  return c.res;
+  return c.json(response, 200);
 });
 
 app.post("/game/action", async (c: Context) => {
@@ -94,25 +90,22 @@ app.post("/game/action", async (c: Context) => {
       ERROR_CODES.INVALID_SESSION,
       "Invalid or expired session",
     );
-    return response;
+    return c.json(response, 401);
   }
   const response = await handleGameAction(reqBody);
-  c.res = response;
-  return c.res;
+  return c.json(response, 200);
 });
 
-// Automated/cron endpoints (for system use)
+// Automated/cron endpoints (for system use) Change to patch or put?
 app.post("/system/shrink", async (c: Context) => {
   // In production, we'd want to validate this is coming from a trusted source
   const response = await handleBoardShrink();
-  c.res = response;
-  return c.res;
+  return c.json(response, 200);
 });
 
 app.post("/system/distribute", async (c: Context) => {
   const response = await handleTokenDistribution();
-  c.res = response;
-  return c.res;
+  return c.json(response, 200);
 });
 
 // Admin endpoints (require admin privileges)
@@ -120,15 +113,13 @@ app.post("/system/distribute", async (c: Context) => {
 app.post("/admin/reset", async (c: Context) => {
   // TODO: Add admin authentication check
   const response = await handleGameReset();
-  c.res = response;
-  return c.res;
+  return c.json(response, 200);
 });
 
 app.get("/admin/stats", async (c: Context) => {
   // TODO: Add admin authentication check
   const response = await handleAdminStats();
-  c.res = response;
-  return c.res;
+  return c.json(response, 200);
 });
 
 // 404 for undefined routes
@@ -149,8 +140,7 @@ app.all("*", (c: Context) => {
       headers: { "Content-Type": "application/json" },
     },
   );
-  c.res = response;
-  return c.res;
+  return c.json(response, 404);
 });
 
 // Export for Deno Deploy

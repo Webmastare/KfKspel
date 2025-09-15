@@ -76,7 +76,7 @@ async function addBandvagnLog(
 }
 
 // Handle game actions (equivalent to /doActionKfKbandvagn)
-export async function handleGameAction(request: Request): Promise<Response> {
+export async function handleGameAction(request: Request) {
   try {
     const body = await request.json();
     const actionData: ActionRequest = validateActionRequest(body);

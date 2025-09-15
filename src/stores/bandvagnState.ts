@@ -26,7 +26,7 @@ export const useBandvagnStore = defineStore("bandvagn", {
 
     // Auto-refresh settings
     autoRefreshEnabled: true,
-    refreshInterval: 10000, // 10 seconds
+    refreshInterval: 3600000, // 1 hour
     refreshTimeoutId: null as number | null,
   }),
 

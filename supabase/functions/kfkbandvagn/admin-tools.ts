@@ -12,41 +12,103 @@ import { ERROR_CODES } from "./types.ts";
 import type { GameLog, Player } from "./types.ts";
 
 // Reset the entire game state (admin only)
-export async function handleGameReset(): Promise<Response> {
+export async function handleGameReset() {
   try {
     const supabase = createServiceClient();
 
-    console.log("Starting game reset");
+    console.log("Starting game reset (clear players and re-populate)");
 
-    // Reset all players to not taken
-    const { error: resetPlayersError } = await supabase
-      .from("KfKbandvagn")
+    // Fetch active board to get size
+    const { data: boardData, error: boardError } = await supabase
+      .from("KfKbandvagnBoard")
       .update({
-        taken_tank: false,
-        user_id: null,
-        playerID: "No-player",
-        tokens: 100,
-        lives: 3,
-        range: 2,
-        color: "#FFFFFF",
-        created_date: null,
-        last_login_date: null,
-      });
+        size: { rows: 50, columns: 50 },
+        shrink: 0,
+        next_shrink: null,
+        upgrades: [],
+        logs: [],
+      })
+      .eq("active_board", true)
+      .select()
+      .single();
 
-    if (resetPlayersError) {
-      console.error("Error resetting players:", resetPlayersError);
+    if (boardError || !boardData) {
+      console.error("Error fetching active board for reset:", boardError);
       return createErrorResponse(
         ERROR_CODES.INTERNAL_ERROR,
-        resetPlayersError.message,
+        boardError?.message || "Active board not found",
+      );
+    }
+    const boardSize = boardData.size;
+
+    // Empty the players table first
+    const { error: deleteError } = await supabase
+      .from("KfKbandvagn")
+      .delete();
+
+    if (deleteError) {
+      console.error("Error deleting players during reset:", deleteError);
+      return createErrorResponse(
+        ERROR_CODES.INTERNAL_ERROR,
+        deleteError.message,
       );
     }
 
-    // Reset board state
+    // Build free spaces array for the board
+    const freeSpaces: Array<[number, number]> = [];
+    for (let r = 0; r < boardSize.rows; r++) {
+      for (let c = 0; c < boardSize.columns; c++) {
+        freeSpaces.push([r, c]);
+      }
+    }
+
+    // Decide how many placeholder users to create (roughly 1 per 10 cells)
+    const numUsers = Math.floor(freeSpaces.length / 10) || 1;
+
+    // Create entries with default values
+    const entries = Array.from({ length: numUsers }, () => ({
+      playerID: "No-player",
+      tokens: 100,
+      color: `#${
+        Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")
+      }`,
+      position: { column: 0, row: 0 },
+      lives: 3,
+      range: 2,
+      taken_tank: false,
+    } as Partial<Player>));
+
+    // Assign random distinct positions
+    for (const entry of entries) {
+      const spliceIndex = Math.floor(Math.random() * freeSpaces.length);
+      const pos = freeSpaces.splice(spliceIndex, 1) as Array<[number, number]>;
+      if (pos && pos[0]) {
+        entry.position = {
+          column: pos[0][1],
+          row: pos[0][0],
+        } as unknown as Player["position"];
+      }
+    }
+
+    console.log("Creating players", entries.length);
+    const { data: inserted, error: insertError } = await supabase
+      .from("KfKbandvagn")
+      .insert(entries);
+
+    if (insertError) {
+      console.error("Error inserting placeholder players:", insertError);
+      return createErrorResponse(
+        ERROR_CODES.INTERNAL_ERROR,
+        insertError.message,
+      );
+    }
+
+    // Reset board state and add reset log
     const resetLogEntry: GameLog = {
       playerID: "ADMIN",
       action: "game_reset",
       timestamp: new Date().toISOString(),
-      details: { resetBy: "admin" },
+      details: { resetBy: "admin", createdPlayers: (inserted || []).length },
     };
 
     const { error: resetBoardError } = await supabase
@@ -59,17 +121,20 @@ export async function handleGameReset(): Promise<Response> {
       .eq("active_board", true);
 
     if (resetBoardError) {
-      console.error("Error resetting board:", resetBoardError);
+      console.error("Error resetting board state:", resetBoardError);
       return createErrorResponse(
         ERROR_CODES.INTERNAL_ERROR,
         resetBoardError.message,
       );
     }
 
-    console.log("Game reset completed");
+    console.log(
+      "Game reset completed, players created:",
+      (inserted || []).length,
+    );
     return createSuccessResponse(
-      { message: "Game reset successfully" },
-      "All players and board state have been reset",
+      { createdPlayers: (inserted || []).length },
+      "Game reset and placeholder players created",
     );
   } catch (error) {
     console.error("Error in handleGameReset:", error);
@@ -81,7 +146,7 @@ export async function handleGameReset(): Promise<Response> {
 }
 
 // Get detailed game statistics (admin only)
-export async function handleAdminStats(): Promise<Response> {
+export async function handleAdminStats() {
   try {
     const supabase = createServiceClient();
 

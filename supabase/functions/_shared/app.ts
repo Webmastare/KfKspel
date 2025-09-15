@@ -1,4 +1,5 @@
 import { Hono } from "jsr:@hono/hono";
+import { Context } from "jsr:@hono/hono";
 
 export function createApp(basePath: string) {
     const app = new Hono().basePath(basePath);
@@ -15,14 +16,6 @@ const allowedOrigins = [
     "webmaster.github.io",
     "*",
 ];
-type Context = {
-    req: {
-        header: (name: string) => string | undefined;
-        method: string;
-    };
-    header: (name: string, value: string) => void;
-    body: (body: unknown, status: number) => Response;
-};
 
 type Next = () => Promise<void>;
 

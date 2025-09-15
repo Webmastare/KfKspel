@@ -191,33 +191,17 @@ export function sanitizePlayerID(playerID: string): string {
 }
 
 // Generate error response
-export function createErrorResponse(code: string, message?: string): Response {
-    return new Response(
-        JSON.stringify({
-            error: {
-                code,
-                message: message || code,
-            },
-        }),
-        {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-        },
-    );
+export function createErrorResponse(code: string, message?: string) {
+    const error: Record<string, string> = { code, message: message || code };
+    return error;
 }
 
 // Generate success response
-export function createSuccessResponse<T>(data?: T, message?: string): Response {
+export function createSuccessResponse<T>(data?: T, message?: string) {
     const response: Record<string, unknown> = {};
 
     if (message) response.message = message;
     if (data !== undefined) response.data = data;
 
-    return new Response(
-        JSON.stringify(response),
-        {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-        },
-    );
+    return response;
 }

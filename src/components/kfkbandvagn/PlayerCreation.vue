@@ -1,123 +1,126 @@
 <template>
-  <!-- Auth Form Overlay -->
-  <AuthForms
-    v-if="showAuthForm"
-    :mode="authMode"
-    @close="closeAuthForm"
-    @success="handleAuthSuccess"
-    class="auth-form"
-  />
+  <!-- Single root container for both auth and player creation states -->
+  <div class="player-creation-container">
+    <!-- Auth Form State -->
+    <AuthForms
+      v-if="showAuthForm"
+      :mode="authMode"
+      @close="closeAuthForm"
+      @success="handleAuthSuccess"
+      class="auth-form"
+    />
 
-  <!-- Player Creation Form (Centered Modal) -->
-  <div v-if="!showAuthForm" class="modal-overlay">
-    <div class="modal-content">
-      <div class="form-base player-creation-form">
-        <button type="button" class="close-form-button" @click="closeModal">&#215;</button>
+    <!-- Player Creation Form State -->
+    <div v-else class="modal-overlay">
+      <div class="modal-content">
+        <div class="form-base player-creation-form">
+          <button type="button" class="close-form-button" @click="closeModal">&#215;</button>
 
-        <h2>Skapa din Bandvagn</h2>
+          <h2>Skapa din Bandvagn</h2>
 
-        <!-- User greeting -->
-        <div v-if="authStore.isAuthed" class="user-greeting">
-          <p>Hej {{ authStore.profile?.username || authStore.user?.email }}!</p>
-          <p>Skapa din bandvagn för att börja spela.</p>
-        </div>
-
-        <!-- Not authenticated -->
-        <div v-else class="auth-prompt">
-          <p>Du behöver vara inloggad för att spela KfKbandvagn.</p>
-          <div class="button-group auth-buttons">
-            <button @click="openAuthForm('login')" class="button-base">Logga In</button>
-            <button @click="openAuthForm('signup')" class="button-base">Skapa Konto</button>
-          </div>
-        </div>
-
-        <!-- Player creation form (only show if authenticated) -->
-        <form v-if="authStore.isAuthed" @submit.prevent="handleSubmit" class="creation-form">
-          <!-- Player Name -->
-          <div class="form-group">
-            <label for="playerID" class="form-label">Spelarnamn</label>
-            <input
-              v-model="playerID"
-              type="text"
-              id="playerID"
-              class="form-input"
-              placeholder="Ange ditt spelarnamn"
-              :disabled="isSubmitting"
-              required
-              minlength="2"
-              maxlength="20"
-            />
-            <small class="input-help">2-20 tecken, inga specialtecken</small>
+          <!-- User greeting -->
+          <div v-if="authStore.isAuthed" class="user-greeting">
+            <p>Hej {{ authStore.profile?.username || authStore.user?.email }}!</p>
+            <p>Skapa din bandvagn för att börja spela.</p>
           </div>
 
-          <!-- Color Picker -->
-          <div class="form-group">
-            <label for="playerColor" class="form-label">Bandvagnsfärg</label>
-            <div class="color-picker-container">
+          <!-- Not authenticated -->
+          <div v-else class="auth-prompt">
+            <p>Du behöver vara inloggad för att spela KfKbandvagn.</p>
+            <div class="button-group auth-buttons">
+              <button @click="openAuthForm('login')" class="button-base">Logga In</button>
+              <button @click="openAuthForm('signup')" class="button-base">Skapa Konto</button>
+            </div>
+          </div>
+
+          <!-- Player creation form (only show if authenticated) -->
+          <form v-if="authStore.isAuthed" @submit.prevent="handleSubmit" class="creation-form">
+            <!-- Player Name -->
+            <div class="form-group">
+              <label for="playerID" class="form-label">Spelarnamn</label>
               <input
-                v-model="playerColor"
-                type="color"
-                id="playerColor"
-                class="color-input"
+                v-model="playerID"
+                type="text"
+                id="playerID"
+                class="form-input"
+                placeholder="Ange ditt spelarnamn"
                 :disabled="isSubmitting"
+                required
+                minlength="2"
+                maxlength="20"
               />
-              <div class="color-preview" :style="{ backgroundColor: playerColor }"></div>
-              <span class="color-value">{{ playerColor }}</span>
-              <button
-                type="button"
-                class="random-color-btn"
-                @click="generateRandomColor"
-                :disabled="isSubmitting"
-                title="Slumpa färg"
-              >
-                🎲
-              </button>
+              <small class="input-help">2-20 tecken, inga specialtecken</small>
             </div>
-            <small class="input-help">Välj en färg för din bandvagn eller slumpa en</small>
-          </div>
 
-          <!-- Preset Colors -->
-          <div class="preset-colors">
-            <label class="form-label">Förvalda färger:</label>
-            <div class="color-presets">
-              <button
-                v-for="color in presetColors"
-                :key="color"
-                type="button"
-                class="preset-color-btn"
-                :class="{ active: playerColor === color }"
-                :style="{ backgroundColor: color }"
-                @click="playerColor = color"
-                :disabled="isSubmitting"
-              ></button>
+            <!-- Color Picker -->
+            <div class="form-group">
+              <label for="playerColor" class="form-label">Bandvagnsfärg</label>
+              <div class="color-picker-container">
+                <input
+                  v-model="playerColor"
+                  type="color"
+                  id="playerColor"
+                  class="color-input"
+                  :disabled="isSubmitting"
+                />
+                <div class="color-preview" :style="{ backgroundColor: playerColor }"></div>
+                <span class="color-value">{{ playerColor }}</span>
+                <button
+                  type="button"
+                  class="random-color-btn"
+                  @click="generateRandomColor"
+                  :disabled="isSubmitting"
+                  title="Slumpa färg"
+                >
+                  🎲
+                </button>
+              </div>
+              <small class="input-help">Välj en färg för din bandvagn eller slumpa en</small>
             </div>
-          </div>
 
-          <!-- Error display -->
-          <div v-if="errorMessage" class="error-message">
-            {{ errorMessage }}
-          </div>
+            <!-- Preset Colors -->
+            <div class="preset-colors">
+              <label class="form-label">Förvalda färger:</label>
+              <div class="color-presets">
+                <button
+                  v-for="color in presetColors"
+                  :key="color"
+                  type="button"
+                  class="preset-color-btn"
+                  :class="{ active: playerColor === color }"
+                  :style="{ backgroundColor: color }"
+                  @click="playerColor = color"
+                  :disabled="isSubmitting"
+                ></button>
+              </div>
+            </div>
 
-          <!-- Loading state -->
-          <div v-if="isSubmitting" class="loading-state">
-            <div class="loading-spinner">⏳</div>
-            <p>Skapar din bandvagn...</p>
-          </div>
+            <!-- Error display -->
+            <div v-if="errorMessage" class="error-message">
+              {{ errorMessage }}
+            </div>
 
-          <!-- Submit button -->
-          <div class="button-group" v-if="!isSubmitting">
-            <button type="button" @click="closeModal" class="button-base decline">Avbryt</button>
-            <button type="submit" class="button-base">Skapa Bandvagn</button>
-          </div>
-        </form>
+            <!-- Loading state -->
+            <div v-if="isSubmitting" class="loading-state">
+              <div class="loading-spinner">⏳</div>
+              <p>Skapar din bandvagn...</p>
+            </div>
 
-        <!-- Existing player check -->
-        <div v-if="authStore.isAuthed && showExistingPlayerOption" class="existing-player-option">
-          <hr class="divider" />
-          <p>Eller om du redan har en bandvagn:</p>
-          <button @click="tryLoginExistingPlayer" class="button-base" :disabled="isSubmitting">
-            Logga in befintlig spelare
-          </button>
+            <!-- Submit button -->
+            <div class="button-group" v-if="!isSubmitting">
+              <button type="button" @click="closeModal" class="button-base decline">Avbryt</button>
+              <button type="submit" class="button-base">Skapa Bandvagn</button>
+            </div>
+          </form>
+
+          <!-- Existing player check -->
+          <div v-if="authStore.isAuthed && showExistingPlayerOption" class="existing-player-option">
+            <hr class="divider" />
+            <p>Eller om du redan har en bandvagn:</p>
+            <button @click="tryLoginExistingPlayer" class="button-base" :disabled="isSubmitting">
+              Logga in befintlig spelare
+            </button>
+          </div>
         </div>
       </div>
     </div>

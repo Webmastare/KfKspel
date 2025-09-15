@@ -12,7 +12,7 @@ import { ERROR_CODES } from "./types.ts";
 import type { GameLog, Player } from "./types.ts";
 
 // Handle board shrinking (called by cron job)
-export async function handleBoardShrink(): Promise<Response> {
+export async function handleBoardShrink() {
   try {
     const supabase = createServiceClient();
 
@@ -181,7 +181,7 @@ export async function handleBoardShrink(): Promise<Response> {
 }
 
 // Handle token distribution to all players (called by cron job)
-export async function handleTokenDistribution(): Promise<Response> {
+export async function handleTokenDistribution() {
   try {
     const supabase = createServiceClient();
 
@@ -287,7 +287,7 @@ export async function handleTokenDistribution(): Promise<Response> {
 }
 
 // Handle heart spawning (called by cron job at random intervals)
-export async function handleHeartSpawn(): Promise<Response> {
+export async function handleHeartSpawn() {
   try {
     const supabase = createServiceClient();
 
