@@ -199,10 +199,6 @@ export function getRecentLogs(
 }
 
 // API related types and functions
-
-// Re-export API types from apiHandler
-export type { BoardData, GameStateResponse } from "./apiHandler";
-
 /**
  * Get current game state (board data and player data)
  */

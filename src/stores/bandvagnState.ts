@@ -141,23 +141,15 @@ export const useBandvagnStore = defineStore("bandvagn", {
 
         // Update board data - transform BoardData to GameBoard format
         if (gameState.boardData) {
-          const boardData: GameBoard = {
-            board_id: "1", // Default board ID
-            rows: gameState.boardData.size.rows,
-            cols: gameState.boardData.size.columns,
+          this.boardData = {
+            board_id: gameState.boardData.board_id,
+            rows: gameState.boardData.rows,
+            cols: gameState.boardData.cols,
             shrink: gameState.boardData.shrink,
             logs: gameState.boardData.logs,
+            upgrades: gameState.boardData.upgrades || {},
+            time_to_shrink: gameState.boardData.time_to_shrink || "",
           };
-
-          if (gameState.boardData.upgrades) {
-            boardData.upgrades = gameState.boardData.upgrades;
-          }
-
-          if (gameState.boardData.time_to_shrink) {
-            boardData.time_to_shrink = gameState.boardData.time_to_shrink;
-          }
-
-          this.boardData = boardData;
         }
 
         this.lastFetch = new Date();

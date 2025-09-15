@@ -12,7 +12,7 @@ import { ERROR_CODES } from "./types.ts";
 import type { BoardData, GameStateResponse, PlayerResponse } from "./types.ts";
 
 // Handle getting game state (equivalent to /getKfKbandvagn)
-export async function handleGetGameState(_request: Request): Promise<Response> {
+export async function handleGetGameState(): Promise<Response> {
   try {
     const supabase = createServiceClient();
 
@@ -112,7 +112,7 @@ export async function handleGetPlayerState(
 }
 
 // Get game statistics
-export async function handleGetGameStats(_request: Request): Promise<Response> {
+export async function handleGetGameStats(): Promise<Response> {
   try {
     const supabase = createServiceClient();
 

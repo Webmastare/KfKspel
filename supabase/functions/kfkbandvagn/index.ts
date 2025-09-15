@@ -52,9 +52,10 @@ app.post("/auth/login", async (c: Context) => {
 
 // Protected game endpoints (require authentication)
 app.get("/game/state", async (c: Context) => {
-  const reqBody = await c.req.json();
   const authHeader = c.req.header("Authorization");
+  console.log("Got auth header:", authHeader);
   const user = await validateUserSession(authHeader);
+  console.log("Validated user:", user);
   if (!user) {
     const response = createErrorResponse(
       ERROR_CODES.INVALID_SESSION,
@@ -62,13 +63,14 @@ app.get("/game/state", async (c: Context) => {
     );
     return response;
   }
-  const response = await handleGetGameState(reqBody);
+  console.log("User is valid, proceeding to get game state");
+  const response = await handleGetGameState();
+  console.log("Game state response:", response);
   c.res = response;
   return c.res;
 });
 
 app.get("/game/stats", async (c: Context) => {
-  const reqBody = await c.req.json();
   const authHeader = c.req.header("Authorization");
   const user = await validateUserSession(authHeader);
   if (!user) {
@@ -78,7 +80,7 @@ app.get("/game/stats", async (c: Context) => {
     );
     return response;
   }
-  const response = await handleGetGameStats(reqBody);
+  const response = await handleGetGameStats();
   c.res = response;
   return c.res;
 });
@@ -101,16 +103,14 @@ app.post("/game/action", async (c: Context) => {
 
 // Automated/cron endpoints (for system use)
 app.post("/system/shrink", async (c: Context) => {
-  const reqBody = await c.req.json();
   // In production, we'd want to validate this is coming from a trusted source
-  const response = await handleBoardShrink(reqBody);
+  const response = await handleBoardShrink();
   c.res = response;
   return c.res;
 });
 
 app.post("/system/distribute", async (c: Context) => {
-  const reqBody = await c.req.json();
-  const response = await handleTokenDistribution(reqBody);
+  const response = await handleTokenDistribution();
   c.res = response;
   return c.res;
 });
@@ -119,16 +119,14 @@ app.post("/system/distribute", async (c: Context) => {
 // Note: In production, you'd want proper admin authentication
 app.post("/admin/reset", async (c: Context) => {
   // TODO: Add admin authentication check
-  const reqBody = await c.req.json();
-  const response = await handleGameReset(reqBody);
+  const response = await handleGameReset();
   c.res = response;
   return c.res;
 });
 
 app.get("/admin/stats", async (c: Context) => {
   // TODO: Add admin authentication check
-  const reqBody = await c.req.json();
-  const response = await handleAdminStats(reqBody);
+  const response = await handleAdminStats();
   c.res = response;
   return c.res;
 });

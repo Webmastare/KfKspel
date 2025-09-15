@@ -128,7 +128,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useBandvagnStore } from '@/stores/bandvagnState'
-import { formatAPIError } from '@/composables/kfkbandvagn/board'
+import { formatAPIError } from '@/composables/kfkbandvagn/apiHandler'
 import AuthForms from '@/components/AuthForms.vue'
 
 // Stores
@@ -280,7 +280,7 @@ onMounted(() => {
 
 <style scoped lang="scss">
 /* Use shared form styles */
-@import '@/styles/generalGames.scss';
+@use '@/styles/generalGames.scss';
 
 // Modal overlay to center the form like auth form
 .modal-overlay {

@@ -5,7 +5,7 @@
 
 import { supabase } from "@/utils/supabase";
 import type { Player, PlayerCreationData } from "./player";
-import type { GameLog, GameState } from "./board";
+import type { GameBoard, GameLog, GameState } from "./board";
 import type { GameAction, GameActionType } from "./gameActions";
 
 // Custom error class for API errors
@@ -53,20 +53,9 @@ export interface PlayerCreationResponse {
     created: boolean;
 }
 
-export interface BoardData {
-    size: {
-        rows: number;
-        columns: number;
-    };
-    shrink: number;
-    upgrades?: Record<string, unknown>;
-    time_to_shrink?: string;
-    logs: GameLog[];
-}
-
 export interface GameStateResponse {
     playerData: Player[];
-    boardData: BoardData;
+    boardData: GameBoard;
 }
 
 export interface ActionResponse {

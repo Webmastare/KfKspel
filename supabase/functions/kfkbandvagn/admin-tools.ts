@@ -12,7 +12,7 @@ import { ERROR_CODES } from "./types.ts";
 import type { GameLog, Player } from "./types.ts";
 
 // Reset the entire game state (admin only)
-export async function handleGameReset(_request: Request): Promise<Response> {
+export async function handleGameReset(): Promise<Response> {
   try {
     const supabase = createServiceClient();
 
@@ -81,7 +81,7 @@ export async function handleGameReset(_request: Request): Promise<Response> {
 }
 
 // Get detailed game statistics (admin only)
-export async function handleAdminStats(_request: Request): Promise<Response> {
+export async function handleAdminStats(): Promise<Response> {
   try {
     const supabase = createServiceClient();
 
