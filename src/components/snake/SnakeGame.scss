@@ -2,26 +2,22 @@
 @use '@/styles/variables';
 @use '@/styles/generalGames';
 
-:root {
-  // Snake-specific variables using general game colors
-  --snake-bg: var(--canvas-bg-color);
-  --snake-color: #22c55e;
-  --snake-head-color: #16a34a;
-  --food-color: #ef4444;
-  --grid-color: var(--canvas-grid-color);
-}
+// Import centralized theme system
+@import '@/styles/theme.scss';
 
-.dark-theme {
-  // Override snake colors for dark theme
-  --snake-color: #22c55e;
-  --snake-head-color: #16a34a;
-  --food-color: #f87171;
+:root {
+  // Snake-specific variables using centralized theme colors
+  --snake-bg: var(--theme-canvas-snake-bg);
+  --snake-color: var(--theme-snake-body);
+  --snake-head-color: var(--theme-snake-head);
+  --food-color: var(--theme-snake-food);
+  --grid-color: var(--theme-canvas-grid);
 }
 
 #snake-app-container {
   min-height: 100vh;
-  background-color: var(--bg-color);
-  color: var(--text-color);
+  background-color: var(--theme-bg-primary);
+  color: var(--theme-text-primary);
   padding: 1rem;
   display: flex;
   flex-direction: column;
@@ -33,7 +29,7 @@
     font-weight: 800;
     margin-bottom: 1.5rem;
     text-align: center;
-    color: var(--text-color);
+    color: var(--theme-text-primary);
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 }
@@ -50,7 +46,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: var(--sidebar-bg-color);
+    background: var(--theme-sidebar-bg);
     padding: 1rem 1.5rem;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -58,7 +54,7 @@
 
     .stat-label {
       font-size: 0.9rem;
-      color: var(--sidebar-text-color);
+      color: var(--theme-sidebar-text);
       margin-bottom: 0.25rem;
       font-weight: 500;
     }
@@ -66,7 +62,7 @@
     .stat-value {
       font-size: 1.5rem;
       font-weight: 700;
-      color: var(--sidebar-value-color);
+      color: var(--theme-sidebar-value);
     }
   }
 }
@@ -90,35 +86,35 @@
     overflow: hidden;
 
     &.theme-btn {
-      background: var(--button-primary-bg);
-      border-color: var(--button-primary-border);
+      background: var(--theme-button-primary-bg);
+      border-color: var(--theme-button-primary-border);
     }
 
     &.pause-btn {
-      background: var(--button-down-bg);
-      border-color: var(--button-down-bg);
+      background: var(--theme-button-warning-bg);
+      border-color: var(--theme-button-warning-bg);
 
       &:hover {
-        background: var(--button-down-hover-bg);
+        background: var(--theme-button-warning-hover);
       }
     }
 
     &.restart-btn {
-      background: var(--button-rotate-bg);
-      border-color: var(--button-rotate-bg);
+      background: var(--theme-button-success-bg);
+      border-color: var(--theme-button-success-bg);
 
       &:hover {
-        background: var(--button-rotate-hover-bg);
+        background: var(--theme-button-success-hover);
       }
     }
 
     &.settings-btn {
-      background: var(--sidebar-bg);
-      border-color: var(--sidebar-bg);
-      color: var(--sidebar-text);
+      background: var(--theme-sidebar-bg);
+      border-color: var(--theme-sidebar-bg);
+      color: var(--theme-sidebar-text-on-dark);
 
       &:hover {
-        background: var(--sidebar-hover-bg);
+        background: var(--theme-sidebar-bg-hover);
       }
     }
   }
@@ -131,7 +127,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--overlay-bg);
+  background: var(--theme-bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -140,7 +136,7 @@
 
 .settings-modal {
   @extend .form-base;
-  color: var(--input-text);
+  color: var(--theme-input-text);
   position: relative;
   max-width: 500px;
   width: 90%;
@@ -152,7 +148,7 @@
     margin-bottom: 2rem;
     font-weight: 600;
     font-size: 1.8rem;
-    color: var(--input-text);
+    color: var(--theme-input-text);
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   }
 
@@ -169,8 +165,8 @@
     position: absolute;
     top: 1rem;
     right: 1rem;
-    background: var(--button-decline-bg);
-    border-color: var(--button-decline-border);
+    background: var(--theme-button-decline-bg);
+    border-color: var(--theme-button-decline-border);
     box-shadow: 0 2px 10px rgba(244, 67, 54, 0.3);
 
     &:hover {
@@ -202,13 +198,13 @@
         align-items: center;
         gap: 0.75rem;
         cursor: pointer;
-        color: var(--input-text);
+        color: var(--theme-input-text);
         font-weight: 500;
 
         input[type='checkbox'] {
           width: 20px;
           height: 20px;
-          accent-color: var(--modal-header-color);
+          accent-color: var(--theme-modal-header);
           cursor: pointer;
         }
 
@@ -229,8 +225,8 @@
 
       &.range-input {
         cursor: pointer;
-        background: var(--input-bg);
-        border: 1px solid var(--input-border);
+        background: var(--theme-input-bg);
+        border: 1px solid var(--theme-input-border);
         border-radius: 12px;
         padding: 0.5rem;
         height: 2.5rem;
@@ -240,7 +236,7 @@
           width: 20px;
           height: 20px;
           border-radius: 50%;
-          background: var(--modal-header-color);
+          background: var(--theme-modal-header);
           cursor: pointer;
           border: 2px solid white;
           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
@@ -250,7 +246,7 @@
           width: 20px;
           height: 20px;
           border-radius: 50%;
-          background: var(--modal-header-color);
+          background: var(--theme-modal-header);
           cursor: pointer;
           border: 2px solid white;
           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
@@ -335,10 +331,10 @@
       }
 
       .restart-btn {
-        background: var(--button-primary-bg);
+        background: var(--theme-button-primary-bg);
         backdrop-filter: blur(8px);
-        color: var(--button-primary-text);
-        border: 1px solid var(--button-primary-border);
+        color: var(--theme-button-primary-text);
+        border: 1px solid var(--theme-button-primary-border);
         cursor: pointer;
         font-weight: 600;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -394,14 +390,14 @@
     z-index: 10;
 
     .pause-content {
-      background: var(--modal-bg-color);
+      background: var(--theme-modal-bg);
       padding: 2rem;
       border-radius: 16px;
       text-align: center;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 
       h2 {
-        color: var(--modal-text-color);
+        color: var(--theme-modal-text);
         font-size: 2rem;
         margin: 0;
       }

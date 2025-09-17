@@ -355,7 +355,7 @@ export type {
 /**
  * Create a new player
  */
-export async function createPlayer(
+export async function createPlayerAPI(
     request: CreatePlayerRequest,
 ): Promise<Player> {
     return makeRequest<Player>("/auth/create", "POST", request);
@@ -364,14 +364,14 @@ export async function createPlayer(
 /**
  * Login existing player
  */
-export async function loginPlayer(request: LoginRequest): Promise<Player> {
+export async function loginPlayerAPI(request: LoginRequest): Promise<Player> {
     return makeRequest<Player>("/auth/login", "POST", request);
 }
 
 /**
  * Perform a game action
  */
-export async function performAction(
+export async function performGameAction(
     action: ActionRequest,
 ): Promise<{ updatedData: Player; shotData?: Player; updatedLogs: GameLog }> {
     return makeRequest<

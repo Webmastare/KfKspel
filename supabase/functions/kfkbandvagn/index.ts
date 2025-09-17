@@ -39,6 +39,15 @@ app.get("/", (c: Context) => {
 app.post("/auth/create", async (c: Context) => {
   const reqBody = await c.req.json();
   const response = await handleCreatePlayer(reqBody);
+  if (!response || response.error) {
+    console.error("Error creating player:", response);
+    const errorResponse = createErrorResponse(
+      ERROR_CODES.INTERNAL_ERROR,
+      "Failed to create player",
+    );
+    return c.json(errorResponse, 500);
+  }
+  console.log("Created new player:", response);
   return c.json(response, 201);
 });
 
@@ -51,9 +60,7 @@ app.post("/auth/login", async (c: Context) => {
 // Protected game endpoints (require authentication)
 app.get("/game/state", async (c: Context) => {
   const authHeader = c.req.header("Authorization");
-  console.log("Got auth header:", authHeader);
   const user = await validateUserSession(authHeader);
-  console.log("Validated user:", user);
   if (!user) {
     const response = createErrorResponse(
       ERROR_CODES.INVALID_SESSION,
@@ -61,9 +68,8 @@ app.get("/game/state", async (c: Context) => {
     );
     return c.json(response, 401);
   }
-  console.log("User is valid, proceeding to get game state");
   const response = await handleGetGameState();
-  console.log("Game state response:", response);
+  console.log("Successfully retrieved game state");
   return c.json(response, 200);
 });
 

@@ -162,12 +162,17 @@ export class Game2048Logic {
 
     this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight)
 
-    // Background
-    this.ctx.fillStyle = this.darkMode ? '#1f2937' : '#f8fafc'
+    // Get theme colors from CSS custom properties
+    const rootStyles = getComputedStyle(document.documentElement)
+    const bgColor = rootStyles.getPropertyValue('--theme-canvas-2048-bg').trim()
+    const borderColor = rootStyles.getPropertyValue('--theme-canvas-2048-border').trim()
+
+    // Background - use theme colors if available, fallback to hardcoded
+    this.ctx.fillStyle = bgColor || (this.darkMode ? '#1f2937' : '#f8fafc')
     this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight)
 
-    // Border
-    this.ctx.strokeStyle = this.darkMode ? '#4b5563' : '#d1d5db'
+    // Border - use theme colors if available, fallback to hardcoded
+    this.ctx.strokeStyle = borderColor || (this.darkMode ? '#4b5563' : '#d1d5db')
     this.ctx.lineWidth = this.gap * this.ratio
     this.ctx.strokeRect(0, 0, this.canvasWidth, this.canvasHeight)
 

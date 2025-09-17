@@ -262,21 +262,26 @@ export async function makeRequest<T>(
     method: "GET" | "POST" = "GET",
     body?: unknown,
 ): Promise<T> {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-    };
+    console.log(
+        "Making request to endpoint:",
+        endpoint,
+        "with method:",
+        method,
+        "and body:",
+        body,
+    );
 
     try {
         const invokeOptions: any = {
             method,
-            headers,
         };
 
         // Only add body if it exists
         if (body) {
-            invokeOptions.body = JSON.stringify(body);
+            console.log("Adding body to request");
+            invokeOptions.body = body;
         }
-
+        console.log("Fetching data from endpoint...", invokeOptions);
         const { data, error } = await supabase.functions.invoke(
             `kfkbandvagn${endpoint}`,
             invokeOptions,

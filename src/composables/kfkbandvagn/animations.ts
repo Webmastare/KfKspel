@@ -28,6 +28,20 @@ export interface ExplosionAnimation {
     elapsed: number;
 }
 
+export interface ClickAnimation {
+    row: number;
+    col: number;
+    type: AnimationType;
+    particles: Particle[];
+    active: boolean;
+    duration: number;
+    elapsed: number;
+    rippleRadius: number;
+    rippleMaxRadius: number;
+    rippleAlpha: number;
+    playerColor: string;
+}
+
 // Bullet animation interface
 export interface BulletAnimation {
     startX: number;
@@ -58,6 +72,7 @@ export interface RGB {
 export interface AnimationState {
     explosions: ExplosionAnimation[];
     bullets: BulletAnimation[];
+    clicks: ClickAnimation[];
     lastUpdate: number;
 }
 /**
@@ -159,26 +174,44 @@ export function rgbToHex(r: number, g: number, b: number): string {
 }
 
 /**
- * Create explosion animation
+ * Create explosion animation with yellow, red, orange, and black colors
  */
 export function createExplosion(
     row: number,
     col: number,
+    cellSize: number,
     type: AnimationType = "explosion",
 ): ExplosionAnimation {
     const particles: Particle[] = [];
-    const particleCount = type === "explosion" ? 20 : 10;
+    const particleCount = type === "explosion" ? 25 : 10;
+    const explosionColors = [
+        "#FFD700",
+        "#FF4500",
+        "#FF6347",
+        "#DC143C",
+        "#8B0000",
+        "#000000",
+    ]; // Gold, OrangeRed, Tomato, Crimson, DarkRed, Black
 
     for (let i = 0; i < particleCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = cellSize * (0.02 + Math.random() * 0.08);
+
         particles.push({
-            x: 0,
+            x: 0, // Will be set to cell center when drawing
             y: 0,
-            vx: (Math.random() - 0.5) * 10,
-            vy: (Math.random() - 0.5) * 10,
-            size: Math.random() * 4 + 2,
-            color: type === "explosion" ? "#ff4444" : "#44ff44",
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: Math.max(
+                2,
+                cellSize * 0.08 + Math.random() * (cellSize * 0.06),
+            ),
+            color:
+                explosionColors[
+                    Math.floor(Math.random() * explosionColors.length)
+                ] || "#FF4500",
             life: 1,
-            maxLife: Math.random() * 0.5 + 0.5,
+            maxLife: 400 + Math.random() * 300,
         });
     }
 
@@ -188,14 +221,58 @@ export function createExplosion(
         type,
         particles,
         active: true,
-        duration: 1000, // 1 second
+        duration: 800, // 0.8 seconds
         elapsed: 0,
     };
 }
 
 /**
- * Create bullet animation
+ * Create click animation with player color (ripple + particles)
  */
+export function createClickAnimation(
+    row: number,
+    col: number,
+    cellSize: number,
+    playerColor: string,
+    type: AnimationType = "click",
+): ClickAnimation {
+    const particles: Particle[] = [];
+    const particleCount = 18;
+
+    for (let i = 0; i < particleCount; i++) {
+        const angle = (i / particleCount) * Math.PI * 2 +
+            (Math.random() - 0.5) * 0.5;
+        const speed = cellSize * (0.015 + Math.random() * 0.045);
+
+        particles.push({
+            x: 0, // Will be set to cell center when drawing
+            y: 0,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: Math.max(
+                1.5,
+                cellSize * 0.06 + Math.random() * (cellSize * 0.04),
+            ),
+            color: playerColor,
+            life: 1,
+            maxLife: 300 + Math.random() * 250,
+        });
+    }
+
+    return {
+        row,
+        col,
+        type,
+        particles,
+        active: true,
+        duration: 350,
+        elapsed: 0,
+        rippleRadius: 0,
+        rippleMaxRadius: Math.max(cellSize * 0.9, 14),
+        rippleAlpha: 1,
+        playerColor,
+    };
+}
 export function createBullet(
     startX: number,
     startY: number,
@@ -229,12 +306,15 @@ export function updateExplosion(
 
     // Update particles
     explosion.particles.forEach((particle) => {
-        particle.x += particle.vx * deltaTime * 0.001;
-        particle.y += particle.vy * deltaTime * 0.001;
-        particle.life -= deltaTime / (particle.maxLife * 1000);
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+        particle.life -= deltaTime / particle.maxLife;
 
-        // Add gravity effect
+        // Add gravity effect for explosion
         particle.vy += 0.001 * deltaTime;
+        // Add air resistance
+        particle.vx *= 0.98;
+        particle.vy *= 0.98;
     });
 
     // Filter out dead particles
@@ -252,8 +332,41 @@ export function updateExplosion(
 }
 
 /**
- * Update bullet animation
+ * Update click animation
  */
+export function updateClickAnimation(
+    click: ClickAnimation,
+    deltaTime: number,
+): ClickAnimation {
+    if (!click.active) return click;
+
+    click.elapsed += deltaTime;
+    const progress = click.elapsed / click.duration;
+
+    if (progress >= 1) {
+        click.active = false;
+        return click;
+    }
+
+    // Update ripple
+    const ease = 1 - Math.pow(1 - progress, 3);
+    click.rippleRadius = ease * click.rippleMaxRadius;
+    click.rippleAlpha = 1 - ease;
+
+    // Update particles
+    click.particles.forEach((particle) => {
+        particle.life -= deltaTime / particle.maxLife;
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+        particle.vx *= 0.985;
+        particle.vy *= 0.985;
+    });
+
+    // Filter out dead particles
+    click.particles = click.particles.filter((p) => p.life > 0);
+
+    return click;
+}
 export function updateBullet(
     bullet: BulletAnimation,
     deltaTime: number,
@@ -283,6 +396,7 @@ export function createAnimationState(): AnimationState {
     return {
         explosions: [],
         bullets: [],
+        clicks: [],
         lastUpdate: performance.now(),
     };
 }
@@ -301,6 +415,11 @@ export function updateAnimations(
         .map((explosion) => updateExplosion(explosion, deltaTime))
         .filter((explosion) => explosion.active);
 
+    // Update clicks
+    state.clicks = state.clicks
+        .map((click) => updateClickAnimation(click, deltaTime))
+        .filter((click) => click.active);
+
     // Update bullets
     state.bullets = state.bullets
         .map((bullet) => updateBullet(bullet, deltaTime))
@@ -318,9 +437,24 @@ export function addExplosion(
     state: AnimationState,
     row: number,
     col: number,
+    cellSize: number,
     type: AnimationType = "explosion",
 ): AnimationState {
-    state.explosions.push(createExplosion(row, col, type));
+    state.explosions.push(createExplosion(row, col, cellSize, type));
+    return state;
+}
+
+/**
+ * Add click animation to animation state
+ */
+export function addClickAnimation(
+    state: AnimationState,
+    row: number,
+    col: number,
+    cellSize: number,
+    playerColor: string,
+): AnimationState {
+    state.clicks.push(createClickAnimation(row, col, cellSize, playerColor));
     return state;
 }
 
@@ -345,5 +479,106 @@ export function addBullet(
 export function clearAnimations(state: AnimationState): AnimationState {
     state.explosions = [];
     state.bullets = [];
+    state.clicks = [];
     return state;
+}
+
+/**
+ * Check if any animations are active
+ */
+export function hasActiveAnimations(state: AnimationState): boolean {
+    return state.explosions.length > 0 || state.bullets.length > 0 ||
+        state.clicks.length > 0;
+}
+
+/**
+ * Render animations on canvas context
+ */
+export function renderAnimations(
+    ctx: CanvasRenderingContext2D,
+    state: AnimationState,
+    cellSize: number,
+    zoom: number,
+    panX: number,
+    panY: number,
+): void {
+    // Render explosions
+    state.explosions.forEach((explosion) => {
+        const centerX = (explosion.col + 0.5) * cellSize;
+        const centerY = (explosion.row + 0.5) * cellSize;
+
+        explosion.particles.forEach((particle) => {
+            const px = centerX + particle.x;
+            const py = centerY + particle.y;
+
+            // Transform to screen coordinates
+            const sx = (px + panX) * zoom;
+            const sy = (py + panY) * zoom;
+            const size = particle.size * zoom * (0.85 + 0.35 * particle.life);
+
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, Math.min(1, particle.life));
+            ctx.fillStyle = particle.color;
+            ctx.beginPath();
+            ctx.arc(sx, sy, size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        });
+    });
+
+    // Render clicks
+    state.clicks.forEach((click) => {
+        const centerX = (click.col + 0.5) * cellSize;
+        const centerY = (click.row + 0.5) * cellSize;
+
+        // Render ripple
+        if (click.rippleAlpha > 0) {
+            const sx = (centerX + panX) * zoom;
+            const sy = (centerY + panY) * zoom;
+            const r = click.rippleRadius * zoom;
+
+            ctx.save();
+            ctx.strokeStyle = `rgba(224, 59, 75, ${
+                Math.max(0, Math.min(0.9, click.rippleAlpha))
+            })`;
+            ctx.lineWidth = Math.max(1, (click.rippleAlpha) * 4);
+            ctx.beginPath();
+            ctx.arc(sx, sy, r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Render particles
+        click.particles.forEach((particle) => {
+            const px = centerX + particle.x;
+            const py = centerY + particle.y;
+
+            // Transform to screen coordinates
+            const sx = (px + panX) * zoom;
+            const sy = (py + panY) * zoom;
+            const size = particle.size * zoom * (0.85 + 0.35 * particle.life);
+
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, Math.min(1, particle.life));
+            ctx.fillStyle = particle.color;
+            ctx.beginPath();
+            ctx.arc(sx, sy, size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        });
+    });
+
+    // Render bullets
+    state.bullets.forEach((bullet) => {
+        const sx = (bullet.currentX + panX) * zoom;
+        const sy = (bullet.currentY + panY) * zoom;
+        const size = Math.max(2, cellSize * 0.1) * zoom;
+
+        ctx.save();
+        ctx.fillStyle = "#000000";
+        ctx.beginPath();
+        ctx.arc(sx, sy, size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
 }

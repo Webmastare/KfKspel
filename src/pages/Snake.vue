@@ -20,11 +20,6 @@
 
     <!-- Game Controls Header -->
     <div class="game-controls-header">
-      <button @click="toggleTheme" class="control-header-btn">
-        <span v-if="isDarkMode">☀️</span>
-        <span v-else>🌙</span>
-      </button>
-
       <button @click="togglePause" class="control-header-btn">
         <span v-if="!gamePaused">Pausa</span>
         <span v-else>Fortsätt</span>
@@ -173,8 +168,6 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import '@/components/snake/SnakeGame.scss'
-
 // Game Constants
 const GRID_SIZE = 20
 const BASE_SPEED = 150 // milliseconds
@@ -197,7 +190,6 @@ const bestScore = ref(0)
 const gameSpeed = ref(8)
 
 // Settings
-const isDarkMode = ref(false)
 const selectedDifficulty = ref('dynamic')
 const foodCount = ref(1)
 const wrapSnake = ref(false)
@@ -240,23 +232,7 @@ const gameInterval = computed(() => {
   return Math.max(50, BASE_SPEED - currentSpeed.value * 5)
 })
 
-function toggleTheme() {
-  isDarkMode.value = !isDarkMode.value
-  applyTheme()
-}
-
-// Theme Management
-function applyTheme() {
-  if (isDarkMode.value) {
-    document.documentElement.classList.add('dark-theme')
-    document.documentElement.classList.remove('light-theme')
-  } else {
-    document.documentElement.classList.add('light-theme')
-    document.documentElement.classList.remove('dark-theme')
-  }
-
-  localStorage.setItem('theme', isDarkMode.value ? 'dark' : 'light')
-}
+// Theme Management (handled globally now)
 
 function updateDifficulty() {
   gameSpeed.value = currentSpeed.value
@@ -283,14 +259,6 @@ function initializeGame() {
   console.log('Initializing Snake game...')
 
   // Load settings from localStorage
-  const savedTheme = localStorage.getItem('theme')
-  const prefersDarkQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  if (savedTheme && ['light', 'dark'].includes(savedTheme)) {
-    isDarkMode.value = savedTheme === 'dark'
-  } else {
-    isDarkMode.value = prefersDarkQuery.matches
-  }
-
   const savedDifficulty = localStorage.getItem('snake-difficulty')
   if (savedDifficulty) selectedDifficulty.value = savedDifficulty
 
@@ -307,7 +275,6 @@ function initializeGame() {
   if (savedBestScore) bestScore.value = parseInt(savedBestScore)
 
   console.log('⚙️ Settings loaded:', {
-    theme: isDarkMode.value ? 'dark' : 'light',
     difficulty: selectedDifficulty.value,
     foodCount: foodCount.value,
     wrap: wrapSnake.value,
@@ -315,7 +282,6 @@ function initializeGame() {
     bestScore: bestScore.value,
   })
 
-  applyTheme()
   updateDifficulty()
 
   const canvasReady = setupCanvas()
@@ -860,3 +826,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
 })
 </script>
+
+<style scoped lang="scss">
+@use '@/components/snake/SnakeGame.scss';
+</style>

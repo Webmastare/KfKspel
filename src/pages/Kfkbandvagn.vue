@@ -31,6 +31,42 @@
           <div v-else class="no-player-message">
             <p>Ingen aktiv spelare - logga in eller skapa en bandvagn</p>
           </div>
+
+          <!-- Players list -->
+          <div class="players-list" v-if="playersToShow.length">
+            <div class="players-list-header">
+              <span>Spelare på brädet ({{ playersToShow.length }})</span>
+            </div>
+            <ul class="players-list-items">
+              <li :style="{ borderBottom: '1px solid var(--theme-border-light)' }">
+                <span class="players-list-header">Namn</span>
+                <span class="players-list-header">Position (r,c)</span>
+                <span class="players-list-header">Distans</span>
+                <span></span>
+              </li>
+              <li v-for="p in playersToShow" :key="p.uuid" class="players-list-item">
+                <div>
+                  <span
+                    v-if="p.uuid === currentPlayer?.uuid"
+                    class="current-player-indicator"
+                    :style="{ color: p.color, background: '#ffd70099', borderRadius: '5px' }"
+                    >★</span
+                  >
+                  <span
+                    v-if="p.uuid !== currentPlayer?.uuid"
+                    class="player-dot"
+                    :style="{ backgroundColor: p.color }"
+                  ></span>
+                  <span class="player-name">{{ p.playerID }}</span>
+                </div>
+                <span class="player-position">{{ p.position.row }}, {{ p.position.column }}</span>
+                <span class="player-distance">{{ p.distToCurrent }}</span>
+                <span class="player-meta"
+                  >❤ {{ p.lives }} · ➶ {{ p.range }} · ⛁ {{ p.tokens }}</span
+                >
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
@@ -43,10 +79,6 @@
           <span class="mobile-lives">{{ currentPlayer.lives }} liv</span>
         </div>
         <div class="mobile-btn-container">
-          <button @click="toggleTheme" class="mobile-btn">
-            <span v-if="isDarkMode">☀️</span>
-            <span v-else>🌙</span>
-          </button>
           <button @click="refreshGameState" class="mobile-btn" :disabled="isLoading">
             <span v-if="isLoading">⏳</span>
             <span v-else>🔄</span>
@@ -60,10 +92,6 @@
       <!-- Desktop sidebar -->
       <div class="sidebar desktop-only">
         <div class="sidebar-btn-container">
-          <button @click="toggleTheme" class="sidebar-btn">
-            <span v-if="isDarkMode">☀️</span>
-            <span v-else>🌙</span>
-          </button>
           <button @click="refreshGameState" class="sidebar-btn" :disabled="isLoading">
             <span v-if="isLoading">Laddar...</span>
             <span v-else>Uppdatera</span>
@@ -81,14 +109,16 @@
             class="action-btn"
             :disabled="currentPlayer.tokens < 3"
           >
-            Köp Räckvidd (3 tokens)
+            Köp Räckvidd <br />
+            (3 tokens)
           </button>
           <button
             @click="showUpgradeModal('life')"
             class="action-btn"
             :disabled="currentPlayer.tokens < 3"
           >
-            Köp Liv (3 tokens)
+            Köp Liv <br />
+            (3 tokens)
           </button>
         </div>
       </div>
@@ -101,7 +131,6 @@
             v-if="showPlayerModal"
             @close="closePlayerModal"
             @playerCreated="handlePlayerCreated"
-            class="auth-form"
           />
 
           <!-- Upgrade Confirmation Modal -->
@@ -126,11 +155,6 @@
           <!-- Game Canvas -->
           <BandvagnCanvas
             v-if="gameInitialized && currentPlayer"
-            :players="allPlayers"
-            :board-data="boardData"
-            :current-player="currentPlayer"
-            :selected-cell="selectedCell"
-            @cellSelected="handleCellSelected"
             @actionPerformed="handleActionPerformed"
           />
 
@@ -269,13 +293,11 @@ const authStore = useAuthStore()
 const gameStore = useBandvagnStore()
 
 // UI State
-const isDarkMode = ref(false)
 const infoShown = ref(false)
 const showStats = ref(false)
 const showPlayerModal = ref(false)
 const showUpgradeDialog = ref(false)
 const upgradeType = ref('')
-const selectedCell = ref(null)
 const isMobile = ref(false)
 
 // Computed
@@ -285,46 +307,23 @@ const boardData = computed(() => gameStore.boardData)
 const isLoading = computed(() => gameStore.isLoading)
 const gameInitialized = computed(() => gameStore.initialized && currentPlayer.value)
 
+// Only show players that have an active tank and are alive (or show all if desired)
+const playersToShow = computed(() =>
+  allPlayers.value
+    .filter((p) => p.taken_tank)
+    .map((p) => ({
+      ...p,
+      distToCurrent: currentPlayer.value
+        ? Math.abs(p.position.row - currentPlayer.value.position.row) +
+          Math.abs(p.position.column - currentPlayer.value.position.column)
+        : Infinity,
+    })),
+)
+
 const recentLogs = computed(() => {
   if (!boardData.value?.logs) return []
   return boardData.value.logs.slice(-10).reverse()
 })
-
-// Theme Management
-function applyTheme() {
-  if (isDarkMode.value) {
-    document.documentElement.classList.add('dark-theme')
-    document.documentElement.classList.remove('light-theme')
-  } else {
-    document.documentElement.classList.add('light-theme')
-    document.documentElement.classList.remove('dark-theme')
-  }
-}
-
-function toggleTheme() {
-  isDarkMode.value = !isDarkMode.value
-  localStorage.setItem('kfkbandvagn-theme', isDarkMode.value ? 'dark' : 'light')
-  applyTheme()
-}
-
-function setInitialTheme() {
-  const storedTheme = localStorage.getItem('kfkbandvagn-theme')
-  const prefersDarkQuery = window.matchMedia('(prefers-color-scheme: dark)')
-
-  if (storedTheme) {
-    isDarkMode.value = storedTheme === 'dark'
-  } else {
-    isDarkMode.value = prefersDarkQuery.matches
-  }
-  applyTheme()
-
-  prefersDarkQuery.addEventListener('change', (e) => {
-    if (!localStorage.getItem('kfkbandvagn-theme')) {
-      isDarkMode.value = e.matches
-      applyTheme()
-    }
-  })
-}
 
 // UI Controls
 function toggleInfo() {
@@ -357,15 +356,9 @@ function handlePlayerCreated() {
   refreshGameState()
 }
 
-// Cell selection and actions
-function handleCellSelected(cell) {
-  selectedCell.value = cell
-}
-
 async function handleActionPerformed(action) {
   try {
     await gameStore.performAction(action)
-    selectedCell.value = null
   } catch (error) {
     console.error('Action failed:', error)
     // TODO: Show user-friendly error message
@@ -424,7 +417,6 @@ function checkMobile() {
 
 // Lifecycle
 onMounted(async () => {
-  setInitialTheme()
   checkMobile()
   window.addEventListener('resize', checkMobile)
 
@@ -443,249 +435,29 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-/* Import the shared game styles */
-@import '@/styles/generalGames.scss';
+/* Import the shared game styles and theme */
+@use '@/styles/generalGames.scss';
+@use '@/components/kfkbandvagn/BandvagnStyle.scss';
 
-/* Bandvagn-specific styles */
-.stats-container {
-  margin-bottom: 20px;
-  border: 1px solid var(--canvas-border-color);
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--sidebar-bg-color);
-}
-
-.stats-toggle {
-  width: 100%;
-  background: var(--sidebar-bg);
-  color: var(--sidebar-text);
-  border: none;
-  padding: 12px 20px;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 16px;
-  font-weight: 600;
-  transition: background-color 0.2s;
-
-  &:hover {
-    background: var(--sidebar-hover-bg);
-  }
-}
-
-.toggle-icon {
-  transition: transform 0.3s;
-
-  &.expanded {
-    transform: rotate(180deg);
-  }
-}
-
-.stats-wrapper {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease;
-
-  &.expanded {
-    max-height: 200px;
-  }
-}
-
-.stats-content {
+/* Kfkbandvagn-specific styles */
+#app-container {
+  background: var(--theme-bg-primary);
+  color: var(--theme-text-primary);
+  min-height: 100vh;
   padding: 20px;
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 15px;
-}
-
-.stat-item {
+h1 {
+  color: var(--theme-text-primary);
   text-align: center;
-}
-
-.stat-label {
-  display: block;
-  font-size: 12px;
-  color: var(--sidebar-text-color);
-  margin-bottom: 5px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.stat-value {
-  display: block;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--sidebar-value-color);
-}
-
-.no-player-message {
-  text-align: center;
-  color: var(--sidebar-text-color);
-  font-style: italic;
-}
-
-.action-buttons {
-  margin-top: 20px;
-}
-
-.action-btn {
-  width: 100%;
-  margin-bottom: 10px;
-  padding: 12px;
-  background: var(--button-modal-action-bg);
-  color: var(--button-text-color);
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s;
-
-  &:hover:not(:disabled) {
-    background: var(--button-modal-action-hover-bg);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.mobile-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
-  justify-content: center;
-}
-
-.mobile-action-btn {
-  flex: 1;
-  padding: 12px 8px;
-  background: var(--button-modal-action-bg);
-  color: var(--button-text-color);
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s;
-
-  &:hover:not(:disabled) {
-    background: var(--button-modal-action-hover-bg);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.loading-container,
-.no-player-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-  text-align: center;
-  color: var(--text-color);
-}
-
-.loading-spinner {
-  font-size: 48px;
   margin-bottom: 20px;
-  animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.game-logs {
-  margin-top: 30px;
-
-  h4 {
-    margin-bottom: 15px;
-    color: var(--sidebar-value-color);
-  }
-}
-
-.logs-container {
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid var(--canvas-border-color);
-  border-radius: 8px;
-  padding: 10px;
-  background: var(--canvas-bg-color);
-}
-
-.log-entry {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.log-player {
-  font-weight: 600;
-  color: var(--modal-header-color);
-}
-
-.log-action {
-  color: var(--sidebar-text-color);
-  margin-left: 5px;
-}
-
-.upgrade-modal {
-  .form-base {
-    max-width: 400px;
-  }
-}
-
-.dead {
-  color: #ef4444 !important;
-  font-weight: 600;
-}
-
-.mobile-game-info {
-  display: flex;
-  gap: 15px;
-}
-
-.mobile-tokens,
-.mobile-lives {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-color);
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .action-buttons,
-  .game-logs {
-    display: none;
-  }
-
-  .mobile-actions {
-    display: flex;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (min-width: 769px) {
-  .mobile-actions {
-    display: none;
+.players-list {
+  li {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 10px;
   }
 }
 </style>

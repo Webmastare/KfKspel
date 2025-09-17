@@ -14,9 +14,8 @@ import { ERROR_CODES } from "./types.ts";
 import type { CreatePlayerRequest, LoginRequest } from "./types.ts";
 
 // Handle player creation (equivalent to /createKfKbandvagn)
-export async function handleCreatePlayer(request: Request) {
+export async function handleCreatePlayer(body: unknown) {
   try {
-    const body = await request.json();
     const createData: CreatePlayerRequest = validateCreatePlayerRequest(body);
 
     const supabase = createServiceClient();
@@ -61,7 +60,7 @@ export async function handleCreatePlayer(request: Request) {
         last_login_date: todaysDate,
       })
       .eq("uuid", selectedPlayer.uuid)
-      .select("user_id, playerID, uuid, tokens, position, lives, range, color")
+      .select("playerID, uuid, tokens, position, lives, range, color")
       .single();
 
     if (updateError) {
@@ -84,9 +83,8 @@ export async function handleCreatePlayer(request: Request) {
 }
 
 // Handle player login (equivalent to /loginKfKbandvagn)
-export async function handleLogin(request: Request) {
+export async function handleLogin(body: unknown) {
   try {
-    const body = await request.json();
     const loginData: LoginRequest = validateLoginRequest(body);
 
     const supabase = createServiceClient();
@@ -130,80 +128,6 @@ export async function handleLogin(request: Request) {
     return createErrorResponse(
       ERROR_CODES.VALIDATION_ERROR,
       error instanceof Error ? error.message : "Validation failed",
-    );
-  }
-}
-
-// Create new users for testing (equivalent to /createNewUsersKfKbandvagn)
-export async function handleCreateTestUsers() {
-  try {
-    const supabase = createServiceClient();
-
-    // Get board data
-    const { data: boardData, error: boardError } = await supabase
-      .from("KfKbandvagnBoard")
-      .select("size, shrink, upgrades")
-      .single();
-
-    if (boardError) {
-      console.error("Error fetching board data:", boardError);
-      return createErrorResponse(
-        ERROR_CODES.INTERNAL_ERROR,
-        boardError.message,
-      );
-    }
-
-    const boardSize = boardData.size;
-    console.log("Board data:", boardData);
-
-    // Generate free spaces
-    const freeSpaces: [number, number][] = [];
-    for (let r = 0; r < boardSize.rows; r++) {
-      for (let c = 0; c < boardSize.columns; c++) {
-        freeSpaces.push([r, c]);
-      }
-    }
-
-    const numUsers = Math.floor(freeSpaces.length / 10);
-    const entries = Array.from({ length: numUsers }, () => ({
-      playerID: "No-player",
-      tokens: 100,
-      color: `#${
-        Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")
-      }`,
-      position: { column: 0, row: 0 },
-      lives: 3,
-      range: 2,
-    }));
-
-    // Assign random positions
-    for (const entry of entries) {
-      const posIndex = Math.floor(Math.random() * freeSpaces.length);
-      const pos = freeSpaces.splice(posIndex, 1)[0];
-      entry.position = { column: pos[1], row: pos[0] };
-    }
-
-    console.log("Creating players");
-
-    const { data: _data, error } = await supabase
-      .from("KfKbandvagn")
-      .insert(entries);
-
-    if (error) {
-      console.error("Error creating test users:", error);
-      return createErrorResponse(ERROR_CODES.INTERNAL_ERROR, error.message);
-    }
-
-    console.log("Players created");
-    return createSuccessResponse(
-      entries,
-      `Created ${entries.length} test players`,
-    );
-  } catch (error) {
-    console.error("Error in handleCreateTestUsers:", error);
-    return createErrorResponse(
-      ERROR_CODES.INTERNAL_ERROR,
-      error instanceof Error ? error.message : "Failed to create test users",
     );
   }
 }

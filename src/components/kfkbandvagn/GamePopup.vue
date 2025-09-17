@@ -10,7 +10,6 @@
 
     <!-- Players at this cell -->
     <div v-if="otherPlayers.length > 0" class="players-section">
-      <h5>Spelare här:</h5>
       <div class="player-list">
         <div
           v-for="player in otherPlayers"
@@ -25,19 +24,6 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Current player info -->
-    <div v-if="currentPlayer" class="current-player-info">
-      <h5>Din Position:</h5>
-      <p>
-        {{ currentPlayer.playerID }} - ({{ currentPlayer.position.row }},
-        {{ currentPlayer.position.column }})
-      </p>
-      <p>
-        {{ currentPlayer.lives }} liv, {{ currentPlayer.tokens }} tokens, räckvidd
-        {{ currentPlayer.range }}
-      </p>
     </div>
 
     <!-- Action buttons -->
@@ -57,21 +43,6 @@
           <button @click="performAction('shot', aliveTargets[0].uuid)" class="action-btn shoot-btn">
             <span class="btn-icon">🎯</span>
             <span class="btn-text">Skjut {{ aliveTargets[0].playerID }}</span>
-            <span class="btn-cost">1 token</span>
-          </button>
-        </div>
-
-        <!-- Multiple targets - show selection -->
-        <div v-else class="target-selection">
-          <p>Välj mål:</p>
-          <button
-            v-for="player in aliveTargets"
-            :key="player.uuid"
-            @click="performAction('shot', player.uuid)"
-            class="action-btn shoot-btn target-btn"
-          >
-            <div class="target-color" :style="{ backgroundColor: player.color }"></div>
-            <span class="btn-text">Skjut {{ player.playerID }}</span>
             <span class="btn-cost">1 token</span>
           </button>
         </div>
@@ -97,13 +68,14 @@
     <div class="info-section">
       <div class="distance-info">
         <span>Avstånd: {{ distance }}</span>
-        <span v-if="currentPlayer">Räckvidd: {{ currentPlayer.range }}</span>
+        <span v-if="currentPlayer && otherPlayers.length > 0"
+          >Räckvidd: {{ currentPlayer.range }}</span
+        >
       </div>
 
       <!-- Cell type info -->
       <div class="cell-type-info">
-        <span v-if="isInPlayableArea" class="status-safe">✓ Säker zon</span>
-        <span v-else class="status-danger">⚠️ Krympt område</span>
+        <span v-if="!isInPlayableArea" class="status-danger">⚠️ Avstängd zon</span>
       </div>
     </div>
   </div>
@@ -197,15 +169,14 @@ function performAction(actionType, targetUUID = null) {
 <style scoped lang="scss">
 .game-popup {
   position: absolute;
-  background: var(--modal-bg-color);
-  border: 2px solid var(--form-border);
+  background: var(--theme-form-bg);
+  border: 2px solid var(--theme-form-border);
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   min-width: 250px;
   max-width: 350px;
   z-index: 1000;
-  backdrop-filter: blur(8px);
 }
 
 .popup-close {
@@ -216,7 +187,7 @@ function performAction(actionType, targetUUID = null) {
   border: none;
   font-size: 20px;
   cursor: pointer;
-  color: var(--text-color);
+  color: var(--theme-text-secondary);
   opacity: 0.7;
   transition: opacity 0.2s;
 
@@ -230,7 +201,7 @@ function performAction(actionType, targetUUID = null) {
 
   h4 {
     margin: 0;
-    color: var(--modal-header-color);
+    color: var(--theme-modal-header);
     font-size: 16px;
   }
 }
@@ -240,7 +211,7 @@ function performAction(actionType, targetUUID = null) {
 
   h5 {
     margin: 0 0 8px 0;
-    color: var(--text-color);
+    color: var(--theme-modal-text);
     font-size: 14px;
   }
 }
@@ -256,9 +227,9 @@ function performAction(actionType, targetUUID = null) {
   align-items: center;
   gap: 8px;
   padding: 6px;
-  background: var(--input-bg);
+  background: var(--theme-input-bg);
   border-radius: 6px;
-  border: 1px solid var(--input-border);
+  border: 1px solid var(--theme-input-border);
 
   &.dead {
     opacity: 0.6;
@@ -269,7 +240,7 @@ function performAction(actionType, targetUUID = null) {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 1px solid var(--canvas-border-color);
+  border: 1px solid var(--theme-input-border);
 }
 
 .player-info {
@@ -280,33 +251,13 @@ function performAction(actionType, targetUUID = null) {
 
 .player-name {
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--theme-modal-text);
   font-size: 13px;
 }
 
 .player-stats {
   font-size: 11px;
-  color: var(--sidebar-text-color);
-}
-
-.current-player-info {
-  margin-bottom: 16px;
-  padding: 8px;
-  background: var(--input-bg);
-  border-radius: 6px;
-  border: 1px solid var(--input-border);
-
-  h5 {
-    margin: 0 0 6px 0;
-    color: var(--modal-header-color);
-    font-size: 14px;
-  }
-
-  p {
-    margin: 0 0 4px 0;
-    font-size: 12px;
-    color: var(--text-color);
-  }
+  color: var(--theme-sidebar-text);
 }
 
 .action-buttons {
@@ -337,20 +288,20 @@ function performAction(actionType, targetUUID = null) {
 }
 
 .move-btn {
-  background: var(--button-modal-action-bg);
-  color: var(--button-text-color);
+  background: var(--theme-button-primary-bg);
+  color: var(--theme-button-primary-text);
 
   &:hover {
-    background: var(--button-modal-action-hover-bg);
+    background: var(--theme-button-primary-hover);
   }
 }
 
 .shoot-btn {
-  background: var(--button-hard-drop-bg);
-  color: var(--button-text-color);
+  background: var(--theme-button-danger-bg);
+  color: var(--theme-button-primary-text);
 
   &:hover {
-    background: var(--button-hard-drop-hover-bg);
+    background: var(--theme-button-danger-hover);
   }
 }
 

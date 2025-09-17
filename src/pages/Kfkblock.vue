@@ -42,10 +42,6 @@
           <span class="mobile-level">Nivå {{ level }}</span>
         </div>
         <div class="mobile-btn-container">
-          <button @click="toggleTheme" class="mobile-btn">
-            <span v-if="isDarkMode">☀️</span>
-            <span v-else>🌙</span>
-          </button>
           <button @click="togglePause" class="mobile-btn">
             <span v-if="gamePaused && pauseTimer == 0">▶️</span>
             <span v-else-if="gamePaused && pauseTimer > 0">{{ pauseTimer.toFixed(1) }}</span>
@@ -65,10 +61,6 @@
       <!-- Desktop sidebar - hidden on mobile -->
       <div class="sidebar desktop-only">
         <div class="sidebar-btn-container">
-          <button @click="toggleTheme" class="sidebar-btn">
-            <span v-if="isDarkMode">☀️</span>
-            <span v-else>🌙</span>
-          </button>
           <button @click="togglePause" class="sidebar-btn">
             <span v-if="gamePaused && pauseTimer == 0"> Fortsätt </span>
             <span v-else-if="gamePaused && pauseTimer > 0"> {{ pauseTimer.toFixed(1) }} </span>
@@ -287,7 +279,6 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import '@/components/kfkblock/style.scss'
 import {
   drawBoard,
   drawPiece,
@@ -297,6 +288,10 @@ import {
 } from '@/components/kfkblock/drawTetris.js'
 import AddPlayerForm from '@/components/kfkblock/AddPlayerForm.vue'
 import { getTopScores } from '@/components/kfkblock/kfkblockTopscores.js'
+import { useThemeStore } from '@/stores/theme'
+
+// Global theme store
+const themeStore = useThemeStore()
 
 // --- Constants ---
 const COLS = 10
@@ -392,7 +387,6 @@ const sack = ref([])
 const blockSize = ref(BASE_BLOCK_SIZE)
 const canvasWidth = ref(COLS * BASE_BLOCK_SIZE)
 const canvasHeight = ref(ROWS * BASE_BLOCK_SIZE)
-const isDarkMode = ref(false)
 const infoShown = ref(false)
 const showLeaderboard = ref(false)
 const showAddPlayerForm = ref(false)
@@ -434,7 +428,7 @@ function refreshDisplay() {
       canvasWidth.value,
       canvasHeight.value,
       blockSize.value,
-      isDarkMode.value,
+      themeStore.isDarkMode,
       COLS,
       ROWS,
       currentPiece.value,
@@ -450,36 +444,17 @@ function refreshDisplay() {
       canvasWidth.value,
       canvasHeight.value,
       blockSize.value,
-      isDarkMode.value,
+      themeStore.isDarkMode,
       COLS,
       ROWS,
     )
     if (nextPieces.value.length > 0) {
       const nextCanvas = isMobile.value ? nextCtxMobile.value : nextCtx.value
       if (nextCanvas) {
-        drawNextPieces(nextPieces.value, nextCanvas, blockSize.value, isDarkMode.value)
+        drawNextPieces(nextPieces.value, nextCanvas, blockSize.value, themeStore.isDarkMode)
       }
     }
   }
-}
-
-// --- Theme Management ---
-function applyTheme() {
-  if (isDarkMode.value) {
-    document.documentElement.classList.add('dark-theme')
-    document.documentElement.classList.remove('light-theme')
-  } else {
-    document.documentElement.classList.add('light-theme')
-    document.documentElement.classList.remove('dark-theme')
-  }
-  // Redraw with new theme
-  refreshDisplay()
-}
-
-function toggleTheme() {
-  isDarkMode.value = !isDarkMode.value
-  localStorage.setItem('theme', isDarkMode.value ? 'dark' : 'light')
-  applyTheme()
 }
 
 function togglePause() {
@@ -513,26 +488,6 @@ function toggleLeaderboard() {
 
 function cycleControlsMode() {
   controlsMode.value = (controlsMode.value + 1) % 3
-}
-
-function setInitialTheme() {
-  const storedTheme = localStorage.getItem('theme')
-  const prefersDarkQuery = window.matchMedia('(prefers-color-scheme: dark)')
-
-  if (storedTheme) {
-    isDarkMode.value = storedTheme === 'dark'
-  } else {
-    isDarkMode.value = prefersDarkQuery.matches
-  }
-  applyTheme()
-
-  prefersDarkQuery.addEventListener('change', (e) => {
-    // Only update if no manual override is stored
-    if (!localStorage.getItem('theme')) {
-      isDarkMode.value = e.matches
-      applyTheme()
-    }
-  })
 }
 
 // --- Board & Canvas Setup ---
@@ -755,7 +710,7 @@ function endGame() {
     canvasWidth.value,
     canvasHeight.value,
     blockSize.value,
-    isDarkMode.value,
+    themeStore.isDarkMode,
     COLS,
     ROWS,
   )
@@ -789,7 +744,7 @@ function gameLoop() {
     canvasWidth.value,
     canvasHeight.value,
     blockSize.value,
-    isDarkMode.value,
+    themeStore.isDarkMode,
     COLS,
     ROWS,
     currentPiece.value,
@@ -1027,7 +982,6 @@ async function getTopPlayers() {
 onMounted(async () => {
   initBoard()
   initializeCanvases() // This will call adjustCanvasSize
-  setInitialTheme() // Apply theme after canvases are ready for initial draw
   addKeyboardListeners()
   await getTopPlayers()
 })
@@ -1039,3 +993,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', debounce(adjustCanvasSize, 100))
 })
 </script>
+
+<style scoped lang="scss">
+@use '@/components/kfkblock/style.scss';
+</style>

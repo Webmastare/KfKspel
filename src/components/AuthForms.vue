@@ -141,7 +141,7 @@ form {
     margin-bottom: 2rem;
     font-weight: 600;
     font-size: 1.5rem;
-    color: var(--input-text);
+    color: var(--theme-input-text);
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   }
 }
@@ -208,8 +208,8 @@ button {
     position: absolute;
     top: 1rem;
     right: 1rem;
-    background: var(--button-decline-bg);
-    border-color: var(--button-decline-border);
+    background: var(--theme-button-decline-bg);
+    border-color: var(--theme-button-decline-border);
     box-shadow: 0 2px 10px rgba(244, 67, 54, 0.3);
 
     &:hover {

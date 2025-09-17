@@ -16,11 +16,11 @@ export interface GameLog {
 
 // Game board interface
 export interface GameBoard {
-    board_id: string;
+    size?: { rows: number; columns: number }; // Optional size object
     rows: number;
     cols: number;
     shrink: number; // Current shrink level
-    upgrades?: Record<string, unknown>;
+    upgrades?: [];
     time_to_shrink?: string; // Timestamp for next shrink
     logs: GameLog[];
 }

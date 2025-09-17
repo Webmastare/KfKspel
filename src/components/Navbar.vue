@@ -12,6 +12,17 @@
       </button>
 
       <div class="user-dropdown" :class="{ show: showUserMenu }">
+        <!-- Theme Toggle (always visible) -->
+        <div class="theme-toggle-section">
+          <button @click="themeStore.toggleTheme()" class="theme-toggle-btn">
+            <span class="theme-icon">{{ themeStore.isDarkMode ? '☀️' : '🌙' }}</span>
+            <span class="theme-text">{{
+              themeStore.isDarkMode ? 'Ljust läge' : 'Mörkt läge'
+            }}</span>
+          </button>
+        </div>
+
+        <!-- User Section -->
         <div v-if="authStore.isAuthed" class="user-greeting">
           <p>Välkommen, {{ authStore.profile?.username || 'Användare' }}!</p>
         </div>
@@ -34,8 +45,10 @@
 <script setup>
 import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 
 const authStore = useAuthStore()
+const themeStore = useThemeStore()
 
 const authMode = ref('') // 'login', 'signup', or ''
 const showUserMenu = ref(false) // Controls visibility of user dropdown
@@ -191,6 +204,70 @@ a {
     opacity: 1;
     visibility: visible;
     transform: translateY(0) scale(1);
+  }
+}
+
+.theme-toggle-section {
+  padding: 0.6rem;
+  border-bottom: 1px solid rgba(76, 175, 80, 0.2);
+  background: rgba(76, 175, 80, 0.05);
+}
+
+.theme-toggle-btn {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  background: rgba(76, 175, 80, 0.15);
+  color: rgba(200, 230, 201, 0.95);
+  border: 1px solid rgba(76, 175, 80, 0.2);
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(129, 199, 132, 0.15), transparent);
+    transition: left 0.4s ease;
+  }
+
+  &:hover {
+    background: rgba(76, 175, 80, 0.25);
+    border-color: rgba(129, 199, 132, 0.4);
+    transform: translateX(3px);
+    box-shadow: 0 2px 10px rgba(27, 94, 32, 0.2);
+
+    &::before {
+      left: 100%;
+    }
+  }
+
+  &:active {
+    transform: translateX(2px) scale(0.98);
+  }
+
+  .theme-icon {
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .theme-text {
+    flex: 1;
+    text-align: left;
   }
 }
 

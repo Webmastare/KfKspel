@@ -1,5 +1,5 @@
 <template>
-  <div class="game-2048" :class="{ 'dark-theme': isDarkTheme }">
+  <div class="game-2048">
     <div class="game-header">
       <h1>2048</h1>
       <div class="score-display">
@@ -29,12 +29,6 @@
       </div>
 
       <div class="settings-toggles">
-        <label class="checkbox-container">
-          <input v-model="isDarkTheme" type="checkbox" @change="toggleTheme" />
-          <span class="checkmark"></span>
-          Mörkt läge
-        </label>
-
         <label class="checkbox-container">
           <input v-model="useClassicColors" type="checkbox" @change="drawBoard" />
           <span class="checkmark"></span>
@@ -78,11 +72,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { Game2048Logic } from '../components/2048/game2048Logic.js'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { Game2048Logic } from '@/components/2048/game2048Logic.js'
+import { useThemeStore } from '@/stores/theme'
 
-// Theme management
-const isDarkTheme = ref(false)
+// Global theme store
+const themeStore = useThemeStore()
 
 // Game state
 const gameCanvas = ref(null)
@@ -102,63 +97,11 @@ const touchStartY = ref(0)
 // Game logic instance
 let gameLogic = null
 
-function toggleTheme() {
-  // Update localStorage
-  localStorage.setItem('theme', isDarkTheme.value ? 'dark' : 'light')
-
-  // Apply theme class to document root
-  if (isDarkTheme.value) {
-    document.documentElement.classList.add('dark-theme')
-  } else {
-    document.documentElement.classList.remove('dark-theme')
-  }
-
-  // Update game logic
-  if (gameLogic) {
-    gameLogic.setDarkMode(isDarkTheme.value)
-    gameLogic.drawBoard()
-  }
-}
-
-function initializeTheme() {
-  const storedTheme = localStorage.getItem('theme')
-  const prefersDarkQuery = window.matchMedia('(prefers-color-scheme: dark)')
-
-  if (storedTheme) {
-    isDarkTheme.value = storedTheme === 'dark'
-  } else {
-    isDarkTheme.value = prefersDarkQuery.matches
-  }
-
-  // Apply theme class to document root
-  if (isDarkTheme.value) {
-    document.documentElement.classList.add('dark-theme')
-  } else {
-    document.documentElement.classList.remove('dark-theme')
-  }
-
-  // Listen for system theme changes
-  prefersDarkQuery.addEventListener('change', (e) => {
-    if (!localStorage.getItem('theme')) {
-      isDarkTheme.value = e.matches
-      if (isDarkTheme.value) {
-        document.documentElement.classList.add('dark-theme')
-      } else {
-        document.documentElement.classList.remove('dark-theme')
-      }
-      if (gameLogic) {
-        gameLogic.setDarkMode(isDarkTheme.value)
-        gameLogic.drawBoard()
-      }
-    }
-  })
-}
-
 function initializeGame() {
   if (!gameCanvas.value) return
 
   gameLogic = new Game2048Logic(gameCanvas.value)
-  gameLogic.setDarkMode(isDarkTheme.value)
+  gameLogic.setDarkMode(themeStore.isDarkMode) // Use global theme store
   gameLogic.setUseClassicColors(useClassicColors.value)
 
   // Set up callbacks
@@ -311,7 +254,6 @@ function handleResize() {
 }
 
 onMounted(async () => {
-  initializeTheme()
   await nextTick()
 
   // Ensure canvas is available before initializing game

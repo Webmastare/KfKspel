@@ -13,7 +13,7 @@
     <!-- Player Creation Form State -->
     <div v-else class="modal-overlay">
       <div class="modal-content">
-        <div class="form-base player-creation-form">
+        <div class="player-creation-form">
           <button type="button" class="close-form-button" @click="closeModal">&#215;</button>
 
           <h2>Skapa din Bandvagn</h2>
@@ -63,7 +63,6 @@
                   class="color-input"
                   :disabled="isSubmitting"
                 />
-                <div class="color-preview" :style="{ backgroundColor: playerColor }"></div>
                 <span class="color-value">{{ playerColor }}</span>
                 <button
                   type="button"
@@ -260,9 +259,10 @@ function closeModal() {
 
 // Generate random color
 function generateRandomColor() {
-  const colors = presetColors
-  const randomIndex = Math.floor(Math.random() * colors.length)
-  playerColor.value = colors[randomIndex]
+  const color = `#${Math.floor(Math.random() * 16777215)
+    .toString(16)
+    .padStart(6, '0')}`
+  playerColor.value = color
 }
 
 // Initialize
@@ -285,6 +285,18 @@ onMounted(() => {
 /* Use shared form styles */
 @use '@/styles/generalGames.scss';
 
+// Player creation form
+.player-creation-form {
+  @extend .form-base;
+  position: fixed;
+  top: calc(50% + 1.5rem);
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10001;
+  max-width: 400px;
+  width: 60%;
+}
+
 // Modal overlay to center the form like auth form
 .modal-overlay {
   position: fixed;
@@ -305,11 +317,6 @@ onMounted(() => {
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-}
-
-.player-creation-form {
-  max-width: 500px;
-  position: relative;
 }
 
 .close-form-button {
@@ -388,13 +395,6 @@ onMounted(() => {
   &:hover {
     transform: scale(1.05);
   }
-}
-
-.color-preview {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 2px solid var(--input-border);
 }
 
 .color-value {
@@ -521,7 +521,8 @@ onMounted(() => {
   }
 
   .player-creation-form {
-    max-width: none;
+    padding: 1rem 1.5rem;
+    width: 90%;
   }
 
   .color-presets {

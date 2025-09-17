@@ -367,7 +367,7 @@ watch(
 
 .guest-form-modal {
   @extend .form-base;
-  color: var(--input-text);
+  color: var(--theme-input-text);
   position: relative;
 
   h2 {
@@ -375,7 +375,7 @@ watch(
     margin-bottom: 1.5rem;
     font-weight: 600;
     font-size: 1.5rem;
-    color: var(--input-text);
+    color: var(--theme-input-text);
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   }
 }
@@ -384,12 +384,12 @@ watch(
   text-align: center;
   margin-bottom: 2rem;
   font-size: 1.1rem;
-  color: var(--input-text);
+  color: var(--theme-input-text);
 
   .score-value {
     font-weight: bold;
     font-size: 1.3rem;
-    color: var(--modal-header-color);
+    color: var(--theme-modal-header);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
 }
@@ -429,8 +429,8 @@ watch(
   position: absolute;
   top: 1rem;
   right: 1rem;
-  background: var(--button-decline-bg);
-  border-color: var(--button-decline-border);
+  background: var(--theme-button-decline-bg);
+  border-color: var(--theme-button-decline-border);
   box-shadow: 0 2px 10px rgba(244, 67, 54, 0.3);
 
   &:hover {

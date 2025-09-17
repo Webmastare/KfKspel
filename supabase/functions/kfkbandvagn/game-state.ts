@@ -37,6 +37,7 @@ export async function handleGetGameState() {
     const { data: boardData, error: boardError } = await supabase
       .from("KfKbandvagnBoard")
       .select("size, shrink, upgrades, logs")
+      .eq("active_board", true)
       .single();
 
     if (boardError) {

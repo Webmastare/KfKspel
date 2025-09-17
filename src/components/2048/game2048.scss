@@ -1,5 +1,5 @@
-// Use the same CSS custom properties as kfkblock theme
-// The theme variables are defined globally in the kfkblock style.scss
+// Import the centralized theme system
+@import '@/styles/theme.scss';
 
 .game-2048 {
   display: flex;
@@ -9,8 +9,8 @@
   padding: 20px;
   max-width: 100vw;
   min-height: 100vh;
-  background-color: var(--bg-color);
-  color: var(--text-color);
+  background-color: var(--theme-bg-primary);
+  color: var(--theme-text-primary);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   transition:
     background-color 0.3s,
@@ -24,22 +24,23 @@
       margin: 0 0 15px 0;
       font-size: 3rem;
       font-weight: bold;
-      color: var(--modal-header-color);
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      color: var(--theme-modal-header);
+      text-shadow: var(--theme-shadow-sm);
       transition: color 0.3s;
     }
 
     .score-display {
-      background-color: var(--sidebar-bg-color);
+      background-color: var(--theme-sidebar-bg);
       padding: 15px 25px;
       border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--theme-shadow-md);
       font-size: 1.3rem;
       font-weight: 600;
+      color: var(--theme-sidebar-text);
       transition: background-color 0.3s;
 
       .score-value {
-        color: var(--modal-header-color);
+        color: var(--theme-modal-header);
         font-weight: bold;
         font-size: 1.5em;
       }
@@ -52,10 +53,10 @@
     gap: 20px;
     align-items: center;
     justify-content: center;
-    background-color: var(--app-container-bg);
+    background-color: var(--theme-bg-secondary);
     padding: 20px;
     border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--theme-shadow-md);
     transition: background-color 0.3s;
 
     .board-size-control {
@@ -66,7 +67,7 @@
 
       label {
         font-weight: 600;
-        color: var(--text-color);
+        color: var(--theme-text-primary);
         font-size: 0.95rem;
       }
 
@@ -78,7 +79,7 @@
         .slider-min,
         .slider-max {
           font-size: 0.9rem;
-          color: var(--sidebar-text-color);
+          color: var(--theme-sidebar-text);
           font-weight: 500;
         }
 
@@ -87,7 +88,7 @@
           appearance: none;
           width: 180px;
           height: 8px;
-          background: var(--canvas-grid-color);
+          background: var(--theme-canvas-grid);
           border-radius: 4px;
           outline: none;
           transition: background 0.3s;
@@ -96,21 +97,21 @@
             -webkit-appearance: none;
             width: 20px;
             height: 20px;
-            background: var(--modal-header-color);
+            background: var(--theme-modal-header);
             border-radius: 50%;
             cursor: pointer;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            box-shadow: var(--theme-shadow-sm);
             transition: background 0.3s;
           }
 
           &::-moz-range-thumb {
             width: 20px;
             height: 20px;
-            background: var(--modal-header-color);
+            background: var(--theme-modal-header);
             border-radius: 50%;
             cursor: pointer;
             border: none;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            box-shadow: var(--theme-shadow-sm);
           }
         }
       }
@@ -127,12 +128,12 @@
         gap: 8px;
         cursor: pointer;
         font-weight: 500;
-        color: var(--text-color);
+        color: var(--theme-text-primary);
 
         input[type='checkbox'] {
           width: 18px;
           height: 18px;
-          accent-color: var(--modal-header-color);
+          accent-color: var(--theme-modal-header);
           cursor: pointer;
         }
       }
@@ -143,11 +144,11 @@
       flex-direction: column;
       align-items: center;
       gap: 10px;
-      background-color: var(--modal-header-color);
-      color: white;
+      background-color: var(--theme-modal-header);
+      color: var(--theme-button-primary-text);
       padding: 15px 20px;
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--theme-shadow-sm);
       animation: pulse-glow 2s infinite;
 
       .saved-game-info {
@@ -168,8 +169,8 @@
     }
 
     .action-button {
-      background-color: var(--modal-header-color);
-      color: var(--button-text-color);
+      background-color: var(--theme-modal-header);
+      color: var(--theme-button-primary-text);
       border: none;
       padding: 12px 24px;
       border-radius: 8px;
@@ -177,12 +178,12 @@
       font-size: 1rem;
       font-weight: bold;
       transition: all 0.2s ease;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--theme-shadow-sm);
 
       &:hover {
-        background-color: var(--button-modal-action-hover-bg);
+        background-color: var(--theme-button-success-hover);
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        box-shadow: var(--theme-shadow-md);
       }
 
       &:active {
@@ -190,10 +191,10 @@
       }
 
       &.restart-button {
-        background-color: var(--button-hard-drop-bg);
+        background-color: var(--theme-button-danger-bg);
 
         &:hover {
-          background-color: var(--button-hard-drop-hover-bg);
+          background-color: var(--theme-button-danger-hover);
         }
       }
     }
@@ -207,17 +208,17 @@
     gap: 15px;
 
     .game-canvas {
-      border: 4px solid var(--canvas-border-color);
-      background-color: var(--canvas-bg-color);
+      border: 4px solid var(--theme-canvas-2048-border);
+      background-color: var(--theme-canvas-2048-bg);
       border-radius: 12px;
-      box-shadow: 0 0 20px var(--canvas-glow-color);
+      box-shadow: 0 0 20px var(--theme-canvas-glow);
       transition: all 0.3s ease;
       touch-action: none;
       user-select: none;
 
       &:focus {
         outline: none;
-        box-shadow: 0 0 25px var(--canvas-glow-color);
+        box-shadow: 0 0 25px var(--theme-canvas-glow);
       }
     }
 
@@ -230,17 +231,17 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      background-color: rgba(0, 0, 0, 0.7);
+      background-color: var(--theme-bg-overlay);
       border-radius: 12px;
       z-index: 100;
 
       .modal-content {
-        background-color: var(--modal-bg-color);
+        background-color: var(--theme-modal-bg);
         padding: 30px 40px;
         border-radius: 16px;
         text-align: center;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-        color: var(--modal-text-color);
+        box-shadow: var(--theme-shadow-lg);
+        color: var(--theme-modal-text);
         transition:
           background-color 0.3s,
           color 0.3s;
@@ -249,14 +250,14 @@
         h2 {
           margin: 0 0 15px 0;
           font-size: 2rem;
-          color: var(--modal-header-color);
+          color: var(--theme-modal-header);
           transition: color 0.3s;
         }
 
         p {
           font-size: 1.2rem;
           margin-bottom: 25px;
-          color: var(--text-color);
+          color: var(--theme-text-primary);
         }
 
         .action-button {
@@ -268,17 +269,17 @@
   }
 
   .game-instructions {
-    background-color: var(--sidebar-bg-color);
+    background-color: var(--theme-sidebar-bg);
     padding: 15px 25px;
     border-radius: 8px;
     text-align: center;
     max-width: 600px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--theme-shadow-sm);
     transition: background-color 0.3s;
 
     p {
       margin: 0;
-      color: var(--sidebar-text-color);
+      color: var(--theme-sidebar-text);
       font-size: 0.95rem;
       line-height: 1.5;
     }
@@ -343,30 +344,9 @@
 @keyframes pulse-glow {
   0%,
   100% {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--theme-shadow-sm);
   }
   50% {
-    box-shadow: 0 4px 16px rgba(34, 197, 94, 0.3);
-  }
-}
-
-// Dark theme specific adjustments
-.game-2048.dark-theme {
-  .game-settings .board-size-control .slider-container .board-size-slider {
-    &::-webkit-slider-thumb {
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-    }
-
-    &::-moz-range-thumb {
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-    }
-  }
-
-  .game-container .game-canvas {
-    box-shadow: 0 0 20px var(--canvas-glow-color);
-  }
-
-  .game-instructions p {
-    color: var(--sidebar-text-color);
+    box-shadow: 0 4px 16px var(--theme-canvas-glow);
   }
 }

@@ -2,13 +2,14 @@ import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
 import { getGameState } from "@/composables/kfkbandvagn/board";
 import {
-  createPlayer,
-  loginPlayer,
-  performAction,
+  createPlayerAPI,
+  loginPlayerAPI,
+  performGameAction,
 } from "@/composables/kfkbandvagn/gameActions";
 import type { Player } from "@/composables/kfkbandvagn/player";
 import type { GameBoard } from "@/composables/kfkbandvagn/board";
 import type { GameActionType } from "@/composables/kfkbandvagn/gameActions";
+import { supabase } from "@/utils/supabase";
 
 export const useBandvagnStore = defineStore("bandvagn", {
   state: () => ({
@@ -130,27 +131,23 @@ export const useBandvagnStore = defineStore("bandvagn", {
       try {
         const gameState = await getGameState();
 
-        // Update players data
+        // Update players data (from Edge Function - service role, safe)
         this.allPlayers = gameState.playerData || [];
-
-        // Find current player
-        const currentPlayer = this.allPlayers.find((p: Player) =>
-          p.uuid === authStore.user?.id && p.taken_tank
-        );
-        this.currentPlayer = currentPlayer || null;
 
         // Update board data - transform BoardData to GameBoard format
         if (gameState.boardData) {
           this.boardData = {
-            board_id: gameState.boardData.board_id,
-            rows: gameState.boardData.rows,
-            cols: gameState.boardData.cols,
+            rows: gameState.boardData.size!.rows,
+            cols: gameState.boardData.size!.columns,
             shrink: gameState.boardData.shrink,
             logs: gameState.boardData.logs,
-            upgrades: gameState.boardData.upgrades || {},
+            upgrades: gameState.boardData.upgrades || [],
             time_to_shrink: gameState.boardData.time_to_shrink || "",
           };
         }
+
+        // Fetch the current user's tank directly via RLS-protected client query
+        await this.fetchCurrentUserTank();
 
         this.lastFetch = new Date();
         console.log("Game state updated:", {
@@ -169,6 +166,55 @@ export const useBandvagnStore = defineStore("bandvagn", {
       }
     },
 
+    // Fetch only the current user's tank using Supabase client (RLS-protected)
+    async fetchCurrentUserTank() {
+      const authStore = useAuthStore();
+      if (!authStore.user?.id) {
+        this.currentPlayer = null;
+        return null;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("KfKbandvagn")
+          .select(
+            "user_id, playerID, uuid, tokens, position, lives, range, color, taken_tank",
+          )
+          .eq("user_id", authStore.user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Failed to fetch current user's tank:", error);
+          this.currentPlayer = null;
+          return null;
+        }
+
+        // If no tank assigned yet
+        if (!data || data.taken_tank === false) {
+          this.currentPlayer = null;
+          return null;
+        }
+
+        // Cast to Player and set
+        this.currentPlayer = {
+          uuid: data.uuid,
+          playerID: data.playerID,
+          position: data.position,
+          lives: data.lives,
+          tokens: data.tokens,
+          range: data.range,
+          taken_tank: data.taken_tank,
+          color: data.color,
+        } as Player;
+
+        return this.currentPlayer;
+      } catch (err) {
+        console.error("Unexpected error fetching current user's tank:", err);
+        this.currentPlayer = null;
+        return null;
+      }
+    },
+
     // Create a new player
     async createPlayer(playerData: { playerID: string; color: string }) {
       const authStore = useAuthStore();
@@ -181,7 +227,7 @@ export const useBandvagnStore = defineStore("bandvagn", {
       this.error = null;
 
       try {
-        const result = await createPlayer({
+        const result = await createPlayerAPI({
           user_id: authStore.user.id,
           playerID: playerData.playerID,
           color: playerData.color,
@@ -214,7 +260,7 @@ export const useBandvagnStore = defineStore("bandvagn", {
       this.error = null;
 
       try {
-        const result = await loginPlayer({
+        const result = await loginPlayerAPI({
           user_id: authStore.user.id,
         });
 
@@ -246,7 +292,7 @@ export const useBandvagnStore = defineStore("bandvagn", {
       this.error = null;
 
       try {
-        const result = await performAction(action);
+        const result = await performGameAction(action);
 
         // Refresh game state after action
         await this.fetchGameState();
@@ -330,12 +376,17 @@ export const useBandvagnStore = defineStore("bandvagn", {
       ) {
         return false;
       }
+      // Check if cell is occupied
+      const occupied = this.allPlayers.some((p: Player) =>
+        p.position.row === row && p.position.column === column && p.lives > 0
+      );
+      if (occupied) return false;
 
       // Check if cell is within range
       const distance = Math.abs(row - this.currentPlayer.position.row) +
         Math.abs(column - this.currentPlayer.position.column);
 
-      return distance <= this.currentPlayer.range && distance > 0;
+      return distance <= 1 && distance > 0 && this.currentPlayer.tokens >= 1; // Adjacent cells only
     },
 
     canShootAtCell(row: number, column: number): boolean {

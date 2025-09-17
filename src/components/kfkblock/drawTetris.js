@@ -14,6 +14,15 @@ export function getThemeColor(varName) {
   return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
 }
 
+// Get themed canvas colors
+function getCanvasColors(isDarkMode) {
+  return {
+    background: getThemeColor('--theme-canvas-kfkblock-bg') || (isDarkMode ? '#111827' : '#e8f5e8'),
+    grid: getThemeColor('--theme-canvas-kfkblock-grid') || (isDarkMode ? '#374151' : '#d4d4d8'),
+    border: getThemeColor('--theme-canvas-kfkblock-border') || (isDarkMode ? '#374151' : '#4a5568'),
+  }
+}
+
 // Helper function to calculate piece dimensions for centering
 function getPieceDimensions(piece) {
   const xValues = piece.getShape().map((coord) => coord[0])
@@ -57,13 +66,14 @@ export function drawBoard(
 ) {
   if (!ctx || !board || board.length === 0) return
 
-  // Clear canvas with theme-appropriate background
-  const bg_color = isDarkMode ? `rgb(50, 50, 50)` : `rgb(220, 220, 220)`
-  ctx.fillStyle = bg_color
+  const colors = getCanvasColors(isDarkMode)
+
+  // Clear canvas with themed background
+  ctx.fillStyle = colors.background
   ctx.fillRect(0, 0, canvasWidth, canvasHeight)
 
-  // Draw grid lines
-  ctx.strokeStyle = `rgb(180,180,180)`
+  // Draw grid lines with themed color
+  ctx.strokeStyle = colors.grid
   ctx.beginPath()
 
   // Vertical lines
@@ -137,10 +147,10 @@ export function drawNextPieces(nextPieces, nextCtx, blockSize, isDarkMode) {
   if (!nextPieces || nextPieces.length === 0 || !nextCtx) return
 
   const canvas = nextCtx.canvas
-  const bg_color = isDarkMode ? `rgb(50, 50, 50)` : `rgb(220, 220, 220)`
+  const colors = getCanvasColors(isDarkMode)
 
-  // Clear canvas
-  nextCtx.fillStyle = bg_color
+  // Clear canvas with themed background
+  nextCtx.fillStyle = colors.background
   nextCtx.fillRect(0, 0, canvas.width, canvas.height)
 
   const pieceHeight = canvas.height / 3 // Divide into 3 sections for 3 next pieces

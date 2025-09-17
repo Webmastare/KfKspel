@@ -192,8 +192,8 @@ export function sanitizePlayerID(playerID: string): string {
 
 // Generate error response
 export function createErrorResponse(code: string, message?: string) {
-    const error: Record<string, string> = { code, message: message || code };
-    return error;
+    const response = { error: true, code, message: message || code };
+    return response;
 }
 
 // Generate success response

@@ -44,7 +44,8 @@ export async function handleGameReset() {
     // Empty the players table first
     const { error: deleteError } = await supabase
       .from("KfKbandvagn")
-      .delete();
+      .delete()
+      .in("taken_tank", [true, false]); // Delete all rows;
 
     if (deleteError) {
       console.error("Error deleting players during reset:", deleteError);
@@ -93,7 +94,8 @@ export async function handleGameReset() {
     console.log("Creating players", entries.length);
     const { data: inserted, error: insertError } = await supabase
       .from("KfKbandvagn")
-      .insert(entries);
+      .insert(entries)
+      .select("*");
 
     if (insertError) {
       console.error("Error inserting placeholder players:", insertError);

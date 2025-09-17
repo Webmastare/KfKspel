@@ -7,11 +7,28 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import Navbar from './components/Navbar.vue'
 import Auth from '@/components/AuthForms.vue'
+import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 
 const authMode = ref('') // 'login', 'signup', or ''
+
+// Initialize stores
+const authStore = useAuthStore()
+const themeStore = useThemeStore()
+
+onMounted(async () => {
+  // Initialize theme system first
+  themeStore.init()
+
+  // Clean up old theme storage from individual games
+  themeStore.cleanupOldThemeStorage()
+
+  // Initialize auth store
+  await authStore.init()
+})
 </script>
 
 <style>

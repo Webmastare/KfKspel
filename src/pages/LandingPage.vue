@@ -1,9 +1,9 @@
 <template>
-  <div class="landing-page" :class="{ 'dark-mode': isDarkTheme }">
+  <div class="landing-page">
     <!-- Theme Toggle -->
     <div class="theme-toggle">
       <label class="toggle-switch">
-        <input type="checkbox" v-model="isDarkTheme" />
+        <input type="checkbox" :checked="isDarkTheme" @change="themeStore.toggleTheme" />
         <span class="slider">
           <span class="toggle-icon">{{ isDarkTheme ? '🌙' : '☀️' }}</span>
         </span>
@@ -108,11 +108,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useThemeStore } from '@/stores/theme'
 import HamiltonianSnake from '@/components/HamiltonianSnake.vue'
 
 const router = useRouter()
+const themeStore = useThemeStore()
 
 const showSnakeDetails = ref(false)
 const snakeFps = ref(10) // Adjusted FPS for smoother animation
@@ -124,25 +126,12 @@ const visualizationOptions = reactive({
 })
 const showWelcomeCard = ref(true)
 
-// Dark mode detection from system preference
-const isDarkTheme = ref(
-  typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false,
-)
+// Use global theme store
+const isDarkTheme = themeStore.isDarkMode
 
-// Listen for system theme changes
+// Initialize theme system
 onMounted(() => {
-  if (typeof window !== 'undefined') {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleThemeChange = (e: MediaQueryListEvent) => {
-      isDarkTheme.value = e.matches
-    }
-    mediaQuery.addEventListener('change', handleThemeChange)
-
-    // Clean up listener on unmount
-    onUnmounted(() => {
-      mediaQuery.removeEventListener('change', handleThemeChange)
-    })
-  }
+  themeStore.init()
 })
 
 function toggleSnakeView() {
@@ -156,47 +145,14 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
 
 <style lang="scss" scoped>
 @use '@/styles/variables' as *;
+@import '@/styles/theme.scss';
 
 .landing-page {
   position: relative;
   width: 100vw;
   min-height: 100vh;
-  background: var(--bg-primary);
+  background: var(--theme-bg-primary);
   transition: background 0.3s ease;
-
-  // Light mode colors (default)
-  --bg-primary: #dfe0e0;
-  --bg-secondary: rgba(223, 223, 223, 0.9);
-  --bg-card: rgba(214, 212, 212, 0.95);
-  --bg-card-hover: rgba(223, 223, 223, 0.98);
-  --text-primary: #2c3e50;
-  --text-secondary: #6c757d;
-  --text-accent: #1c1c1c;
-  --border-color: rgba(0, 0, 0, 0.1);
-  --shadow-color: rgba(0, 0, 0, 0.1);
-  --button-bg: rgba(255, 255, 255, 0.2);
-  --button-hover: rgba(255, 255, 255, 0.3);
-  --control-bg: rgba(255, 255, 255, 0.6);
-  --control-text: #333;
-  --overlay-bg: rgba(255, 255, 255, 0.05);
-
-  // Dark mode colors
-  &.dark-mode {
-    --bg-primary: #1a1a1a;
-    --bg-secondary: rgba(30, 30, 30, 0.9);
-    --bg-card: rgba(40, 40, 40, 0.95);
-    --bg-card-hover: rgba(50, 50, 50, 0.98);
-    --text-primary: #c2c5c8;
-    --text-secondary: #adb5bd;
-    --text-accent: #ced4da;
-    --border-color: rgba(255, 255, 255, 0.1);
-    --shadow-color: rgba(0, 0, 0, 0.3);
-    --button-bg: rgba(255, 255, 255, 0.15);
-    --button-hover: rgba(255, 255, 255, 0.25);
-    --control-bg: rgba(60, 60, 60, 0.8);
-    --control-text: #e9ecef;
-    --overlay-bg: rgba(0, 0, 0, 0.1);
-  }
 }
 
 .background-game {
@@ -234,9 +190,9 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
   .title {
     font-size: 3.5rem;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--theme-text-primary);
     margin-bottom: 0.5rem;
-    background: linear-gradient(135deg, $kfkb1 0%, var(--text-accent) 100%);
+    background: linear-gradient(135deg, $kfkb1 0%, var(--theme-text-accent) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -246,7 +202,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
 
   .subtitle {
     font-size: 1.2rem;
-    color: var(--text-secondary);
+    color: var(--theme-text-secondary);
     margin-bottom: 3rem;
     font-weight: 300;
     z-index: 1;
@@ -262,34 +218,34 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
 }
 
 .game-card {
-  background: var(--bg-card);
+  background: var(--theme-bg-secondary);
   border-radius: 15px;
   padding: 1rem;
   text-align: center;
   transition: all 0.3s ease;
-  border: 2px solid var(--border-color);
+  border: 2px solid var(--theme-border-light);
   backdrop-filter: blur(10px);
-  box-shadow: 0 5px 15px var(--shadow-color);
+  box-shadow: var(--theme-shadow-md);
   pointer-events: auto; /* Ensure game cards are interactive */
 
   &:hover {
     transform: translateY(-5px);
-    box-shadow: 0 15px 30px var(--shadow-color);
+    box-shadow: var(--theme-shadow-lg);
     border-color: rgba(58, 152, 59, 0.3);
-    background: var(--bg-card-hover);
+    background: var(--theme-bg-elevated);
   }
 
   h3 {
     font-size: 1.5rem;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--theme-text-primary);
     margin-bottom: 0.5rem;
   }
 
   .play-btn {
-    background: linear-gradient(135deg, $kfkb1 0%, $kfkb2 100%);
-    color: white;
-    border: none;
+    background: var(--theme-button-primary-bg);
+    color: var(--theme-button-primary-text);
+    border: 2px solid var(--theme-button-primary-border);
     padding: 0.75rem 2rem;
     border-radius: 25px;
     font-weight: 600;
@@ -303,6 +259,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
 
     &:hover {
       transform: scale(1.05);
+      background: var(--theme-button-primary-hover);
       box-shadow: 5px 5px 15px rgba(58, 152, 59, 0.4);
     }
 
@@ -311,8 +268,8 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
     }
 
     &.disabled {
-      background: var(--button-bg);
-      color: var(--text-secondary);
+      background: var(--theme-button-secondary-bg);
+      color: var(--theme-text-secondary);
       cursor: not-allowed;
       opacity: 0.6;
 
@@ -324,35 +281,35 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
   }
 
   &.special .play-btn {
-    background: var(--button-bg);
+    background: var(--theme-button-secondary-bg);
     backdrop-filter: blur(10px);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
+    border: 1px solid var(--theme-border-light);
+    color: var(--theme-text-primary);
 
     &:hover {
-      background: var(--button-hover);
+      background: var(--theme-button-secondary-hover);
     }
   }
 }
 
 .snake-info {
-  background: var(--control-bg);
+  background: var(--theme-bg-elevated);
   border-radius: 15px;
   padding: 2rem;
   text-align: left;
   margin-top: 2rem;
   backdrop-filter: blur(10px);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--theme-border-light);
   pointer-events: auto; /* Ensure snake info is interactive */
 
   h4 {
-    color: var(--text-primary);
+    color: var(--theme-text-primary);
     font-size: 1.3rem;
     margin-bottom: 1rem;
   }
 
   p {
-    color: var(--text-secondary);
+    color: var(--theme-text-secondary);
     line-height: 1.6;
     margin-bottom: 1.5rem;
   }
@@ -366,7 +323,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
 
   button {
     background: $kfkb1;
-    border: 2px solid var(--border-color);
+    border: 2px solid var(--theme-border-light);
     color: white;
     padding: 0.5rem 1rem;
     border-radius: 20px;
@@ -412,7 +369,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
     pointer-events: auto; /* Ensure FPS control is interactive */
 
     label {
-      color: var(--control-text);
+      color: var(--theme-text-primary);
       font-weight: 500;
       font-size: 0.9rem;
     }
@@ -421,7 +378,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
       width: 120px;
       height: 6px;
       border-radius: 3px;
-      background: linear-gradient(to right, $kfkb1 0%, var(--text-accent) 100%);
+      background: linear-gradient(to right, $kfkb1 0%, var(--theme-text-accent) 100%);
       outline: none;
       opacity: 0.8;
       transition: opacity 0.2s;
@@ -439,12 +396,12 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
         border-radius: 50%;
         background: $kfkb1;
         cursor: pointer;
-        box-shadow: 0 2px 6px var(--shadow-color);
+        box-shadow: var(--theme-shadow-sm);
         transition: all 0.2s ease;
 
         &:hover {
           transform: scale(1.1);
-          box-shadow: 0 4px 12px var(--shadow-color);
+          box-shadow: var(--theme-shadow-md);
         }
       }
 
@@ -455,12 +412,12 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
         background: $kfkb1;
         cursor: pointer;
         border: none;
-        box-shadow: 0 2px 6px var(--shadow-color);
+        box-shadow: var(--theme-shadow-sm);
         transition: all 0.2s ease;
 
         &:hover {
           transform: scale(1.1);
-          box-shadow: 0 4px 12px var(--shadow-color);
+          box-shadow: var(--theme-shadow-md);
         }
       }
 
@@ -473,7 +430,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
     }
 
     .fps-value {
-      color: var(--control-text);
+      color: var(--theme-text-primary);
       font-weight: 600;
       font-size: 0.9rem;
       min-width: 50px;
@@ -486,9 +443,9 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
   position: absolute;
   bottom: 20px;
   right: 20px;
-  background: var(--control-bg);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background: var(--theme-bg-elevated);
+  color: var(--theme-text-primary);
+  border: 1px solid var(--theme-border-light);
   padding: 0.75rem 1rem;
   border-radius: 10px;
   cursor: pointer;
@@ -500,7 +457,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
   pointer-events: auto; /* Ensure close button is interactive */
 
   &:hover {
-    background: var(--button-hover);
+    background: var(--theme-button-secondary-hover);
     transform: scale(1.05);
   }
 
