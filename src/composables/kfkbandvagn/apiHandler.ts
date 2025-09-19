@@ -278,10 +278,8 @@ export async function makeRequest<T>(
 
         // Only add body if it exists
         if (body) {
-            console.log("Adding body to request");
             invokeOptions.body = body;
         }
-        console.log("Fetching data from endpoint...", invokeOptions);
         const { data, error } = await supabase.functions.invoke(
             `kfkbandvagn${endpoint}`,
             invokeOptions,

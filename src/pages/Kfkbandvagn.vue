@@ -225,8 +225,18 @@
           <h4>Senaste Händelser</h4>
           <div class="logs-container">
             <div v-for="(log, index) in recentLogs" :key="index" class="log-entry">
-              <span class="log-player">{{ log.playerID }}:</span>
-              <span class="log-action">{{ getActionDescription(log) }}</span>
+              <div class="log-header">
+                <span class="log-timestamp">{{ getDetailedLogInfo(log).timestamp }}</span>
+                <span
+                  class="log-player"
+                  :class="{ 'current-player': getDetailedLogInfo(log).isCurrentPlayer }"
+                >
+                  {{ getDetailedLogInfo(log).playerID }}
+                </span>
+              </div>
+              <div class="log-content">
+                <span class="log-action">{{ getDetailedLogInfo(log).actionDescription }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -282,7 +292,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useBandvagnStore } from '@/stores/bandvagnState'
 import PlayerCreation from '@/components/kfkbandvagn/PlayerCreation.vue'
@@ -377,6 +387,7 @@ function cancelUpgrade() {
 }
 
 async function confirmUpgrade() {
+  console.log('Confirming upgrade:', upgradeType.value)
   try {
     await gameStore.performAction({
       action: upgradeType.value,
@@ -384,30 +395,99 @@ async function confirmUpgrade() {
     })
     showUpgradeDialog.value = false
     upgradeType.value = ''
+    console.log('Upgrade successful')
   } catch (error) {
     console.error('Upgrade failed:', error)
     // TODO: Show error message to user
   }
 }
 
-// Action description helper
-function getActionDescription(log) {
-  const actionMap = {
-    move: 'flyttade',
-    shot: 'sköt',
-    range: 'köpte räckvidd',
-    life: 'köpte liv',
-    board_shrink: 'spelplan krympte',
-    token_distribution: 'tokens utdelade',
+// Enhanced log formatting functions
+function formatTimestamp(timestamp) {
+  const date = new Date(timestamp)
+
+  const year = date.getFullYear().toString().slice(-2) // Get only last two digits of the year
+  const month = String(date.getMonth() + 1).padStart(2, '0') // Months are zero-indexed
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+
+  return `${year}-${month}-${day} ${hours}:${minutes}`
+}
+
+function getDetailedLogInfo(log) {
+  const isCurrentPlayer = currentPlayer.value && log.playerID === currentPlayer.value.playerID
+  let actionDescription = ''
+
+  switch (log.action) {
+    case 'shot':
+      if (log.details?.targetPlayer) {
+        actionDescription = `sköt mot ${log.details.targetPlayer}`
+        if (log.details?.hit) {
+          actionDescription += ' och träffade!'
+        } else {
+          actionDescription += ' men missade.'
+        }
+      } else {
+        actionDescription = 'sköt'
+      }
+      break
+
+    case 'move':
+      if (log.details?.position) {
+        actionDescription = `Flyttade till (${log.details.position.row}, ${log.details.position.column})`
+      } else {
+        actionDescription = 'Flyttade'
+      }
+      break
+
+    case 'range':
+      if (log.details?.range) {
+        actionDescription = `Köpte räckvidd (${log.details.range - 1} → ${log.details.range})`
+      } else {
+        actionDescription = 'Köpte räckvidd'
+      }
+      break
+
+    case 'life':
+      if (log.details?.lives) {
+        actionDescription = `Köpte liv (${log.details.lives - 1} → ${log.details.lives})`
+      } else {
+        actionDescription = 'Köpte liv'
+      }
+      break
+
+    case 'board_shrink':
+      actionDescription = 'Spelplanen krympte'
+      break
+
+    case 'token_distribution':
+      if (log.details?.tokensGiven) {
+        actionDescription = `Fick ${log.details.tokensGiven} tokens`
+      } else {
+        actionDescription = 'Fick tokens'
+      }
+      break
+
+    case 'death':
+      actionDescription = 'Dog'
+      break
+
+    case 'respawn':
+      actionDescription = 'Återuppstod'
+      break
+
+    default:
+      actionDescription = log.action
+      break
   }
 
-  let description = actionMap[log.action] || log.action
-
-  if (log.details?.targetPlayer) {
-    description += ` mot ${log.details.targetPlayer}`
+  return {
+    timestamp: formatTimestamp(log.timestamp),
+    playerID: log.playerID,
+    actionDescription,
+    isCurrentPlayer,
   }
-
-  return description
 }
 
 // Mobile detection
@@ -415,18 +495,41 @@ function checkMobile() {
   isMobile.value = window.innerWidth <= 768
 }
 
+// Auth state watcher - handles game state initialization and updates
+watch(
+  () => authStore.authStateVersion,
+  async (newVersion, oldVersion) => {
+    console.log(`Auth state version changed: ${oldVersion} -> ${newVersion}`)
+
+    if (authStore.isAuthed) {
+      console.log('User authenticated, initializing game store')
+      try {
+        await gameStore.initialize()
+
+        // Check if user needs to create a player
+        if (!currentPlayer.value) {
+          showPlayerModal.value = true
+        } else {
+          // Close player modal if it's open and we now have a player
+          showPlayerModal.value = false
+        }
+      } catch (error) {
+        console.error('Failed to initialize game store after auth change:', error)
+      }
+    } else {
+      console.log('User logged out, resetting game store')
+      // Reset game store when user logs out
+      gameStore.reset()
+      showPlayerModal.value = false
+    }
+  },
+  { immediate: false }, // Don't run immediately since we handle initial state in onMounted
+)
+
 // Lifecycle
 onMounted(async () => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
-
-  // Initialize game store
-  await gameStore.initialize()
-
-  // Check if user needs to create a player
-  if (authStore.isAuthed && !currentPlayer.value) {
-    showPlayerModal.value = true
-  }
 })
 
 onBeforeUnmount(() => {
@@ -459,5 +562,72 @@ h1 {
     grid-template-columns: 1fr 1fr 1fr 1fr;
     gap: 10px;
   }
+}
+
+/* Enhanced Game Logs Styling */
+.game-logs {
+  h4 {
+    margin-bottom: 12px;
+    color: var(--theme-text-primary);
+    font-size: 1.1rem;
+  }
+}
+
+.logs-container {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--theme-border-light);
+  border-radius: 8px;
+  background: var(--theme-bg-secondary);
+  padding: 8px;
+}
+
+.log-entry {
+  margin-bottom: 12px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--theme-bg-primary);
+  border: 1px solid var(--theme-border-light);
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 0.85rem;
+}
+
+.log-timestamp {
+  color: var(--theme-text-secondary);
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.log-player {
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--theme-bg-secondary);
+  color: var(--theme-text-primary);
+
+  &.current-player {
+    background: #f58989;
+    color: #000;
+  }
+}
+
+.log-content {
+  margin-left: 4px;
+}
+
+.log-action {
+  color: var(--theme-text-primary);
+  font-size: 0.9rem;
+  line-height: 1.4;
 }
 </style>

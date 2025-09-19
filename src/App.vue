@@ -25,9 +25,6 @@ onMounted(async () => {
 
   // Clean up old theme storage from individual games
   themeStore.cleanupOldThemeStorage()
-
-  // Initialize auth store
-  await authStore.init()
 })
 </script>
 

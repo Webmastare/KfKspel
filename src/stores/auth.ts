@@ -12,6 +12,7 @@ type Profile = {
 export const useAuthStore = defineStore("auth", {
   state: () => ({
     initialized: false,
+    authReady: false, // True when auth initialization is complete and we have final user state
     session: null as
       | Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]
       | null,
@@ -21,31 +22,72 @@ export const useAuthStore = defineStore("auth", {
     profile: null as Profile | null,
     loadingProfile: false,
     isSigningUp: false, // Flag to prevent auto-fetch during signup
+    authStateVersion: 0, // Increment this whenever auth state changes for components to watch
   }),
 
   getters: {
     isAuthed: (s) => !!s.user,
+    // Helper to know when auth state is fully ready for components to act on
+    isAuthStateReady: (s) => s.authReady,
   },
 
   actions: {
     async init() {
+      // Prevent multiple initializations
+      if (this.initialized) {
+        console.log("Auth store already initialized, skipping");
+        return;
+      }
+
       // Pick up existing session (JWT) from localStorage
       const { data: { session } } = await supabase.auth.getSession();
       console.log("Get session:", session);
       this.session = session;
       this.user = session?.user ?? null;
 
-      // Stay synced with any auth change
+      // If we have a user, fetch their profile immediately
+      if (this.user && !this.isSigningUp) {
+        await this.fetchProfile();
+        console.log("Initial profile fetch:", this.profile);
+      }
+
+      // Mark auth as ready after initial setup
+      this.authReady = true;
+      this.authStateVersion++; // Trigger watchers
+      console.log("Auth state ready - version:", this.authStateVersion);
+
+      // Stay synced with any auth change (but skip INITIAL_SESSION since we handled it above)
       supabase.auth.onAuthStateChange(async (_event, session) => {
         console.log("Auth event:", _event, session);
+
+        // Skip INITIAL_SESSION since we already handled the initial state above
+        if (_event === "INITIAL_SESSION") {
+          return;
+        }
+
+        const previousUser = this.user;
         this.session = session;
         this.user = session?.user ?? null;
 
         if (this.user && !this.isSigningUp) {
           await this.fetchProfile();
-          console.log("Fetched profile:", this.profile);
+          console.log("Fetched profile after auth change:", this.profile);
         } else if (!this.user) {
           this.profile = null;
+        }
+
+        // Increment version if user actually changed (login/logout/user switch)
+        if (previousUser?.id !== this.user?.id) {
+          this.authStateVersion++;
+          console.log(
+            "Auth state changed - new version:",
+            this.authStateVersion,
+            {
+              event: _event,
+              previousUserId: previousUser?.id,
+              currentUserId: this.user?.id,
+            },
+          );
         }
       });
 
@@ -118,6 +160,13 @@ export const useAuthStore = defineStore("auth", {
       if (this.user && !this.profile) {
         await this.fetchProfile();
       }
+
+      // Trigger auth state change for watchers after signup is complete
+      this.authStateVersion++;
+      console.log(
+        "Signup completed - auth state version:",
+        this.authStateVersion,
+      );
     },
 
     async fetchProfile() {

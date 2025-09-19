@@ -374,6 +374,7 @@ export async function loginPlayerAPI(request: LoginRequest): Promise<Player> {
 export async function performGameAction(
     action: ActionRequest,
 ): Promise<{ updatedData: Player; shotData?: Player; updatedLogs: GameLog }> {
+    console.log("performGameAction called with action:", action);
     return makeRequest<
         { updatedData: Player; shotData?: Player; updatedLogs: GameLog }
     >(

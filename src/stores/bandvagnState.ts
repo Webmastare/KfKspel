@@ -91,6 +91,13 @@ export const useBandvagnStore = defineStore("bandvagn", {
   actions: {
     // Initialize the store
     async initialize() {
+      // Prevent multiple initializations
+      console.log("Initializing bandvagn store");
+      if (this.initialized) {
+        console.log("Bandvagn store already initialized, skipping");
+        return;
+      }
+
       const authStore = useAuthStore();
 
       if (!authStore.isAuthed) {
@@ -111,6 +118,8 @@ export const useBandvagnStore = defineStore("bandvagn", {
         if (this.autoRefreshEnabled) {
           this.startAutoRefresh();
         }
+
+        console.log("Bandvagn store initialized successfully");
       } catch (error) {
         console.error("Failed to initialize bandvagn store:", error);
         this.error = error instanceof Error
@@ -123,8 +132,6 @@ export const useBandvagnStore = defineStore("bandvagn", {
 
     // Fetch current game state
     async fetchGameState() {
-      const authStore = useAuthStore();
-
       this.isLoading = true;
       this.error = null;
 
@@ -292,11 +299,13 @@ export const useBandvagnStore = defineStore("bandvagn", {
       this.error = null;
 
       try {
+        console.log("Performing action:", action);
         const result = await performGameAction(action);
-
+        console.log("Action result:", result);
         // Refresh game state after action
+        console.log("Refreshing game state after action...");
         await this.fetchGameState();
-
+        console.log("Game state refreshed successfully.");
         return result;
       } catch (error) {
         console.error("Action failed:", error);

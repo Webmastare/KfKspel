@@ -435,8 +435,8 @@ function drawBoard() {
   ctx.value.restore()
 
   // Grid color
-  ctx.value.strokeStyle = '#ffffff' //styles.getPropertyValue('--canvas-grid-color').trim()
-  ctx.value.lineWidth = 1
+  ctx.value.strokeStyle = styles.getPropertyValue('--canvas-grid-color').trim()
+  ctx.value.lineWidth = 0.5
 
   // Draw vertical lines
   for (let col = 0; col <= cols; col++) {
@@ -479,13 +479,13 @@ function drawBoard() {
   ctx.value.textBaseline = 'top'
   for (let c = 0; c < cols; c++) {
     const x = c * cellSize.value + cellSize.value / 2
-    ctx.value.fillText(String(c), x, 2)
+    ctx.value.fillText(String(c), x, 5 - Math.min(pan.value.y, cellSize.value))
   }
   ctx.value.textAlign = 'left'
   ctx.value.textBaseline = 'middle'
   for (let r = 0; r < rows; r++) {
     const y = r * cellSize.value + cellSize.value / 2
-    ctx.value.fillText(String(r), 2, y)
+    ctx.value.fillText(String(r), 5 - Math.min(pan.value.x, cellSize.value), y)
   }
 }
 
