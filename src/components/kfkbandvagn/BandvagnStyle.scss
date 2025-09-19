@@ -5,7 +5,7 @@
   margin-bottom: 20px;
   border: 1px solid var(--theme-border-light);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: scroll;
   background: var(--theme-sidebar-bg);
 }
 
@@ -38,8 +38,6 @@
 }
 
 .stats-wrapper {
-  max-height: 0;
-  overflow: hidden;
   transition: max-height 0.3s ease;
 
   &.expanded {
@@ -90,7 +88,7 @@
   padding: 0;
   margin: 0;
   max-height: 160px;
-  overflow: auto;
+  overflow: scroll;
 }
 .players-list-item {
   display: flex;

@@ -318,8 +318,8 @@ const isLoading = computed(() => gameStore.isLoading)
 const gameInitialized = computed(() => gameStore.initialized && currentPlayer.value)
 
 // Only show players that have an active tank and are alive (or show all if desired)
-const playersToShow = computed(() =>
-  allPlayers.value
+const playersToShow = computed(() => {
+  const filteredPlayers = allPlayers.value
     .filter((p) => p.taken_tank)
     .map((p) => ({
       ...p,
@@ -327,8 +327,10 @@ const playersToShow = computed(() =>
         ? Math.abs(p.position.row - currentPlayer.value.position.row) +
           Math.abs(p.position.column - currentPlayer.value.position.column)
         : Infinity,
-    })),
-)
+    }))
+  console.log('Filtering players to show:', filteredPlayers)
+  return filteredPlayers.sort((a, b) => a.distToCurrent - b.distToCurrent)
+})
 
 const recentLogs = computed(() => {
   if (!boardData.value?.logs) return []

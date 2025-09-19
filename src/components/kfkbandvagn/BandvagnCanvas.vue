@@ -505,19 +505,16 @@ function drawAnimations() {
     pan.value.x,
     pan.value.y,
   )
-
-  // Continue animation loop if there are active animations
-  if (hasActiveAnimations(animationState.value)) {
-    requestAnimFrame()
-  }
 }
 
 function requestAnimFrame() {
   if (rafId !== null) return
   const loop = () => {
     rafId = null
-    // Redraw whole scene to layer animations correctly
     drawGame()
+    if (hasActiveAnimations(animationState.value)) {
+      rafId = requestAnimationFrame(loop)
+    }
   }
   rafId = requestAnimationFrame(loop)
 }
@@ -545,7 +542,14 @@ function drawPlayerRange() {
   for (let row = centerRow - range; row <= centerRow + range; row++) {
     for (let col = centerCol - range; col <= centerCol + range; col++) {
       const distance = Math.abs(row - centerRow) + Math.abs(col - centerCol)
-      if (distance <= range && distance > 0) {
+      if (
+        distance <= range &&
+        distance > 0 &&
+        row >= 0 &&
+        col >= 0 &&
+        row < boardSize.value.rows &&
+        col < boardSize.value.cols
+      ) {
         const x = col * cellSize.value
         const y = row * cellSize.value
         ctx.value.fillRect(x, y, cellSize.value, cellSize.value)

@@ -206,10 +206,9 @@ export function createExplosion(
                 2,
                 cellSize * 0.08 + Math.random() * (cellSize * 0.06),
             ),
-            color:
-                explosionColors[
-                    Math.floor(Math.random() * explosionColors.length)
-                ] || "#FF4500",
+            color: explosionColors[
+                Math.floor(Math.random() * explosionColors.length)
+            ] || "#FF4500",
             life: 1,
             maxLife: 400 + Math.random() * 300,
         });
@@ -440,6 +439,11 @@ export function addExplosion(
     cellSize: number,
     type: AnimationType = "explosion",
 ): AnimationState {
+    // Reset lastUpdate if this is the first animation being added to an empty state
+    if (!hasActiveAnimations(state)) {
+        state.lastUpdate = performance.now();
+    }
+
     state.explosions.push(createExplosion(row, col, cellSize, type));
     return state;
 }
@@ -454,6 +458,11 @@ export function addClickAnimation(
     cellSize: number,
     playerColor: string,
 ): AnimationState {
+    // Reset lastUpdate if this is the first animation being added to an empty state
+    if (!hasActiveAnimations(state)) {
+        state.lastUpdate = performance.now();
+    }
+
     state.clicks.push(createClickAnimation(row, col, cellSize, playerColor));
     return state;
 }
@@ -469,17 +478,12 @@ export function addBullet(
     endY: number,
     speed: number = 0.05,
 ): AnimationState {
-    state.bullets.push(createBullet(startX, startY, endX, endY, speed));
-    return state;
-}
+    // Reset lastUpdate if this is the first animation being added to an empty state
+    if (!hasActiveAnimations(state)) {
+        state.lastUpdate = performance.now();
+    }
 
-/**
- * Clear all animations
- */
-export function clearAnimations(state: AnimationState): AnimationState {
-    state.explosions = [];
-    state.bullets = [];
-    state.clicks = [];
+    state.bullets.push(createBullet(startX, startY, endX, endY, speed));
     return state;
 }
 
