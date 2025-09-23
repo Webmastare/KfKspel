@@ -30,17 +30,27 @@
     <div class="action-buttons">
       <!-- Move action -->
       <div v-if="canMove" class="action-option">
-        <button @click="performAction('move')" class="action-btn move-btn">
+        <button
+          @click="performAction('move')"
+          class="action-btn move-btn"
+          :disabled="!canAffordMove || isActionInProgress"
+          :class="{ disabled: !canAffordMove || isActionInProgress }"
+        >
           <span class="btn-icon">🚶‍♂️</span>
           <span class="btn-text">Flytta Hit</span>
-          <span class="btn-cost">1 token</span>
+          <span class="btn-cost">{{ moveCost }} token{{ moveCost > 1 ? 's' : '' }}</span>
         </button>
       </div>
 
       <!-- Shoot action -->
       <div v-if="canShoot && aliveTargets.length > 0" class="action-option">
         <div v-if="aliveTargets.length === 1">
-          <button @click="performAction('shot', aliveTargets[0].uuid)" class="action-btn shoot-btn">
+          <button
+            @click="performAction('shot', aliveTargets[0].uuid)"
+            class="action-btn shoot-btn"
+            :disabled="!canAffordShot || isActionInProgress"
+            :class="{ disabled: !canAffordShot || isActionInProgress }"
+          >
             <span class="btn-icon">🎯</span>
             <span class="btn-text">Skjut {{ aliveTargets[0].playerID }}</span>
             <span class="btn-cost">1 token</span>
@@ -52,9 +62,9 @@
       <div v-if="!canMove && !canShoot" class="no-actions">
         <p v-if="!currentPlayer">Du måste vara inloggad för att spela</p>
         <p v-else-if="currentPlayer.lives <= 0">Du är död och kan inte utföra handlingar</p>
-        <p v-else-if="currentPlayer.tokens < 1">Du har inga tokens kvar</p>
-        <p v-else-if="distance > currentPlayer.range">
-          För långt bort (räckvidd: {{ currentPlayer.range }})
+        <p v-else-if="!canAffordMove && distance > 0">
+          Du har inte råd att flytta hit ({{ moveCost }} tokens behövs, du har
+          {{ currentPlayer.tokens }})
         </p>
         <p v-else-if="hasBlockingPlayer && otherPlayers.length === 0">
           Du kan inte flytta till din egen position
@@ -82,7 +92,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 // Props
 const props = defineProps({
@@ -118,6 +128,9 @@ const props = defineProps({
 // Emits
 const emit = defineEmits(['action', 'close'])
 
+// Action state for preventing double-clicks
+const isActionInProgress = ref(false)
+
 // Computed properties
 const popupStyle = computed(() => ({
   left: `${props.position.x}px`,
@@ -137,6 +150,23 @@ const distance = computed(() => {
   )
 })
 
+// Calculate movement cost based on Manhattan distance
+const moveCost = computed(() => {
+  return Math.max(1, distance.value) // At least 1 token, cost increases with distance
+})
+
+// Check if player can afford the move
+const canAffordMove = computed(() => {
+  if (!props.currentPlayer) return false
+  return props.currentPlayer.tokens >= moveCost.value
+})
+
+// Check if player can afford to shoot
+const canAffordShot = computed(() => {
+  if (!props.currentPlayer) return false
+  return props.currentPlayer.tokens >= 1 // Shooting always costs 1 token
+})
+
 const isInPlayableArea = computed(() => {
   // This would need to be calculated based on board shrink data
   // For now, assume all cells are safe
@@ -148,21 +178,37 @@ const hasBlockingPlayer = computed(() => {
 })
 
 // Actions
-function performAction(actionType, targetUUID = null) {
-  const action = {
-    action: actionType,
-    user_id: props.currentPlayer?.user_id,
-    moveDirection:
-      actionType === 'move'
-        ? {
-            row: props.cell.row,
-            col: props.cell.col,
-          }
-        : undefined,
-    targetUUID: targetUUID,
+async function performAction(actionType, targetUUID = null) {
+  if (isActionInProgress.value) {
+    console.log('Action already in progress, ignoring click')
+    return
   }
 
-  emit('action', action)
+  // Set action in progress to prevent double-clicks
+  isActionInProgress.value = true
+  try {
+    const action = {
+      action: actionType,
+      tank_id: props.currentPlayer?.uuid || '',
+      targetCell:
+        actionType === 'move'
+          ? {
+              row: props.cell.row,
+              col: props.cell.col,
+            }
+          : undefined,
+      targetUUID: targetUUID,
+    }
+
+    await emit('action', action)
+  } catch (error) {
+    console.error('Error performing action:', error)
+  } finally {
+    // Reset action state after a short delay to allow the action to process
+    setTimeout(() => {
+      isActionInProgress.value = false
+    }, 1000)
+  }
 }
 </script>
 
@@ -282,8 +328,14 @@ function performAction(actionType, targetUUID = null) {
   transition: all 0.2s;
   text-align: left;
 
-  &:hover {
+  &:hover:not(.disabled) {
     transform: translateY(-1px);
+  }
+
+  &.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
   }
 }
 

@@ -68,7 +68,7 @@ export interface LoginRequest {
 }
 
 export interface ActionRequest {
-  user_id: string;
+  tank_id: string;
   action: GameActionType;
   moveDirection?: MoveDirection;
   targetUUID?: string;

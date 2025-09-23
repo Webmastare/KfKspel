@@ -38,10 +38,13 @@
 }
 
 .stats-wrapper {
+  overflow: hidden;
+  max-height: 0;
   transition: max-height 0.3s ease;
 
   &.expanded {
-    max-height: 200px;
+    max-height: 250px;
+    overflow: scroll;
   }
 }
 
@@ -77,6 +80,11 @@
 
 .players-list {
   margin-top: 16px;
+  li {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+  }
 }
 .players-list-header {
   font-weight: 600;
@@ -96,6 +104,16 @@
   gap: 8px;
   padding: 6px 4px;
   border-bottom: 1px dashed var(--theme-border-light);
+  .player-focus {
+    button {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--theme-text-primary);
+      transition: color 0.2s;
+    }
+  }
 }
 .player-dot {
   display: inline-block;
@@ -449,8 +467,25 @@
 }
 
 .information-text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   color: var(--theme-text-primary);
   line-height: 1.6;
+
+  .background-decor {
+    background: var(--theme-button-primary-bg);
+    padding: 2px;
+    border-radius: 12px;
+    border: 1px solid var(--theme-border-light);
+  }
+
+  .information-inset {
+    padding: 15px;
+    background: var(--theme-bg-tertiary);
+    border: 1px solid var(--theme-border-light);
+    border-radius: 10px;
+  }
 
   strong {
     color: var(--theme-text-accent);

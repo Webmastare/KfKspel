@@ -107,28 +107,45 @@ export async function handleBoardShrink() {
       }
     }
 
-    // Update affected players
-    const updatePromises = playersToUpdate.map((player) =>
-      supabase
+    // Update affected players using batch upsert instead of individual updates
+    if (playersToUpdate.length > 0) {
+      // Prepare the batch update data
+      const batchUpdateData = playersToUpdate.map((player) => ({
+        uuid: player.uuid,
+        position: player.position,
+        lives: player.lives,
+        // Include other required fields to avoid issues
+        user_id: player.user_id,
+        playerID: player.playerID,
+        tokens: player.tokens,
+        range: player.range,
+        color: player.color,
+        taken_tank: player.taken_tank,
+        created_date: player.created_date,
+        last_login_date: player.last_login_date,
+      }));
+
+      // Perform batch update using upsert
+      const { error: batchUpdateError } = await supabase
         .from("KfKbandvagn")
-        .update({
-          position: player.position,
-          lives: player.lives,
-        })
-        .eq("uuid", player.uuid)
-    );
+        .upsert(batchUpdateData, {
+          onConflict: "uuid",
+          ignoreDuplicates: false,
+        });
 
-    const updateResults = await Promise.all(updatePromises);
+      if (batchUpdateError) {
+        console.error(
+          "Error in batch update of affected players:",
+          batchUpdateError,
+        );
+        return createErrorResponse(
+          ERROR_CODES.INTERNAL_ERROR,
+          "Failed to update affected players during board shrink",
+        );
+      }
 
-    // Check for update errors
-    const updateErrors = updateResults.filter((result: { error: unknown }) =>
-      result.error
-    );
-    if (updateErrors.length > 0) {
-      console.error("Errors updating players:", updateErrors);
-      return createErrorResponse(
-        ERROR_CODES.INTERNAL_ERROR,
-        "Failed to update some players",
+      console.log(
+        `Batch updated ${playersToUpdate.length} players affected by board shrink`,
       );
     }
 
@@ -187,51 +204,51 @@ export async function handleTokenDistribution() {
 
     console.log("Starting token distribution");
 
-    // Get all active players
-    const { data: players, error: playersError } = await supabase
+    // Get all active players with their current token counts
+    const { data: activePlayers, error: playersError } = await supabase
       .from("KfKbandvagn")
-      .select("uuid, playerID, tokens")
+      .select("uuid, tokens")
       .eq("taken_tank", true);
 
     if (playersError) {
-      console.error("Error fetching players:", playersError);
+      console.error("Error fetching active players:", playersError);
       return createErrorResponse(
         ERROR_CODES.INTERNAL_ERROR,
         playersError.message,
       );
     }
 
-    if (!players || players.length === 0) {
-      console.log("No active players found");
+    if (!activePlayers || activePlayers.length === 0) {
+      console.log("No active players found to update");
       return createSuccessResponse(
         { playersUpdated: 0 },
         "No active players to distribute tokens to",
       );
     }
 
-    // Give each player 1 token
-    const updatePromises = players.map((
-      player: { uuid: string; tokens: number },
-    ) =>
-      supabase
-        .from("KfKbandvagn")
-        .update({ tokens: player.tokens + 1 })
-        .eq("uuid", player.uuid)
-    );
+    // Prepare batch update data - increment each player's tokens by 1
+    const updateData = activePlayers.map((player) => ({
+      uuid: player.uuid,
+      tokens: player.tokens + 1,
+    }));
 
-    const updateResults = await Promise.all(updatePromises);
+    // Use upsert with the uuid array to do a batch update
+    const { error: batchUpdateError } = await supabase
+      .from("KfKbandvagn")
+      .upsert(updateData, {
+        onConflict: "uuid",
+        ignoreDuplicates: false,
+      });
 
-    // Check for update errors
-    const updateErrors = updateResults.filter((result: { error: unknown }) =>
-      result.error
-    );
-    if (updateErrors.length > 0) {
-      console.error("Errors updating player tokens:", updateErrors);
+    if (batchUpdateError) {
+      console.error("Error in batch token update:", batchUpdateError);
       return createErrorResponse(
         ERROR_CODES.INTERNAL_ERROR,
-        "Failed to update some player tokens",
+        batchUpdateError.message,
       );
     }
+
+    const playersUpdated = activePlayers.length;
 
     // Add log entry about token distribution
     const logEntry: GameLog = {
@@ -239,8 +256,8 @@ export async function handleTokenDistribution() {
       action: "token_distribution",
       timestamp: new Date().toISOString(),
       details: {
-        playersUpdated: players.length,
-        tokensDistributed: players.length,
+        playersUpdated: playersUpdated,
+        tokensPerPlayer: 1,
       },
     };
 
@@ -270,12 +287,12 @@ export async function handleTokenDistribution() {
     }
 
     console.log(
-      `Token distribution completed. Updated ${players.length} players`,
+      `Token distribution completed. Updated ${playersUpdated} players`,
     );
 
     return createSuccessResponse({
-      playersUpdated: players.length,
-      tokensDistributed: players.length,
+      playersUpdated: playersUpdated,
+      tokensDistributed: playersUpdated,
     }, "Token distribution completed successfully");
   } catch (error) {
     console.error("Error in handleTokenDistribution:", error);

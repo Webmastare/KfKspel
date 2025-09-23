@@ -3,7 +3,7 @@
  */
 
 // Animation types
-export type AnimationType = "explosion" | "click";
+export type AnimationType = "explosion" | "click" | "move";
 
 // Particle interface for explosion animations
 export interface Particle {
@@ -26,6 +26,7 @@ export interface ExplosionAnimation {
     active: boolean;
     duration: number;
     elapsed: number;
+    onComplete?: () => void; // Callback when explosion finishes
 }
 
 export interface ClickAnimation {
@@ -53,6 +54,23 @@ export interface BulletAnimation {
     progress: number; // 0-1
     active: boolean;
     speed: number;
+    onComplete?: () => void; // Callback when bullet reaches target
+}
+
+// Tank movement animation interface
+export interface TankMoveAnimation {
+    startRow: number;
+    startCol: number;
+    endRow: number;
+    endCol: number;
+    currentRow: number;
+    currentCol: number;
+    tankUuid: string; // Which tank is moving
+    phase: "row" | "col"; // Current movement phase (row first, then column)
+    progress: number; // 0-1 progress for current phase
+    active: boolean;
+    speed: number; // cells per second
+    onComplete?: () => void; // Callback when movement finishes
 }
 
 // Color conversion interfaces
@@ -73,6 +91,7 @@ export interface AnimationState {
     explosions: ExplosionAnimation[];
     bullets: BulletAnimation[];
     clicks: ClickAnimation[];
+    tankMoves: TankMoveAnimation[];
     lastUpdate: number;
 }
 /**
@@ -181,6 +200,7 @@ export function createExplosion(
     col: number,
     cellSize: number,
     type: AnimationType = "explosion",
+    onComplete?: () => void,
 ): ExplosionAnimation {
     const particles: Particle[] = [];
     const particleCount = type === "explosion" ? 25 : 10;
@@ -195,7 +215,7 @@ export function createExplosion(
 
     for (let i = 0; i < particleCount; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const speed = cellSize * (0.02 + Math.random() * 0.08);
+        const speed = cellSize * (0.07 + Math.random() * 0.16);
 
         particles.push({
             x: 0, // Will be set to cell center when drawing
@@ -214,7 +234,7 @@ export function createExplosion(
         });
     }
 
-    return {
+    const explosion: ExplosionAnimation = {
         row,
         col,
         type,
@@ -223,6 +243,12 @@ export function createExplosion(
         duration: 800, // 0.8 seconds
         elapsed: 0,
     };
+
+    if (onComplete) {
+        explosion.onComplete = onComplete;
+    }
+
+    return explosion;
 }
 
 /**
@@ -236,12 +262,12 @@ export function createClickAnimation(
     type: AnimationType = "click",
 ): ClickAnimation {
     const particles: Particle[] = [];
-    const particleCount = 18;
+    const particleCount = 50;
 
     for (let i = 0; i < particleCount; i++) {
         const angle = (i / particleCount) * Math.PI * 2 +
             (Math.random() - 0.5) * 0.5;
-        const speed = cellSize * (0.015 + Math.random() * 0.045);
+        const speed = cellSize * (0.06 + Math.random() * 0.16);
 
         particles.push({
             x: 0, // Will be set to cell center when drawing
@@ -277,9 +303,17 @@ export function createBullet(
     startY: number,
     endX: number,
     endY: number,
-    speed: number = 0.05,
+    onComplete?: () => void,
 ): BulletAnimation {
-    return {
+    // Calculate distance to ensure constant speed regardless of distance
+    const distance = Math.sqrt(
+        Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2),
+    );
+    // Normalize speed: higher distances get lower speed values to maintain constant visual speed
+    const baseSpeed = 12.0; // Base speed constant for consistent bullet travel time
+    const normalizedSpeed = baseSpeed / Math.max(1, distance);
+
+    const bullet: BulletAnimation = {
         startX,
         startY,
         endX,
@@ -288,8 +322,47 @@ export function createBullet(
         currentY: startY,
         progress: 0,
         active: true,
+        speed: normalizedSpeed,
+    };
+
+    if (onComplete) {
+        bullet.onComplete = onComplete;
+    }
+
+    return bullet;
+}
+
+/**
+ * Create tank move animation with Manhattan-style movement (row first, then column)
+ */
+export function createTankMove(
+    startRow: number,
+    startCol: number,
+    endRow: number,
+    endCol: number,
+    tankUuid: string,
+    speed: number = 2.0, // cells per second
+    onComplete?: () => void,
+): TankMoveAnimation {
+    const move: TankMoveAnimation = {
+        startRow,
+        startCol,
+        endRow,
+        endCol,
+        currentRow: startRow,
+        currentCol: startCol,
+        tankUuid,
+        phase: startRow !== endRow ? "row" : "col", // Start with row if row needs changing
+        progress: 0,
+        active: true,
         speed,
     };
+
+    if (onComplete) {
+        move.onComplete = onComplete;
+    }
+
+    return move;
 }
 
 /**
@@ -301,6 +374,7 @@ export function updateExplosion(
 ): ExplosionAnimation {
     if (!explosion.active) return explosion;
 
+    const wasActive = explosion.active;
     explosion.elapsed += deltaTime;
 
     // Update particles
@@ -325,6 +399,11 @@ export function updateExplosion(
         explosion.particles.length === 0
     ) {
         explosion.active = false;
+
+        // Call completion callback if this explosion just finished
+        if (wasActive && explosion.onComplete) {
+            explosion.onComplete();
+        }
     }
 
     return explosion;
@@ -372,11 +451,17 @@ export function updateBullet(
 ): BulletAnimation {
     if (!bullet.active) return bullet;
 
+    const wasComplete = bullet.progress >= 1;
     bullet.progress += bullet.speed * deltaTime * 0.01;
 
     if (bullet.progress >= 1) {
         bullet.progress = 1;
         bullet.active = false;
+
+        // Call completion callback if this bullet just finished
+        if (!wasComplete && bullet.onComplete) {
+            bullet.onComplete();
+        }
     }
 
     // Linear interpolation
@@ -389,6 +474,84 @@ export function updateBullet(
 }
 
 /**
+ * Update tank move animation with Manhattan-style movement
+ */
+export function updateTankMove(
+    move: TankMoveAnimation,
+    deltaTime: number,
+): TankMoveAnimation {
+    if (!move.active) return move;
+
+    const wasComplete = move.progress >= 1 && move.phase === "col" &&
+        move.currentRow === move.endRow;
+
+    // Calculate progress increment based on speed (cells per second)
+    const speedMultiplier = move.speed * deltaTime * 0.001; // Convert to cells per millisecond
+
+    if (move.phase === "row") {
+        // Moving along row first
+        const rowDistance = Math.abs(move.endRow - move.startRow);
+        if (rowDistance === 0) {
+            // No row movement needed, switch to column phase
+            move.phase = "col";
+            move.progress = 0;
+        } else {
+            move.progress += speedMultiplier / rowDistance;
+
+            if (move.progress >= 1) {
+                move.progress = 1;
+                move.currentRow = move.endRow;
+
+                // Check if we need column movement
+                if (move.endCol !== move.startCol) {
+                    move.phase = "col";
+                    move.progress = 0;
+                } else {
+                    // Movement complete
+                    move.active = false;
+                    if (move.onComplete) {
+                        move.onComplete();
+                    }
+                }
+            } else {
+                // Interpolate row position
+                move.currentRow = move.startRow +
+                    (move.endRow - move.startRow) * move.progress;
+            }
+        }
+    } else if (move.phase === "col") {
+        // Moving along column
+        const colDistance = Math.abs(move.endCol - move.startCol);
+        if (colDistance === 0) {
+            // No column movement needed, complete
+            move.active = false;
+            if (move.onComplete) {
+                move.onComplete();
+            }
+        } else {
+            move.progress += speedMultiplier / colDistance;
+
+            if (move.progress >= 1) {
+                move.progress = 1;
+                move.currentCol = move.endCol;
+                move.active = false;
+
+                // Movement complete
+                if (move.onComplete) {
+                    move.onComplete();
+                }
+            } else {
+                // Interpolate column position
+                move.currentCol = move.startCol +
+                    (move.endCol - move.startCol) * move.progress;
+            }
+        }
+    }
+
+    return move;
+}
+
+/**
  * Create initial animation state
  */
 export function createAnimationState(): AnimationState {
@@ -396,6 +559,7 @@ export function createAnimationState(): AnimationState {
         explosions: [],
         bullets: [],
         clicks: [],
+        tankMoves: [],
         lastUpdate: performance.now(),
     };
 }
@@ -424,6 +588,11 @@ export function updateAnimations(
         .map((bullet) => updateBullet(bullet, deltaTime))
         .filter((bullet) => bullet.active);
 
+    // Update tank movements
+    state.tankMoves = state.tankMoves
+        .map((move) => updateTankMove(move, deltaTime))
+        .filter((move) => move.active);
+
     state.lastUpdate = currentTime;
 
     return state;
@@ -438,13 +607,16 @@ export function addExplosion(
     col: number,
     cellSize: number,
     type: AnimationType = "explosion",
+    onComplete?: () => void,
 ): AnimationState {
     // Reset lastUpdate if this is the first animation being added to an empty state
     if (!hasActiveAnimations(state)) {
         state.lastUpdate = performance.now();
     }
 
-    state.explosions.push(createExplosion(row, col, cellSize, type));
+    state.explosions.push(
+        createExplosion(row, col, cellSize, type, onComplete),
+    );
     return state;
 }
 
@@ -477,13 +649,48 @@ export function addBullet(
     endX: number,
     endY: number,
     speed: number = 0.05,
+    onComplete?: () => void,
 ): AnimationState {
     // Reset lastUpdate if this is the first animation being added to an empty state
     if (!hasActiveAnimations(state)) {
         state.lastUpdate = performance.now();
     }
 
-    state.bullets.push(createBullet(startX, startY, endX, endY, speed));
+    state.bullets.push(
+        createBullet(startX, startY, endX, endY, onComplete),
+    );
+    return state;
+}
+
+/**
+ * Add tank move to animation state
+ */
+export function addTankMove(
+    state: AnimationState,
+    startRow: number,
+    startCol: number,
+    endRow: number,
+    endCol: number,
+    tankUuid: string,
+    speed: number = 2.0,
+    onComplete?: () => void,
+): AnimationState {
+    // Reset lastUpdate if this is the first animation being added to an empty state
+    if (!hasActiveAnimations(state)) {
+        state.lastUpdate = performance.now();
+    }
+
+    state.tankMoves.push(
+        createTankMove(
+            startRow,
+            startCol,
+            endRow,
+            endCol,
+            tankUuid,
+            speed,
+            onComplete,
+        ),
+    );
     return state;
 }
 
@@ -492,7 +699,7 @@ export function addBullet(
  */
 export function hasActiveAnimations(state: AnimationState): boolean {
     return state.explosions.length > 0 || state.bullets.length > 0 ||
-        state.clicks.length > 0;
+        state.clicks.length > 0 || state.tankMoves.length > 0;
 }
 
 /**
@@ -585,4 +792,27 @@ export function renderAnimations(
         ctx.fill();
         ctx.restore();
     });
+
+    // Note: Tank movements are not rendered here directly.
+    // Instead, tanks with active movement animations should use
+    // their animated position (currentRow/currentCol) when being
+    // drawn in the main rendering loop.
+}
+
+/**
+ * Get animated position for a tank if it has an active move animation
+ */
+export function getTankAnimatedPosition(
+    state: AnimationState,
+    tankUuid: string,
+): { row: number; col: number } | null {
+    const move = state.tankMoves.find((m) =>
+        m.tankUuid === tankUuid && m.active
+    );
+    if (!move) return null;
+
+    return {
+        row: move.currentRow,
+        col: move.currentCol,
+    };
 }

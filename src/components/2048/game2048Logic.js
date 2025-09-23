@@ -29,7 +29,7 @@ export class Game2048Logic {
     this.rows = 4
     this.columns = 4
     this.tileSize = 100
-    this.gap = 8
+    this.gap = 4
     this.canvasWidth = 0
     this.canvasHeight = 0
 

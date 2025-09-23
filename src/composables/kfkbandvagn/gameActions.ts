@@ -8,6 +8,8 @@ import type {
     CreatePlayerRequest,
     LoginRequest,
 } from "./apiHandler";
+import type { GameLog } from "./board";
+import { makeRequest } from "./apiHandler";
 
 // Valid game action types
 export type GameActionType = "move" | "shot" | "range" | "life";
@@ -43,24 +45,6 @@ export interface MoveValidation {
     isValid: boolean;
     newPosition?: Position;
     reason?: string;
-}
-
-/**
- * Type guard for GameActionType
- */
-export function isGameActionType(action: unknown): action is GameActionType {
-    return typeof action === "string" &&
-        ["move", "shot", "range", "life"].includes(action);
-}
-
-/**
- * Type guard for MoveDirection
- */
-export function isMoveDirection(
-    direction: unknown,
-): direction is MoveDirection {
-    return typeof direction === "string" &&
-        ["up", "down", "left", "right"].includes(direction);
 }
 
 /**
@@ -282,10 +266,8 @@ export function validateShotAction(
     }
 
     // Check if target is within range
-    const distance = Math.max(
-        Math.abs(shooter.position.row - target.position.row),
-        Math.abs(shooter.position.column - target.position.column),
-    );
+    const distance = Math.abs(shooter.position.row - target.position.row) +
+        Math.abs(shooter.position.column - target.position.column);
 
     if (distance > shooter.range) {
         return {
@@ -338,12 +320,6 @@ export function validateUpgradeAction(
         isValid: true,
     };
 }
-
-// API related types and functions
-
-import { supabase } from "@/utils/supabase";
-import type { GameLog } from "./board";
-import { makeRequest } from "./apiHandler";
 
 // Re-export API types from apiHandler for consistency
 export type {

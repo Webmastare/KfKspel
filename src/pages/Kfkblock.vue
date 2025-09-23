@@ -1,6 +1,6 @@
 <template>
   <div id="app-container">
-    <h1>KfKblock</h1>
+    <h1 class="game-header">KfKblock</h1>
 
     <!-- Leaderboard Section -->
     <div class="leaderboard-container">

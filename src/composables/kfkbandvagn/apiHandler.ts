@@ -284,6 +284,7 @@ export async function makeRequest<T>(
             `kfkbandvagn${endpoint}`,
             invokeOptions,
         );
+        console.log("Response data:", data, "Error:", error);
 
         if (error) {
             console.error("Edge Function error:", error);

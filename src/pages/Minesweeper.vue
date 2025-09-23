@@ -1,19 +1,25 @@
 <template>
   <div :class="['app', { 'dark-mode': themeStore.isDarkMode }]">
-    <h1 class="title">Minesweeper</h1>
+    <h1 class="game-header">Minesweeper</h1>
 
     <!-- ─────── Settings & Actions ─────── -->
-    <section class="settings">
-      <form class="difficulty" @change="onDifficultyChange">
-        <label v-for="d in difficulties" :key="d.id" class="radio">
-          <input type="radio" name="difficulty" :value="d.id" v-model="selectedDifficulty" />
-          {{ d.label }}
-        </label>
-        <label class="radio">
-          <input type="radio" name="difficulty" value="custom" v-model="selectedDifficulty" />
-          Custom
-        </label>
-      </form>
+    <div class="game-settings">
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label for="difficulty-select" class="form-label">Svårighetsgrad</label>
+          <select
+            id="difficulty-select"
+            v-model="selectedDifficulty"
+            @change="onDifficultyChange"
+            class="form-select"
+          >
+            <option v-for="d in difficulties" :key="d.id" :value="d.id">
+              {{ d.label }}
+            </option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+      </div>
 
       <transition name="fade">
         <div v-if="selectedDifficulty === 'custom'" class="custom-settings">
@@ -29,25 +35,29 @@
             Mines
             <input type="number" v-model.number="customM" :min="1" :max="customW * customH - 1" />
           </label>
-          <button class="btn" @click.prevent="createCustom">Create</button>
+          <button class="btn" @click.prevent="createCustom">Skapa</button>
         </div>
       </transition>
 
-      <div class="actions">
+      <div class="actions" :style="{ display: 'flex', gap: '8px' }">
         <button class="btn" :disabled="gameStatus === -1" @click="resetGame">🔄 Restart</button>
         <button class="btn seed" @click="generateSeed">🎲 New seed</button>
       </div>
 
       <div class="seed-input">
-        Seed:
-        <input v-model="seedInput" type="text" />
-        <button class="btn" @click.prevent="applySeed">Apply</button>
-        <div class="copy-seed">
-          <div v-if="showCopied" class="copied-popup">Seed copied!</div>
-          <button class="btn" @click.prevent="copySeed">Copy</button>
+        <div>
+          <label for="seed-input">Seed:</label>
+          <input v-model="seedInput" type="text" />
+        </div>
+        <div :style="{ display: 'flex', gap: '8px' }">
+          <button class="btn" @click.prevent="applySeed">Använd</button>
+          <div class="copy-seed">
+            <div v-if="showCopied" class="copied-popup">Seed kopierad!</div>
+            <button class="btn" @click.prevent="copySeed">Kopiera</button>
+          </div>
         </div>
       </div>
-    </section>
+    </div>
 
     <!-- ─────── Stats ─────── -->
     <section class="stats">
@@ -60,7 +70,7 @@
             class="bar__inner"
             :class="{ cleared: clearedPercent === 100 }"
             :style="{ width: clearedPercent + '%' }"
-          />
+          ></div>
         </div>
       </div>
     </section>
@@ -70,14 +80,14 @@
       <canvas ref="canvas" @mousedown="onPointer" @contextmenu.prevent />
       <transition name="fade">
         <div v-if="gameStatus === 1" class="overlay win">
-          <span>🎉 You win!</span>
-          <button class="btn" @click="resetGame">Play Again</button>
+          <span>🎉 Enkel Vinst!</span>
+          <button class="btn" @click="resetGame">Spela igen</button>
         </div>
       </transition>
       <transition name="fade">
         <div v-if="gameStatus === 2" class="overlay lose">
-          <span>💥 Game over!</span>
-          <button class="btn" @click="resetGame">Play Again</button>
+          <span>💥 Du förlorade!</span>
+          <button class="btn" @click="resetGame">Spela igen</button>
         </div>
       </transition>
     </div>
@@ -100,10 +110,11 @@ const MAX_SIZE = 61
 const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 const difficulties = [
-  { id: 'very easy', label: 'Very Easy', cfg: [9, 9, 1] },
-  { id: 'easy', label: 'Easy', cfg: [9, 9, 10] },
-  { id: 'medium', label: 'Medium', cfg: [16, 16, 40] },
-  { id: 'hard', label: 'Hard', cfg: [30, 16, 99] },
+  { id: 'very easy', label: 'Väldigt Lätt', cfg: [9, 9, 1] },
+  { id: 'easy', label: 'Lätt', cfg: [9, 9, 10] },
+  { id: 'medium', label: 'Medel', cfg: [16, 16, 40] },
+  { id: 'hard', label: 'Svår', cfg: [30, 16, 99] },
+  { id: 'extreme', label: 'Extrem', cfg: [40, 30, 200] },
 ]
 
 // Base‑62 helpers
@@ -583,8 +594,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
-// Import centralized theme system
-@import '@/styles/theme.scss';
+@use '@/styles/theme.scss';
+@use '@/styles/generalGames.scss';
 
 .app {
   min-height: 100vh;
@@ -597,17 +608,22 @@ onBeforeUnmount(() => {
   transition:
     background-color 0.3s,
     color 0.3s;
-
-  &.dark-mode {
-    background: var(--theme-bg-primary);
-    color: var(--theme-text-primary);
-  }
 }
 
-.title {
-  font-family: 'Courier New', monospace;
-  margin-bottom: 0.5rem;
-  color: var(--theme-text-primary);
+// Custom settings grid for minesweeper
+.custom-settings {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--theme-sidebar-bg);
+  border-radius: 8px;
+  border: 1px solid var(--theme-border-light);
+
+  .custom-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 15px;
+    align-items: end;
+  }
 }
 
 /* ─────── Controls ─────── */
@@ -708,7 +724,7 @@ onBeforeUnmount(() => {
   padding: 0.4rem 0.8rem;
   border: none;
   border-radius: 6px;
-  background: var(--theme-modal-header);
+  background: var(--theme-button-primary-bg);
   color: var(--theme-button-primary-text);
   cursor: pointer;
   transition:
@@ -718,7 +734,7 @@ onBeforeUnmount(() => {
   &:hover:not(:disabled) {
     transform: translateY(-2px);
     filter: brightness(1.15);
-    background: var(--theme-button-success-hover);
+    background: var(--theme-button-primary-hover);
   }
   &:disabled {
     opacity: 0.5;
@@ -768,6 +784,7 @@ onBeforeUnmount(() => {
     border-radius: 8px;
     box-shadow: var(--theme-shadow-md);
   }
+
   .overlay {
     position: absolute;
     display: flex;

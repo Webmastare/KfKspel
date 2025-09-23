@@ -32,7 +32,7 @@
     <div class="canvas-controls">
       <button @click="resetZoom" class="control-btn" title="Reset zoom">(0,0)</button>
       <button
-        @click="centerOnPlayer"
+        @click="centerOnPlayer(currentPlayer)"
         class="control-btn"
         title="Center on player"
         v-if="currentPlayer"
@@ -61,6 +61,8 @@ import {
   addClickAnimation,
   addExplosion,
   addBullet,
+  addTankMove,
+  getTankAnimatedPosition,
   hasActiveAnimations,
   renderAnimations,
   type AnimationState,
@@ -108,7 +110,9 @@ const animationState = ref<AnimationState>(createAnimationState())
 let rafId: number | null = null
 
 // Computed properties
-const currentPlayer = computed(() => gameStore.currentPlayer)
+const currentPlayer = computed(
+  () => gameStore.allPlayers.find((p) => p.uuid === gameStore.currentPlayer?.uuid) || null,
+)
 const allPlayers = computed(() => gameStore.allPlayers)
 
 const boardSize = computed(() => {
@@ -154,12 +158,10 @@ const canShootAtCell = computed(() => {
   // Check if within range
   const { row, col } = selectedCell.value
   const distance =
-    Math.abs(row - gameStore.currentPlayer.position.row) +
-    Math.abs(col - gameStore.currentPlayer.position.column)
+    Math.abs(row - currentPlayer.value!.position.row) +
+    Math.abs(col - currentPlayer.value!.position.column)
 
-  return (
-    distance <= gameStore.currentPlayer.range && distance > 0 && gameStore.currentPlayer.tokens >= 1
-  )
+  return distance <= currentPlayer.value!.range && distance > 0 && currentPlayer.value!.tokens >= 1
 })
 
 // Measure container content box (excludes borders/scrollbars)
@@ -254,8 +256,16 @@ function drawGame() {
 
 function drawPlayers() {
   for (const player of allPlayers.value!) {
-    const x = player.position.column * cellSize.value
-    const y = player.position.row * cellSize.value
+    // Check if this player has an active move animation
+    const animatedPos = getTankAnimatedPosition(animationState.value, player.uuid)
+
+    const position = animatedPos || {
+      row: player.position.row,
+      col: player.position.column,
+    }
+
+    const x = position.col * cellSize.value
+    const y = position.row * cellSize.value
 
     // Draw tank marker (closer to original): body + turret
     const isTaken = player.taken_tank
@@ -269,7 +279,7 @@ function drawPlayers() {
       player.color,
       isAlive,
       isTaken,
-      player.uuid === currentPlayer.value!.uuid,
+      player.uuid === currentPlayer.value?.uuid,
     )
 
     // Draw current player indicator
@@ -292,12 +302,21 @@ function drawPlayers() {
 
     // Draw lives indicator
     if (player.lives > 0) {
-      ctx.value!.fillStyle = '#e74c3c'
-      const heartSize = cellSize.value / 8
-      for (let i = 0; i < player.lives; i++) {
-        const heartX = x + 5 + i * (heartSize + 2)
-        const heartY = y + 5
-        ctx.value!.fillRect(heartX, heartY, heartSize, heartSize)
+      if (player.lives > 3) {
+        // Draw life count if more than 3 lives
+        ctx.value!.fillStyle = '#e74c3c'
+        ctx.value!.font = `${Math.floor(cellSize.value * 0.3)}px Arial`
+        ctx.value!.textAlign = 'left'
+        ctx.value!.textBaseline = 'top'
+        ctx.value!.fillText(`${player.lives}❤`, x, y + 1)
+      } else {
+        ctx.value!.fillStyle = '#e74c3c'
+        const heartSize = cellSize.value / 8
+        for (let i = 0; i < player.lives; i++) {
+          const heartX = x + 5 + i * (heartSize + 2)
+          const heartY = y + 5
+          ctx.value!.fillRect(heartX, heartY, heartSize, heartSize)
+        }
       }
     }
   }
@@ -514,6 +533,8 @@ function requestAnimFrame() {
     drawGame()
     if (hasActiveAnimations(animationState.value)) {
       rafId = requestAnimationFrame(loop)
+    } else {
+      console.log('Stopping animation loop')
     }
   }
   rafId = requestAnimationFrame(loop)
@@ -538,7 +559,7 @@ function drawPlayerRange() {
   const centerCol = currentPlayer.value!.position.column
 
   ctx.value.fillStyle = 'rgba(76, 175, 80, 0.15)'
-
+  // Manhattan distance range
   for (let row = centerRow - range; row <= centerRow + range; row++) {
     for (let col = centerCol - range; col <= centerCol + range; col++) {
       const distance = Math.abs(row - centerRow) + Math.abs(col - centerCol)
@@ -556,6 +577,39 @@ function drawPlayerRange() {
       }
     }
   }
+  /*
+  ctx.value.fillStyle = 'rgba(180, 75, 80, 0.15)'
+  // Euclidean distance range
+  for (let row = centerRow - range; row <= centerRow + range; row++) {
+    for (let col = centerCol - range; col <= centerCol + range; col++) {
+      const distance = Math.round(Math.sqrt((row - centerRow) ** 2 + (col - centerCol) ** 2))
+      if (
+        distance <= range &&
+        distance > 0 &&
+        row >= 0 &&
+        col >= 0 &&
+        row < boardSize.value.rows &&
+        col < boardSize.value.cols
+      ) {
+        const x = col * cellSize.value
+        const y = row * cellSize.value
+        ctx.value.fillRect(x, y, cellSize.value, cellSize.value)
+      }
+    }
+  }
+  // Euclidean Circle outline
+  ctx.value.strokeStyle = 'rgba(180, 75, 80, 0.5)'
+  ctx.value.lineWidth = 2
+  ctx.value.beginPath()
+  ctx.value.arc(
+    centerCol * cellSize.value + cellSize.value / 2,
+    centerRow * cellSize.value + cellSize.value / 2,
+    range * cellSize.value,
+    0,
+    Math.PI * 2,
+  )
+  ctx.value.stroke()
+  */
 }
 
 // Coordinate transformation
@@ -732,44 +786,133 @@ function resetZoom() {
   drawGame()
 }
 
-function centerOnPlayer() {
-  if (!currentPlayer) return
-
+function centerOnPlayer(p?: any) {
+  if (!p) return
+  console.log('Centering on player', p.name, p.position)
   const centerX = canvasWidth.value / 2
   const centerY = canvasHeight.value / 2
 
-  pan.value.x =
-    centerX / zoom.value -
-    (currentPlayer.value!.position.column * cellSize.value + cellSize.value / 2)
-  pan.value.y =
-    centerY / zoom.value - (currentPlayer.value!.position.row * cellSize.value + cellSize.value / 2)
+  pan.value.x = centerX / zoom.value - (p.position.column * cellSize.value + cellSize.value / 2)
+  pan.value.y = centerY / zoom.value - (p.position.row * cellSize.value + cellSize.value / 2)
 
   drawGame()
 }
 
 // Animation helper functions
-function triggerExplosion(row: number, col: number) {
-  animationState.value = addExplosion(animationState.value, row, col, cellSize.value)
+function triggerExplosion(row: number, col: number, onComplete?: () => void) {
+  animationState.value = addExplosion(
+    animationState.value,
+    row,
+    col,
+    cellSize.value,
+    'explosion',
+    onComplete,
+  )
   requestAnimFrame()
 }
 
-function triggerBullet(fromRow: number, fromCol: number, toRow: number, toCol: number) {
+function triggerBullet(
+  fromRow: number,
+  fromCol: number,
+  toRow: number,
+  toCol: number,
+  onComplete?: () => void,
+) {
   const startX = (fromCol + 0.5) * cellSize.value
   const startY = (fromRow + 0.5) * cellSize.value
   const endX = (toCol + 0.5) * cellSize.value
   const endY = (toRow + 0.5) * cellSize.value
 
-  animationState.value = addBullet(animationState.value, startX, startY, endX, endY)
+  animationState.value = addBullet(
+    animationState.value,
+    startX,
+    startY,
+    endX,
+    endY,
+    0.05,
+    onComplete,
+  )
   requestAnimFrame()
 }
 
-// Expose animation functions for external use
+// Composite function to trigger bullet followed by explosion
+// Composite function to trigger bullet followed by explosion
+function triggerTankMove(
+  tankUuid: string,
+  fromRow: number,
+  fromCol: number,
+  toRow: number,
+  toCol: number,
+  onMoveComplete?: () => void,
+) {
+  animationState.value = addTankMove(
+    animationState.value,
+    fromRow,
+    fromCol,
+    toRow,
+    toCol,
+    tankUuid,
+    2.0, // 2 cells per second
+    () => {
+      // When movement is complete, trigger click animation and callback
+      animationState.value = addClickAnimation(
+        animationState.value,
+        toRow,
+        toCol,
+        cellSize.value,
+        currentPlayer.value?.color || '#ffffff',
+      )
+      if (onMoveComplete) {
+        onMoveComplete()
+      }
+    },
+  )
+  requestAnimFrame()
+}
+
+function triggerBulletAndExplosion(
+  fromRow: number,
+  fromCol: number,
+  toRow: number,
+  toCol: number,
+  onExplosionComplete?: () => void,
+) {
+  triggerBullet(fromRow, fromCol, toRow, toCol, () => {
+    // When bullet reaches target, trigger explosion
+    triggerExplosion(toRow, toCol, onExplosionComplete)
+  })
+}
+
+// Expose functions for external use
 defineExpose({
   triggerExplosion,
   triggerBullet,
+  triggerBulletAndExplosion,
+  triggerTankMove,
+  centerOnPlayer,
 })
 function handlePopupAction(action: any) {
-  emit('actionPerformed', action)
+  // For move actions, we need to handle them specially to trigger animations
+  if (action.action === 'move' && currentPlayer.value) {
+    const fromRow = currentPlayer.value.position.row
+    const fromCol = currentPlayer.value.position.column
+    const toRow = action.targetCell.row
+    const toCol = action.targetCell.col
+
+    // Add animation trigger to the action
+    const actionWithAnimation = {
+      ...action,
+      animationTrigger: {
+        triggerTankMove: (onComplete?: () => void) => {
+          triggerTankMove(currentPlayer.value!.uuid, fromRow, fromCol, toRow, toCol, onComplete)
+        },
+      },
+    }
+
+    emit('actionPerformed', actionWithAnimation)
+  } else {
+    emit('actionPerformed', action)
+  }
   closePopup()
 }
 

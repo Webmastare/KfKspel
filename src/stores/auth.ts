@@ -59,9 +59,17 @@ export const useAuthStore = defineStore("auth", {
       // Stay synced with any auth change (but skip INITIAL_SESSION since we handled it above)
       supabase.auth.onAuthStateChange(async (_event, session) => {
         console.log("Auth event:", _event, session);
-
+        return;
+        /*
         // Skip INITIAL_SESSION since we already handled the initial state above
         if (_event === "INITIAL_SESSION") {
+          return;
+        }
+        if (_event === "TOKEN_REFRESHED") {
+          console.log(
+            "Token refreshed, session updated but skipping profile fetch",
+          );
+          this.session = session;
           return;
         }
 
@@ -89,6 +97,7 @@ export const useAuthStore = defineStore("auth", {
             },
           );
         }
+        */
       });
 
       this.initialized = true;

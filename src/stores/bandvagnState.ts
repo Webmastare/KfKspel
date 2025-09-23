@@ -136,6 +136,7 @@ export const useBandvagnStore = defineStore("bandvagn", {
       this.error = null;
 
       try {
+        console.log("Fetching game state from server...");
         const gameState = await getGameState();
 
         // Update players data (from Edge Function - service role, safe)
@@ -286,25 +287,178 @@ export const useBandvagnStore = defineStore("bandvagn", {
       }
     },
 
-    // Perform a game action
+    // Perform a game action with animation support
     async performAction(action: {
       action: GameActionType;
-      user_id: string;
-      moveDirection?: { row: number; col: number };
+      tank_id: string;
+      targetCell?: { row: number; col: number };
       targetUUID?: string;
+      animationTrigger?: {
+        triggerBulletAndExplosion?: (
+          fromRow: number,
+          fromCol: number,
+          toRow: number,
+          toCol: number,
+          onComplete?: () => void,
+        ) => void;
+        triggerTankMove?: (
+          onComplete?: () => void,
+        ) => void;
+      };
     }) {
-      const authStore = useAuthStore();
-
       this.isLoading = true;
       this.error = null;
 
       try {
-        console.log("Performing action:", action);
-        const result = await performGameAction(action);
+        // Create proper ActionRequest object
+        const actionRequest: any = {
+          action: action.action,
+          tank_id: action.tank_id,
+        };
+
+        // Add moveDirection for move actions
+        if (action.action === "move" && action.targetCell) {
+          actionRequest.moveDirection = {
+            row: action.targetCell.row,
+            col: action.targetCell.col,
+          };
+        }
+
+        // Add targetUUID for shot actions
+        if (action.action === "shot" && action.targetUUID) {
+          actionRequest.targetUUID = action.targetUUID;
+        }
+
+        console.log("Performing action:", actionRequest);
+        const result = await performGameAction(actionRequest);
         console.log("Action result:", result);
-        // Refresh game state after action
-        console.log("Refreshing game state after action...");
-        await this.fetchGameState();
+
+        // Handle shot actions with animation
+        if (
+          action.action === "shot" &&
+          action.animationTrigger?.triggerBulletAndExplosion &&
+          action.targetUUID &&
+          this.currentPlayer
+        ) {
+          // Find target player to get position
+          const targetPlayer = this.allPlayers.find((p) =>
+            p.uuid === action.targetUUID
+          );
+          if (targetPlayer) {
+            const shooterPos = this.currentPlayer.position;
+            const targetPos = targetPlayer.position;
+
+            // Update shooter data immediately (action confirmed)
+            this.currentPlayer = result.updatedData;
+
+            // Trigger animation sequence
+            action.animationTrigger.triggerBulletAndExplosion(
+              shooterPos.row,
+              shooterPos.column,
+              targetPos.row,
+              targetPos.column,
+              () => {
+                // After explosion completes, update the target's data
+                if (result.shotData) {
+                  const targetIndex = this.allPlayers.findIndex((p) =>
+                    p.uuid === action.targetUUID
+                  );
+                  if (targetIndex !== -1) {
+                    this.allPlayers[targetIndex] = result.shotData;
+                  }
+                }
+
+                // Update game logs
+                if (result.updatedLogs && this.boardData) {
+                  // Handle both single log and array of logs
+                  if (Array.isArray(result.updatedLogs)) {
+                    this.boardData.logs = result.updatedLogs;
+                  } else {
+                    // If it's a single log, append it to existing logs
+                    this.boardData.logs = [
+                      ...this.boardData.logs,
+                      result.updatedLogs,
+                    ];
+                  }
+                }
+              },
+            );
+
+            return result;
+          }
+        }
+
+        // Handle move actions with animation
+        if (
+          action.action === "move" &&
+          action.animationTrigger?.triggerTankMove &&
+          this.currentPlayer
+        ) {
+          // Store the result to apply after animation completes
+          const moveResult = result;
+
+          // Trigger animation sequence
+          action.animationTrigger.triggerTankMove(() => {
+            // After movement animation completes, update player position and logs
+            if (moveResult.updatedData) {
+              // Update player data
+              const currentIndex = this.allPlayers.findIndex((p) =>
+                p.uuid === moveResult.updatedData?.uuid
+              );
+              if (currentIndex !== -1) {
+                this.allPlayers[currentIndex] = moveResult.updatedData;
+              }
+              //this.currentPlayer = moveResult.updatedData;
+            }
+
+            // Update game logs
+            if (moveResult.updatedLogs && this.boardData) {
+              // Handle both single log and array of logs
+              if (Array.isArray(moveResult.updatedLogs)) {
+                this.boardData.logs = moveResult.updatedLogs;
+              } else {
+                // If it's a single log, append it to existing logs
+                this.boardData.logs = [
+                  ...this.boardData.logs,
+                  moveResult.updatedLogs,
+                ];
+              }
+            }
+          });
+
+          // Don't update player data immediately for move actions with animation
+          return result;
+        }
+
+        // For non-shot and non-animated-move actions. Update current player and logs
+        if (
+          action.action !== "shot" &&
+          !(action.action === "move" &&
+            action.animationTrigger?.triggerTankMove) &&
+          result.updatedData
+        ) {
+          // Update local player data
+          const currentIndex = this.allPlayers.findIndex((p) =>
+            p.uuid === result.updatedData?.uuid
+          );
+          if (currentIndex !== -1) {
+            this.allPlayers[currentIndex] = result.updatedData;
+          }
+          // this.currentPlayer = result.updatedData;
+          // Update game logs
+          if (result.updatedLogs && this.boardData) {
+            // Handle both single log and array of logs
+            if (Array.isArray(result.updatedLogs)) {
+              this.boardData.logs = result.updatedLogs;
+            } else {
+              // If it's a single log, append it to existing logs
+              this.boardData.logs = [
+                ...this.boardData.logs,
+                result.updatedLogs,
+              ];
+            }
+          }
+        }
         console.log("Game state refreshed successfully.");
         return result;
       } catch (error) {
@@ -318,8 +472,6 @@ export const useBandvagnStore = defineStore("bandvagn", {
 
     // Get game statistics
     async fetchGameStats() {
-      const authStore = useAuthStore();
-
       try {
         // Import getGameStats from board.ts
         const { getGameStats } = await import(
@@ -378,24 +530,37 @@ export const useBandvagnStore = defineStore("bandvagn", {
       const playableSize = this.playableBoardSize;
       const shrink = this.boardData?.shrink || 0;
 
-      // Check if cell is within playable area
+      // Check if cell is within board bounds
       if (
-        row < shrink || row >= playableSize.rows + shrink ||
-        column < shrink || column >= playableSize.cols + shrink
+        row < 0 || row >= this.boardSize.rows ||
+        column < 0 || column >= this.boardSize.cols
       ) {
         return false;
       }
-      // Check if cell is occupied
+
+      // Check if cell is occupied by another living player
       const occupied = this.allPlayers.some((p: Player) =>
-        p.position.row === row && p.position.column === column && p.lives > 0
+        p.position.row === row && p.position.column === column &&
+        p.lives > 0 && p.uuid !== this.currentPlayer?.uuid
       );
       if (occupied) return false;
 
-      // Check if cell is within range
+      // Don't allow move to same position
+      if (
+        this.currentPlayer.position.row === row &&
+        this.currentPlayer.position.column === column
+      ) {
+        return false;
+      }
+
+      // Calculate Manhattan distance and required tokens
       const distance = Math.abs(row - this.currentPlayer.position.row) +
         Math.abs(column - this.currentPlayer.position.column);
 
-      return distance <= 1 && distance > 0 && this.currentPlayer.tokens >= 1; // Adjacent cells only
+      const requiredTokens = Math.max(1, distance);
+
+      // Check if player has enough tokens for the move
+      return this.currentPlayer.tokens >= requiredTokens;
     },
 
     canShootAtCell(row: number, column: number): boolean {

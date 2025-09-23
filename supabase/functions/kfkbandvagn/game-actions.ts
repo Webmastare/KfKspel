@@ -10,9 +10,8 @@ import {
   createSuccessResponse,
   isPositionOccupied,
   validateActionRequest,
-  validateMoveDirection,
 } from "../_shared/validation.ts";
-import { ERROR_CODES, TOKEN_COSTS } from "./types.ts";
+import { ERROR_CODES } from "./types.ts";
 import type {
   ActionRequest,
   ActionResponse,
@@ -81,10 +80,8 @@ export async function handleGameAction(body: unknown) {
     const actionData: ActionRequest = validateActionRequest(body);
 
     const supabase = createServiceClient();
-    const tokensNeeded = TOKEN_COSTS[actionData.action];
 
     console.log("Action request:", actionData);
-    console.log("Tokens needed:", tokensNeeded);
 
     // Fetch all current players
     const { data: currentData, error: fetchError } = await supabase
@@ -101,18 +98,10 @@ export async function handleGameAction(body: unknown) {
 
     // Find the current user
     const currentUser = currentData?.find((player: Player) =>
-      player.user_id === actionData.user_id
+      player.uuid === actionData.tank_id
     );
     if (!currentUser) {
       return createErrorResponse(ERROR_CODES.USER_NOT_FOUND, "User not found");
-    }
-
-    // Check if user has enough tokens
-    if (currentUser.tokens < tokensNeeded) {
-      return createErrorResponse(
-        ERROR_CODES.MISSING_TOKENS,
-        "Not enough tokens",
-      );
     }
 
     // Check if player is alive for most actions
@@ -132,24 +121,34 @@ export async function handleGameAction(body: unknown) {
         if (!actionData.moveDirection) {
           return createErrorResponse(
             ERROR_CODES.VALIDATION_ERROR,
-            "Move direction is required",
+            "Move target position is required",
           );
         }
 
-        // Validate move direction
-        if (!validateMoveDirection(actionData.moveDirection)) {
+        const targetRow = actionData.moveDirection.row;
+        const targetCol = actionData.moveDirection.col;
+        const currentRow = currentUser.position.row;
+        const currentCol = currentUser.position.column;
+
+        // Calculate Manhattan distance and required tokens
+        const distance = Math.abs(targetRow - currentRow) +
+          Math.abs(targetCol - currentCol);
+        const requiredTokens = Math.max(1, distance);
+
+        // Check if user has enough tokens
+        if (currentUser.tokens < requiredTokens) {
           return createErrorResponse(
-            ERROR_CODES.INVALID_ACTION,
-            "Invalid move direction",
+            ERROR_CODES.MISSING_TOKENS,
+            `Not enough tokens. Need ${requiredTokens}, have ${currentUser.tokens}`,
           );
         }
 
+        // Check if target position is occupied
         const newPosition: Position = {
-          row: currentUser.position.row + actionData.moveDirection.row,
-          column: currentUser.position.column + actionData.moveDirection.col,
+          row: targetRow,
+          column: targetCol,
         };
 
-        // Check if new position is occupied
         if (isPositionOccupied(newPosition, currentData as Player[])) {
           return createErrorResponse(
             ERROR_CODES.INVALID_ACTION,
@@ -160,16 +159,18 @@ export async function handleGameAction(body: unknown) {
         // TODO: Add board boundary validation here when we have board size
 
         updateQuery = {
-          tokens: currentUser.tokens - tokensNeeded,
+          tokens: currentUser.tokens - requiredTokens,
           position: newPosition,
         };
 
         detailsQuery = {
           from: {
-            row: currentUser.position.row,
-            column: currentUser.position.column,
+            row: currentRow,
+            column: currentCol,
           },
           to: newPosition,
+          distance: distance,
+          cost: requiredTokens,
         };
         break;
       }
@@ -182,7 +183,17 @@ export async function handleGameAction(body: unknown) {
           );
         }
 
-        updateQuery = { tokens: currentUser.tokens - tokensNeeded };
+        const shotTokenCost = 1;
+
+        // Check if user has enough tokens for shooting
+        if (currentUser.tokens < shotTokenCost) {
+          return createErrorResponse(
+            ERROR_CODES.MISSING_TOKENS,
+            `Not enough tokens. Need ${shotTokenCost}, have ${currentUser.tokens}`,
+          );
+        }
+
+        updateQuery = { tokens: currentUser.tokens - shotTokenCost };
 
         const targetUser = currentData?.find((player: Player) =>
           player.uuid === actionData.targetUUID
@@ -251,8 +262,18 @@ export async function handleGameAction(body: unknown) {
       }
 
       case "range": {
+        const rangeTokenCost = 3;
+
+        // Check if user has enough tokens
+        if (currentUser.tokens < rangeTokenCost) {
+          return createErrorResponse(
+            ERROR_CODES.MISSING_TOKENS,
+            `Not enough tokens. Need ${rangeTokenCost}, have ${currentUser.tokens}`,
+          );
+        }
+
         updateQuery = {
-          tokens: currentUser.tokens - tokensNeeded,
+          tokens: currentUser.tokens - rangeTokenCost,
           range: currentUser.range + 1,
         };
 
@@ -261,8 +282,18 @@ export async function handleGameAction(body: unknown) {
       }
 
       case "life": {
+        const lifeTokenCost = 3;
+
+        // Check if user has enough tokens
+        if (currentUser.tokens < lifeTokenCost) {
+          return createErrorResponse(
+            ERROR_CODES.MISSING_TOKENS,
+            `Not enough tokens. Need ${lifeTokenCost}, have ${currentUser.tokens}`,
+          );
+        }
+
         updateQuery = {
-          tokens: currentUser.tokens - tokensNeeded,
+          tokens: currentUser.tokens - lifeTokenCost,
           lives: currentUser.lives + 1,
         };
 
@@ -282,7 +313,7 @@ export async function handleGameAction(body: unknown) {
     const { data: updatedData, error: updateError } = await supabase
       .from("KfKbandvagn")
       .update(updateQuery)
-      .eq("user_id", actionData.user_id)
+      .eq("uuid", actionData.tank_id)
       .select("user_id, playerID, uuid, tokens, position, lives, range, color")
       .single();
 

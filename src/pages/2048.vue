@@ -1,7 +1,7 @@
 <template>
   <div class="game-2048">
-    <div class="game-header">
-      <h1>2048</h1>
+    <div>
+      <h1 class="game-header">2048</h1>
       <div class="score-display">
         Poäng: <span class="score-value">{{ score }}</span>
       </div>

@@ -1,6 +1,6 @@
 <template>
   <div id="app-container">
-    <h1>KfKbandvagn</h1>
+    <h1 class="game-header">KfKbandvagn</h1>
 
     <!-- Player Stats Section (similar to leaderboard) -->
     <div class="stats-container">
@@ -42,6 +42,7 @@
                 <span class="players-list-header">Namn</span>
                 <span class="players-list-header">Position (r,c)</span>
                 <span class="players-list-header">Distans</span>
+                <span class="players-list-header">Visa</span>
                 <span></span>
               </li>
               <li v-for="p in playersToShow" :key="p.uuid" class="players-list-item">
@@ -61,6 +62,7 @@
                 </div>
                 <span class="player-position">{{ p.position.row }}, {{ p.position.column }}</span>
                 <span class="player-distance">{{ p.distToCurrent }}</span>
+                <span class="player-focus"><button @click="focusOnPlayer(p)">🔍</button></span>
                 <span class="player-meta"
                   >❤ {{ p.lives }} · ➶ {{ p.range }} · ⛁ {{ p.tokens }}</span
                 >
@@ -154,7 +156,8 @@
 
           <!-- Game Canvas -->
           <BandvagnCanvas
-            v-if="gameInitialized && currentPlayer"
+            ref="canvasRef"
+            v-if="getGameInitialized()"
             @actionPerformed="handleActionPerformed"
           />
 
@@ -264,28 +267,48 @@
     <!-- Information Section -->
     <div v-if="infoShown" class="information-container">
       <div class="information-text">
-        <strong>Spelregler</strong>
-        <p>
-          KfKbandvagn är ett strategiskt multiplayer-spel där du styr en bandvagn på en krympande
-          spelplan. Klicka på en ruta för att flytta dit (kostar 1 token) eller skjuta mot en annan
-          spelare (kostar 1 token). Överlev så länge som möjligt!
-        </p>
-
-        <strong>Handlingar</strong>
-        <p>
-          <strong>Flytta:</strong> Klicka på en tom ruta inom din räckvidd för att flytta dit (1
-          token).<br />
-          <strong>Skjut:</strong> Klicka på en annan spelare inom din räckvidd för att skjuta (1
-          token).<br />
-          <strong>Köp Räckvidd:</strong> Öka din räckvidd med 1 (3 tokens).<br />
-          <strong>Köp Liv:</strong> Få ett extra liv (3 tokens).
-        </p>
-
-        <strong>Spelplan</strong>
-        <p>
-          Spelplanen krymper regelbundet och spelare utanför den aktiva ytan förlorar liv. Nya
-          tokens distribueras automatiskt till alla levande spelare. Planera dina drag väl!
-        </p>
+        <div class="background-decor">
+          <div class="information-inset">
+            <strong>Spelregler</strong>
+            <p>
+              Varje spelare börjar på en slumpmässig plats på spelplanen med 3 hjärtan (liv), 2
+              rutor i räckvidd och 0 Tokens. Tokens förelas automatiskt dagligen. Använd tokens för
+              att utföra handlingar.
+            </p>
+          </div>
+        </div>
+        <div class="background-decor">
+          <div class="information-inset">
+            <strong>Handlingar</strong>
+            <p>
+              <strong>Flytta:</strong> Klicka på en tom ruta för att flytta dit (1 token per
+              ruta).<br />
+              <strong>Skjut:</strong> Klicka på en annan spelare inom din räckvidd för att skjuta (1
+              token). Om spelaren dör får du 5 tokens.<br />
+              <strong>Köp Räckvidd:</strong> Öka din räckvidd med 1 (3 tokens).<br />
+              <strong>Köp Liv:</strong> Få ett extra liv (3 tokens).
+            </p>
+          </div>
+        </div>
+        <div class="background-decor">
+          <div class="information-inset">
+            <strong>Liv och Dödsfall</strong>
+            <p>
+              Om du blir skjuten förlorar du ett liv. När du når 0 liv är du ute ur spelet (kom ihåg
+              att köpa liv). Du kan återuppstå genom att en annan spelare donerar ett liv till dig.
+            </p>
+          </div>
+        </div>
+        <div class="background-decor">
+          <div class="information-inset">
+            <strong>Spelplan</strong>
+            <p>
+              Spelplanen krymper regelbundet och spelare utanför den aktiva ytan förlorar ett liv
+              för varje gång spelplanen krymper. Nya tokens fördelas automatiskt till alla levande
+              spelare. Planera dina drag väl!
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -297,6 +320,10 @@ import { useAuthStore } from '@/stores/auth'
 import { useBandvagnStore } from '@/stores/bandvagnState'
 import PlayerCreation from '@/components/kfkbandvagn/PlayerCreation.vue'
 import BandvagnCanvas from '@/components/kfkbandvagn/BandvagnCanvas.vue'
+import { supabase } from '@/utils/supabase'
+
+// Canvas reference
+const canvasRef = ref(null)
 
 // Stores
 const authStore = useAuthStore()
@@ -317,6 +344,11 @@ const boardData = computed(() => gameStore.boardData)
 const isLoading = computed(() => gameStore.isLoading)
 const gameInitialized = computed(() => gameStore.initialized && currentPlayer.value)
 
+function getGameInitialized() {
+  console.log('Checking game initialized:', gameStore.initialized, currentPlayer.value)
+  return gameStore.initialized && currentPlayer.value
+}
+
 // Only show players that have an active tank and are alive (or show all if desired)
 const playersToShow = computed(() => {
   const filteredPlayers = allPlayers.value
@@ -328,13 +360,12 @@ const playersToShow = computed(() => {
           Math.abs(p.position.column - currentPlayer.value.position.column)
         : Infinity,
     }))
-  console.log('Filtering players to show:', filteredPlayers)
   return filteredPlayers.sort((a, b) => a.distToCurrent - b.distToCurrent)
 })
 
 const recentLogs = computed(() => {
   if (!boardData.value?.logs) return []
-  return boardData.value.logs.slice(-10).reverse()
+  return boardData.value.logs.slice().reverse()
 })
 
 // UI Controls
@@ -368,8 +399,19 @@ function handlePlayerCreated() {
   refreshGameState()
 }
 
+function focusOnPlayer(player) {
+  canvasRef.value.centerOnPlayer(player)
+}
+
 async function handleActionPerformed(action) {
   try {
+    // For shot actions, provide animation trigger
+    if (action.action === 'shot' && canvasRef.value) {
+      action.animationTrigger = {
+        triggerBulletAndExplosion: canvasRef.value.triggerBulletAndExplosion,
+      }
+    }
+
     await gameStore.performAction(action)
   } catch (error) {
     console.error('Action failed:', error)
@@ -393,7 +435,7 @@ async function confirmUpgrade() {
   try {
     await gameStore.performAction({
       action: upgradeType.value,
-      user_id: authStore.user?.id,
+      tank_id: currentPlayer.value?.uuid || '',
     })
     showUpgradeDialog.value = false
     upgradeType.value = ''
@@ -423,15 +465,10 @@ function getDetailedLogInfo(log) {
 
   switch (log.action) {
     case 'shot':
-      if (log.details?.targetPlayer) {
-        actionDescription = `sköt mot ${log.details.targetPlayer}`
-        if (log.details?.hit) {
-          actionDescription += ' och träffade!'
-        } else {
-          actionDescription += ' men missade.'
-        }
+      if (log.details?.targetUser) {
+        actionDescription = `Sköt ${log.details.targetUser} (${log.details.targetUserLives} liv kvar)`
       } else {
-        actionDescription = 'sköt'
+        actionDescription = 'Sköt'
       }
       break
 
@@ -465,14 +502,18 @@ function getDetailedLogInfo(log) {
 
     case 'token_distribution':
       if (log.details?.tokensGiven) {
-        actionDescription = `Fick ${log.details.tokensGiven} tokens`
+        actionDescription = `Alla fick ${log.details.tokensGiven} tokens`
       } else {
-        actionDescription = 'Fick tokens'
+        actionDescription = 'Alla fick tokens'
       }
       break
 
     case 'death':
-      actionDescription = 'Dog'
+      if (log.details?.targetUser) {
+        actionDescription = `${log.details.targetUser} dog`
+      } else {
+        actionDescription = 'Någon dog'
+      }
       break
 
     case 'respawn':
@@ -532,6 +573,33 @@ watch(
 onMounted(async () => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
+
+  // Handle tab visibility changes to reinitialize Supabase client
+  document.addEventListener('visibilitychange', async () => {
+    console.log('Document visibility changed:', document.visibilityState)
+    if (document.visibilityState === 'visible') {
+      try {
+        // Refresh the session to ensure tokens are valid
+        const { data, error } = await supabase.auth.refreshSession()
+        if (error) {
+          console.warn('Session refresh failed:', error)
+        } else {
+          console.log('Session refreshed successfully')
+        }
+      } catch (refreshError) {
+        console.error('Error refreshing session:', refreshError)
+      }
+    }
+  })
+
+  if (authStore.isAuthed) {
+    console.log('User authenticated, initializing game store')
+    try {
+      await gameStore.initialize()
+    } catch (error) {
+      console.error('Failed to initialize game store on mount:', error)
+    }
+  }
 })
 
 onBeforeUnmount(() => {
@@ -556,14 +624,6 @@ h1 {
   color: var(--theme-text-primary);
   text-align: center;
   margin-bottom: 20px;
-}
-
-.players-list {
-  li {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-    gap: 10px;
-  }
 }
 
 /* Enhanced Game Logs Styling */

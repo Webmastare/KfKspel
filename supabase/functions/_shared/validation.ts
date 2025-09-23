@@ -7,7 +7,6 @@ import type {
     CreatePlayerRequest,
     GameActionType,
     LoginRequest,
-    MoveDirection,
     Player,
     Position,
 } from "../kfkbandvagn/types.ts";
@@ -71,8 +70,8 @@ export function validateActionRequest(body: unknown): ActionRequest {
 
     const data = body as Record<string, unknown>;
 
-    if (typeof data.user_id !== "string" || !data.user_id.trim()) {
-        throw new Error("user_id is required and must be a non-empty string");
+    if (typeof data.tank_id !== "string" || !data.tank_id.trim()) {
+        throw new Error("tank_id is required and must be a non-empty string");
     }
 
     if (typeof data.action !== "string" || !data.action.trim()) {
@@ -86,11 +85,11 @@ export function validateActionRequest(body: unknown): ActionRequest {
     }
 
     const result: ActionRequest = {
-        user_id: data.user_id,
+        tank_id: data.tank_id,
         action: data.action as GameActionType,
     };
 
-    // Validate move direction if action is move
+    // Validate move target if action is move
     if (data.action === "move") {
         if (!data.moveDirection || typeof data.moveDirection !== "object") {
             throw new Error("moveDirection is required for move action");
@@ -135,21 +134,6 @@ export function validatePosition(
         position.row < boardRows &&
         position.column >= 0 &&
         position.column < boardCols
-    );
-}
-
-// Validate move direction values
-export function validateMoveDirection(moveDir: MoveDirection): boolean {
-    // Only allow moves of 1 cell in cardinal directions
-    const validMoves = [
-        { row: -1, col: 0 }, // up
-        { row: 1, col: 0 }, // down
-        { row: 0, col: -1 }, // left
-        { row: 0, col: 1 }, // right
-    ];
-
-    return validMoves.some((valid) =>
-        valid.row === moveDir.row && valid.col === moveDir.col
     );
 }
 

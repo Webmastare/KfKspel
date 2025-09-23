@@ -145,7 +145,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
 
 <style lang="scss" scoped>
 @use '@/styles/variables' as *;
-@import '@/styles/theme.scss';
+@use '@/styles/theme.scss';
 
 .landing-page {
   position: relative;
