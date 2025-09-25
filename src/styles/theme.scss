@@ -1,5 +1,11 @@
 // KfKspel Centralized Theme System
 // This file contains all theme variables and definitions
+// 
+// DESIGN PRINCIPLES:
+// - Games should use standard theme variables (--theme-canvas-bg, --theme-canvas-border, etc.) 
+// - Only create game-specific variables when truly necessary (e.g., 2048 classic colors)
+// - Keep redundant alias variables to a minimum
+// - All canvas elements should use the same base theme for consistency
 
 :root {
   // ================  // === Border & Shadow Colors ===
@@ -104,34 +110,12 @@
   --theme-mine-cell: #f5f5f5;
   --theme-mine-revealed: #e0e0e0;
 
-  // 2048
-  --theme-2048-tile-empty: rgba(238, 228, 218, 0.35);
-  --theme-2048-tile-2: #eee4da;
-  --theme-2048-tile-4: #ede0c8;
-  --theme-2048-board: #bbada0;
+  // === Game-Specific Variables (Only when necessary) ===
+  // 2048 - Needs specific background for classic mode
+  --theme-canvas-2048-bg: #bbada0;
 
-  // === Game-Specific Canvas Variables ===
-  // Kfkbandvagn
-  --theme-canvas-kfkbandvagn-bg: var(--theme-canvas-bg);
-  --theme-canvas-kfkbandvagn-border: var(--theme-canvas-border);
-  --theme-canvas-kfkbandvagn-text: var(--theme-text-primary);
+  // Kfkbandvagn - Uses accent color
   --theme-canvas-kfkbandvagn-accent: #22c55e;
-
-  // Kfkblock (Tetris)
-  --theme-canvas-kfkblock-bg: var(--theme-canvas-bg);
-  --theme-canvas-kfkblock-border: var(--theme-canvas-border);
-  --theme-canvas-kfkblock-grid: var(--theme-canvas-grid);
-  --theme-canvas-kfkblock-text: var(--theme-text-primary);
-
-  // 2048 Canvas
-  --theme-canvas-2048-bg: var(--theme-2048-board);
-  --theme-canvas-2048-text: var(--theme-text-primary);
-  --theme-canvas-2048-border: var(--theme-canvas-border);
-
-  // Snake Canvas
-  --theme-canvas-snake-bg: var(--theme-canvas-bg);
-  --theme-canvas-snake-border: var(--theme-canvas-border);
-  --theme-canvas-snake-grid: var(--theme-canvas-grid);
 
   // === Border & Shadow Colors ===
   --theme-border-light: rgba(0, 0, 0, 0.1);
@@ -168,9 +152,9 @@
   --theme-text-on-dark: #e2e8f0;
 
   // === Canvas & Game Colors ===
-  --theme-canvas-bg: #111827;
-  --theme-canvas-border: #374151;
-  --theme-canvas-grid: #374151;
+  --theme-canvas-bg: #1f2124;
+  --theme-canvas-border: #3a414e;
+  --theme-canvas-grid: #3c414a;
   --theme-canvas-glow: rgba(34, 197, 94, 0.4);
 
   // === Sidebar Colors ===
@@ -246,28 +230,12 @@
   --theme-2048-tile-4: #3d3530;
   --theme-2048-board: #2d2520;
 
-  // === Game-Specific Canvas Variables ===
-  // Kfkbandvagn
-  --theme-canvas-kfkbandvagn-bg: var(--theme-canvas-bg);
-  --theme-canvas-kfkbandvagn-border: var(--theme-canvas-border);
-  --theme-canvas-kfkbandvagn-text: var(--theme-text-primary);
-  --theme-canvas-kfkbandvagn-accent: #34d399;
-
-  // Kfkblock (Tetris)
-  --theme-canvas-kfkblock-bg: var(--theme-canvas-bg);
-  --theme-canvas-kfkblock-border: var(--theme-canvas-border);
-  --theme-canvas-kfkblock-grid: var(--theme-canvas-grid);
-  --theme-canvas-kfkblock-text: var(--theme-text-primary);
-
-  // 2048 Canvas
+  // === Game-Specific Variables (Only when necessary) ===
+  // 2048 - Uses different board background in dark mode
   --theme-canvas-2048-bg: var(--theme-2048-board);
-  --theme-canvas-2048-text: var(--theme-text-primary);
-  --theme-canvas-2048-border: var(--theme-canvas-border);
 
-  // Snake Canvas
-  --theme-canvas-snake-bg: var(--theme-canvas-bg);
-  --theme-canvas-snake-border: var(--theme-canvas-border);
-  --theme-canvas-snake-grid: var(--theme-canvas-grid);
+  // Kfkbandvagn - Uses accent color  
+  --theme-canvas-kfkbandvagn-accent: #34d399;
 
   // === Border & Shadow Colors ===
   --theme-border-light: rgba(255, 255, 255, 0.1);

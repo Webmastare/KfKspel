@@ -983,11 +983,11 @@ onBeforeUnmount(() => {
 .canvas-container,
 .game-canvas {
   /* Canvas theme variables mapped to centralized theme */
-  --canvas-bg-color: var(--theme-canvas-kfkbandvagn-bg);
+  --canvas-bg-color: var(--theme-canvas-bg);
   --canvas-grid-color: var(--theme-canvas-grid);
-  --canvas-text-color: var(--theme-canvas-kfkbandvagn-text);
+  --canvas-text-color: var(--theme-text-primary);
   --modal-header-color: var(--theme-canvas-kfkbandvagn-accent);
-  --canvas-border-color: var(--theme-canvas-kfkbandvagn-border);
+  --canvas-border-color: var(--theme-canvas-border);
 }
 
 .canvas-container {

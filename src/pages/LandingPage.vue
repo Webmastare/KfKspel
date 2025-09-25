@@ -34,14 +34,6 @@
         <p class="subtitle">Tips: Logga in för att spara dina framsteg!</p>
         <div class="game-grid">
           <div class="game-card">
-            <h3>2048</h3>
-            <router-link to="/2048" class="play-btn">Spela</router-link>
-          </div>
-          <div class="game-card">
-            <h3>Minesweeper</h3>
-            <router-link to="/minesweeper" class="play-btn">Spela</router-link>
-          </div>
-          <div class="game-card">
             <h3>KfKblock</h3>
             <router-link to="/kfkblock" class="play-btn">Spela</router-link>
           </div>
@@ -53,12 +45,13 @@
             <h3>Snake</h3>
             <router-link to="/snake" class="play-btn">Spela</router-link>
           </div>
-
-          <div class="game-card special">
-            <h3>Hamiltonian Snake</h3>
-            <button class="play-btn" @click="toggleSnakeView">
-              {{ !showSnakeDetails ? 'Visa Detaljer' : 'Dölj Detaljer' }}
-            </button>
+          <div class="game-card">
+            <h3>2048</h3>
+            <router-link to="/2048" class="play-btn">Spela</router-link>
+          </div>
+          <div class="game-card">
+            <h3>Minesweeper</h3>
+            <router-link to="/minesweeper" class="play-btn">Spela</router-link>
           </div>
         </div>
 
@@ -103,6 +96,9 @@
       </div>
     </div>
     <!-- Hide Overlay to show only the game -->
+    <button class="hamilinfo-btn" @click="toggleSnakeView">
+      {{ !showSnakeDetails ? '?' : '!' }}
+    </button>
     <button class="close-btn" @click="showWelcomeCard = !showWelcomeCard">x</button>
   </div>
 </template>
@@ -162,7 +158,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
   width: 100%;
   height: 100%;
   opacity: 1;
-  z-index: 2;
+  z-index: 0;
   pointer-events: none; /* Make background non-interactive */
 }
 
@@ -219,6 +215,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
 
 .game-card {
   background: var(--theme-bg-secondary);
+  opacity: 0.8;
   border-radius: 15px;
   padding: 1rem;
   text-align: center;
@@ -279,21 +276,11 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
       }
     }
   }
-
-  &.special .play-btn {
-    background: var(--theme-button-secondary-bg);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--theme-border-light);
-    color: var(--theme-text-primary);
-
-    &:hover {
-      background: var(--theme-button-secondary-hover);
-    }
-  }
 }
 
 .snake-info {
   background: var(--theme-bg-elevated);
+  opacity: 0.8;
   border-radius: 15px;
   padding: 2rem;
   text-align: left;
@@ -436,6 +423,33 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
       min-width: 50px;
       text-align: center;
     }
+  }
+}
+
+.hamilinfo-btn {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: var(--theme-bg-elevated);
+  color: var(--theme-text-primary);
+  border: 1px solid var(--theme-border-light);
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  cursor: pointer;
+  z-index: 4;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  font-size: 1.2rem;
+  font-weight: bold;
+  pointer-events: auto; /* Ensure button is interactive */
+
+  &:hover {
+    background: var(--theme-button-secondary-hover);
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.95);
   }
 }
 

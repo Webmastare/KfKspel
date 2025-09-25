@@ -117,6 +117,10 @@ const difficulties = [
   { id: 'extreme', label: 'Extrem', cfg: [40, 30, 200] },
 ]
 
+function getThemeColor(varName) {
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+}
+
 // Base‑62 helpers
 const to62 = (n) => {
   let s = ''
@@ -152,7 +156,7 @@ class Sweeper {
     this.showedNodes = 0
     this.nodesToReveal = []
     this.gameStatus = -1 // -1 idle, 0 playing, 1 win, 2 lose
-    this.showMines = true
+    this.showMines = false
     this.time = 0
 
     this.revealVersion = 0
@@ -400,7 +404,7 @@ function resetGame() {
   sweeper.time = 0
   seedInput.value = encodeSeed(customW.value, customH.value, customM.value)
   sweeper.gameStatus = -1
-  sweeper.showMines = true
+  sweeper.showMines = false
   sweeper.nodesToReveal = []
   sweeper.showedNodes = 0
   sweeper.placedMines = 0
@@ -444,7 +448,7 @@ function applySeed() {
   seedInput.value = encodeSeed(w, h, m)
   sweeper.time = 0
   sweeper.gameStatus = -1
-  sweeper.showMines = true
+  sweeper.showMines = false
   sweeper.showedNodes = 0
   sweeper.placedMines = 0
   sweeper.initGrid()
@@ -490,7 +494,8 @@ function draw() {
   const { blockSize } = sweeper
   ctx.value.save()
   ctx.value.scale(pixelRatio, pixelRatio)
-  ctx.value.fillStyle = themeStore.isDarkMode ? '#2e2e2e' : '#d5d5d5'
+  ctx.value.fillStyle =
+    getThemeColor('--theme-canvas-grid') || (themeStore.isDarkMode ? '#2e2e2e' : '#d5d5d5')
   ctx.value.fillRect(0, 0, canvas.value.width, canvas.value.height)
 
   ctx.value.font = `${Math.floor(blockSize / 1.6)}px Courier New`
@@ -514,25 +519,28 @@ function draw() {
       const y = r * blockSize
 
       // tile background
-      ctx.value.fillStyle = themeStore.isDarkMode ? '#4a4a4a' : '#eeeeee'
+      ctx.value.fillStyle =
+        getThemeColor('--theme-canvas-bg') || (themeStore.isDarkMode ? '#4a4a4a' : '#eeeeee')
       ctx.value.fillRect(x + 1, y + 1, blockSize - 2, blockSize - 2)
 
       // revealed?
       if (n.isShown) {
-        ctx.value.fillStyle = themeStore.isDarkMode ? '#9aa19a' : '#dfeae0'
+        ctx.value.fillStyle =
+          getThemeColor('--theme-mine-revealed') || (themeStore.isDarkMode ? '#9aa19a' : '#dfeae0')
         ctx.value.fillRect(x + 1, y + 1, blockSize - 2, blockSize - 2)
       }
 
       // mine or flag visuals
       if (n.isMarked) {
-        ctx.value.fillStyle = '#ffce00'
+        ctx.value.fillStyle =
+          getThemeColor('--theme-mine-flag') || (themeStore.isDarkMode ? '#9aa19a' : '#dfeae0')
         ctx.value.beginPath()
         ctx.value.arc(x + blockSize / 2, y + blockSize / 2, blockSize / 3, 0, Math.PI * 2)
         ctx.value.fill()
       }
 
       if (n.isMine && (sweeper.showMines || n.isShown)) {
-        ctx.value.fillStyle = '#ff4d6d'
+        ctx.value.fillStyle = getThemeColor('--theme-mine-bg') || '#ff4d6d'
         ctx.value.beginPath()
         ctx.value.arc(x + blockSize / 2, y + blockSize / 2, blockSize / 3, 0, Math.PI * 2)
         ctx.value.fill()

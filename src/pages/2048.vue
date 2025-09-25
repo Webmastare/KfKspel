@@ -72,7 +72,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { Game2048Logic } from '@/components/2048/game2048Logic.js'
 import { useThemeStore } from '@/stores/theme'
 
@@ -252,6 +252,17 @@ function handleResize() {
     gameLogic.resizeBoard()
   }
 }
+
+// Watch for theme changes and update game accordingly
+watch(
+  () => themeStore.isDarkMode,
+  (newDarkMode) => {
+    if (gameLogic) {
+      gameLogic.setDarkMode(newDarkMode)
+      gameLogic.drawBoard()
+    }
+  },
+)
 
 onMounted(async () => {
   await nextTick()

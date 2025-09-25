@@ -512,29 +512,73 @@ function draw() {
   const snakeColor = rootStyles.getPropertyValue('--snake-color').trim() || '#22c55e'
   const snakeHeadColor = rootStyles.getPropertyValue('--snake-head-color').trim() || '#16a34a'
   const foodColor = rootStyles.getPropertyValue('--food-color').trim() || '#ef4444'
-  const gridColor = rootStyles.getPropertyValue('--grid-color').trim() || '#e5e7eb'
+  const gridColor = rootStyles.getPropertyValue('--theme-canvas-grid').trim() || '#d4d4d8'
 
-  // Clear canvas with background color
+  // Clear and fill background
   ctx.value.fillStyle = canvasBg
-  ctx.value.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.value.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
 
-  // Draw grid
+  // Draw grid lines
   ctx.value.strokeStyle = gridColor
   ctx.value.lineWidth = 1
-  for (let i = 0; i <= GRID_SIZE; i++) {
-    const pos = i * cellSize.value
-    ctx.value.beginPath()
-    ctx.value.moveTo(pos, 0)
-    ctx.value.lineTo(pos, canvasHeight.value)
-    ctx.value.stroke()
+  ctx.value.beginPath()
 
-    ctx.value.beginPath()
-    ctx.value.moveTo(0, pos)
-    ctx.value.lineTo(canvasWidth.value, pos)
-    ctx.value.stroke()
+  // Vertical lines
+  for (let i = 0; i <= GRID_SIZE; i++) {
+    const x = i * cellSize.value
+    ctx.value.moveTo(x, 0)
+    ctx.value.lineTo(x, canvasHeight.value)
   }
 
+  // Horizontal lines
+  for (let i = 0; i <= GRID_SIZE; i++) {
+    const y = i * cellSize.value
+    ctx.value.moveTo(0, y)
+    ctx.value.lineTo(canvasWidth.value, y)
+  }
+  ctx.value.stroke()
+
+  // Draw food
+  ctx.value.fillStyle = foodColor
+  food.value.forEach((f) => {
+    ctx.value.fillRect(
+      f.x * cellSize.value + 2,
+      f.y * cellSize.value + 2,
+      cellSize.value - 4,
+      cellSize.value - 4,
+    )
+  })
+
   // Draw snake
+  snake.value.forEach((segment, index) => {
+    ctx.value.fillStyle = index === 0 ? snakeHeadColor : snakeColor
+    const padding = index === 0 ? 1 : 2
+    ctx.value.fillRect(
+      segment.x * cellSize.value + padding,
+      segment.y * cellSize.value + padding,
+      cellSize.value - padding * 2,
+      cellSize.value - padding * 2,
+    )
+  })
+
+  // Draw score overlay
+  if (gameStarted.value) {
+    ctx.value.fillStyle = 'rgba(0, 0, 0, 0.7)'
+    ctx.value.font = `${Math.min(cellSize.value, 24)}px Arial`
+    ctx.value.textAlign = 'left'
+    ctx.value.textBaseline = 'top'
+
+    const scoreText = `Score: ${score.value}`
+    const textMetrics = ctx.value.measureText(scoreText)
+    const padding = 8
+
+    // Background for score text
+    ctx.value.fillRect(padding, padding, textMetrics.width + padding * 2, 30)
+
+    // Score text
+    ctx.value.fillStyle = 'white'
+    ctx.value.fillText(scoreText, padding * 2, padding * 2)
+  } // Draw snake
   snake.value.forEach((segment, index) => {
     const x = segment.x * cellSize.value
     const y = segment.y * cellSize.value

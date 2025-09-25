@@ -278,7 +278,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   drawBoard,
   drawPiece,
@@ -977,6 +977,16 @@ async function getTopPlayers() {
   if (!data || !Array.isArray(data)) return
   leaderBoardData.value = data
 }
+
+// --- Watchers ---
+// Watch for theme changes and redraw canvas
+watch(
+  () => themeStore.isDarkMode,
+  () => {
+    // Redraw the canvas when theme changes
+    refreshDisplay()
+  },
+)
 
 // --- Lifecycle ---
 onMounted(async () => {

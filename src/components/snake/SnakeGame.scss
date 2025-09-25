@@ -6,12 +6,11 @@
 @import '@/styles/theme.scss';
 
 :root {
-  // Snake-specific variables using centralized theme colors
-  --snake-bg: var(--theme-canvas-snake-bg);
+  // Snake-specific game element colors
+  --snake-bg: var(--theme-canvas-bg);
   --snake-color: var(--theme-snake-body);
   --snake-head-color: var(--theme-snake-head);
   --food-color: var(--theme-snake-food);
-  --grid-color: var(--theme-canvas-grid);
 }
 
 #snake-app-container {

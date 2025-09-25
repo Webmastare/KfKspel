@@ -17,9 +17,9 @@ export function getThemeColor(varName) {
 // Get themed canvas colors
 function getCanvasColors(isDarkMode) {
   return {
-    background: getThemeColor('--theme-canvas-kfkblock-bg') || (isDarkMode ? '#111827' : '#e8f5e8'),
-    grid: getThemeColor('--theme-canvas-kfkblock-grid') || (isDarkMode ? '#374151' : '#d4d4d8'),
-    border: getThemeColor('--theme-canvas-kfkblock-border') || (isDarkMode ? '#374151' : '#4a5568'),
+    background: getThemeColor('--theme-canvas-bg') || (isDarkMode ? '#111827' : '#e8f5e8'),
+    grid: getThemeColor('--theme-canvas-grid') || (isDarkMode ? '#374151' : '#d4d4d8'),
+    border: getThemeColor('--theme-canvas-border') || (isDarkMode ? '#374151' : '#4a5568'),
   }
 }
 
