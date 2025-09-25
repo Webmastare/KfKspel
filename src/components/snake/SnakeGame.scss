@@ -3,7 +3,7 @@
 @use '@/styles/generalGames';
 
 // Import centralized theme system
-@import '@/styles/theme.scss';
+@use '@/styles/theme.scss';
 
 :root {
   // Snake-specific game element colors

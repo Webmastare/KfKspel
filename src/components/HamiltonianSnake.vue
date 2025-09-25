@@ -253,18 +253,32 @@ class GameMaster {
     for (let r = 0; r < rows; r++) {
       this.grid.push([])
       for (let c = 0; c < columns; c++) {
-        this.grid[r].push(new Spot(c, r))
+        this.grid[r]?.push(new Spot(c, r))
       }
     }
 
     for (let r = 0; r < this.grid.length; r++) {
       const row = this.grid[r]
+      if (!row) continue
       for (let c = 0; c < row.length; c++) {
         const spot = row[c]
-        if (r > 0) spot.neighbors.push(this.grid[r - 1][c]) // Up
-        if (c < row.length - 1) spot.neighbors.push(this.grid[r][c + 1]) // Right
-        if (r < this.grid.length - 1) spot.neighbors.push(this.grid[r + 1][c]) // Down
-        if (c > 0) spot.neighbors.push(this.grid[r][c - 1]) // Left
+        if (!spot) continue
+        if (r > 0) {
+          const upSpot = this.grid[r - 1]?.[c]
+          if (upSpot) spot.neighbors.push(upSpot)
+        }
+        if (c < row.length - 1) {
+          const rightSpot = this.grid[r]?.[c + 1]
+          if (rightSpot) spot.neighbors.push(rightSpot)
+        }
+        if (r < this.grid.length - 1) {
+          const downSpot = this.grid[r + 1]?.[c]
+          if (downSpot) spot.neighbors.push(downSpot)
+        }
+        if (c > 0) {
+          const leftSpot = this.grid[r]?.[c - 1]
+          if (leftSpot) spot.neighbors.push(leftSpot)
+        }
       }
     }
   }
@@ -280,31 +294,50 @@ class GameMaster {
     for (let r = 0; r < mazeRows; r++) {
       this.mazeGrid.push([])
       for (let c = 0; c < mazeCols; c++) {
-        this.mazeGrid[r].push(new Spot(c, r))
+        this.mazeGrid[r]?.push(new Spot(c, r))
       }
     }
 
     // Get neighbors for maze grid
     for (let r = 0; r < this.mazeGrid.length; r++) {
       const row = this.mazeGrid[r]
+      if (!row) continue
       for (let c = 0; c < row.length; c++) {
         const spot = row[c]
-        if (r > 0) spot.neighbors.push(this.mazeGrid[r - 1][c])
-        if (c < row.length - 1) spot.neighbors.push(this.mazeGrid[r][c + 1])
-        if (r < this.mazeGrid.length - 1) spot.neighbors.push(this.mazeGrid[r + 1][c])
-        if (c > 0) spot.neighbors.push(this.mazeGrid[r][c - 1])
+        if (!spot) continue
+        if (r > 0) {
+          const upSpot = this.mazeGrid[r - 1]?.[c]
+          if (upSpot) spot.neighbors.push(upSpot)
+        }
+        if (c < row.length - 1) {
+          const rightSpot = this.mazeGrid[r]?.[c + 1]
+          if (rightSpot) spot.neighbors.push(rightSpot)
+        }
+        if (r < this.mazeGrid.length - 1) {
+          const downSpot = this.mazeGrid[r + 1]?.[c]
+          if (downSpot) spot.neighbors.push(downSpot)
+        }
+        if (c > 0) {
+          const leftSpot = this.mazeGrid[r]?.[c - 1]
+          if (leftSpot) spot.neighbors.push(leftSpot)
+        }
       }
     }
     // Create starting point
-    this.mazeStart =
-      this.mazeGrid[Math.floor(Math.random() * this.mazeGrid.length)][
-        Math.floor(Math.random() * this.mazeGrid[0].length)
-      ]
+    const randomRow = this.mazeGrid[Math.floor(Math.random() * this.mazeGrid.length)]
+    if (randomRow && randomRow.length > 0) {
+      this.mazeStart = randomRow[Math.floor(Math.random() * randomRow.length)] || null
+    } else {
+      this.mazeStart = null
+    }
+
     // Start maze generation
-    this.mazePath = [this.mazeStart]
-    this.mazeStart.visited = true
-    await this.genMazeFunc(this.mazeStart)
-    console.log('Maze generation complete.')
+    if (this.mazeStart) {
+      this.mazePath = [this.mazeStart]
+      this.mazeStart.visited = true
+      await this.genMazeFunc(this.mazeStart)
+      console.log('Maze generation complete.')
+    }
 
     // Expand maze to full grid and generate Hamiltonian cycle
     // Reset visited flags
@@ -315,18 +348,24 @@ class GameMaster {
       for (const cell of row) cell.visited = false
     }
 
-    this.hamilStart = this.grid[0][0]
-    this.hamilPath = [this.hamilStart]
-    // Generate Hamiltonian cycle from maze
-    if (await this.genCycleFromMaze(this.hamilStart, 1)) {
-      console.log('Hamiltonian cycle generated successfully!')
-      if (this.hamilPath.length === rows * columns) {
-        this.hamilDone = true
+    const firstRow = this.grid[0]
+    if (firstRow && firstRow[0]) {
+      this.hamilStart = firstRow[0]
+      this.hamilPath = [this.hamilStart]
+      // Generate Hamiltonian cycle from maze
+      if (await this.genCycleFromMaze(this.hamilStart, 1)) {
+        console.log('Hamiltonian cycle generated successfully!')
+        if (this.hamilPath.length === rows * columns) {
+          this.hamilDone = true
+        } else {
+          console.warn('Cycle length mismatch')
+        }
       } else {
-        console.warn('Cycle length mismatch')
+        console.error('Could not generate Hamiltonian cycle')
+        this.hamilDone = false
       }
     } else {
-      console.error('Could not generate Hamiltonian cycle')
+      console.error('Could not initialize grid properly')
       this.hamilDone = false
     }
   }
@@ -347,16 +386,20 @@ class GameMaster {
     const unvisitedNeighbors = node.neighbors.filter((neighbor) => !neighbor.visited)
     if (unvisitedNeighbors.length > 0) {
       const nextCell = unvisitedNeighbors[Math.floor(Math.random() * unvisitedNeighbors.length)]
-      nextCell.visited = true
-      this.removeWalls(node, nextCell)
-      this.mazePath.push(nextCell)
-      await this.genMazeFunc(nextCell)
+      if (nextCell) {
+        nextCell.visited = true
+        this.removeWalls(node, nextCell)
+        this.mazePath.push(nextCell)
+        await this.genMazeFunc(nextCell)
+      }
       return true
     } else {
       if (this.mazePath.length > 1) {
         this.mazePath.pop()
         const parentCell = this.mazePath[this.mazePath.length - 1]
-        await this.genMazeFunc(parentCell)
+        if (parentCell) {
+          await this.genMazeFunc(parentCell)
+        }
       }
       return true
     }
@@ -398,7 +441,7 @@ class GameMaster {
     }
 
     // Draw the current Hamiltonian path so far
-    if (this.hamilPath.length > 1) {
+    if (this.hamilPath.length > 1 && this.hamilPath[0]) {
       context.strokeStyle = '#4466bb'
       context.lineWidth = Math.max(2, blockSize / 10)
       context.beginPath()
@@ -409,7 +452,9 @@ class GameMaster {
 
       for (let i = 1; i < this.hamilPath.length; i++) {
         const spot = this.hamilPath[i]
-        context.lineTo(spot.x * blockSize + blockSize / 2, spot.y * blockSize + blockSize / 2)
+        if (spot) {
+          context.lineTo(spot.x * blockSize + blockSize / 2, spot.y * blockSize + blockSize / 2)
+        }
       }
       context.stroke()
     }
@@ -548,14 +593,29 @@ class GameMaster {
     let snakeBodyIn = rows * columns // Start with max possible distance
     for (let bodySegmentIndex = 0; bodySegmentIndex < snakeBody.length; bodySegmentIndex++) {
       const bodyPart = snakeBody[bodySegmentIndex]
+      if (!bodyPart || bodyPart[0] === undefined || bodyPart[1] === undefined) continue
 
       // Convert body part position to grid coordinates
       const bodyGridX = Math.floor(bodyPart[0] / blockSize)
       const bodyGridY = Math.floor(bodyPart[1] / blockSize)
 
+      // Check bounds
+      if (
+        bodyGridY < 0 ||
+        bodyGridY >= this.grid.length ||
+        bodyGridX < 0 ||
+        !this.grid[bodyGridY] ||
+        bodyGridX >= this.grid[bodyGridY].length
+      ) {
+        continue
+      }
+
       // Get the Hamiltonian path index for this body part
       const bodyNode = this.grid[bodyGridY][bodyGridX]
+      if (!bodyNode) continue
+
       const bodyCurrentIndex = this.hamilPath.indexOf(bodyNode)
+      if (bodyCurrentIndex === -1) continue
 
       // Calculate the distance from the head to this body part along the path
       let distanceFromHead = this.getDistance(toIndex, bodyCurrentIndex)
@@ -579,6 +639,22 @@ class GameMaster {
     // No collisions detected - shortcut is safe
     //console.log('Safe: No body parts will collide, closest is', snakeBodyIn);
     return { safetyCheckPassed: true, snakeBodyIn }
+  }
+
+  // Helper function to safely get maze grid cell
+  private getMazeCell(x: number, y: number): Spot | null {
+    const row = Math.floor(y / 2)
+    const col = Math.floor(x / 2)
+    if (
+      row >= 0 &&
+      row < this.mazeGrid.length &&
+      col >= 0 &&
+      this.mazeGrid[row] &&
+      col < this.mazeGrid[row].length
+    ) {
+      return this.mazeGrid[row][col] || null
+    }
+    return null
   }
 
   getDistance(fromIndex: number, toIndex: number): number {
@@ -606,34 +682,26 @@ class GameMaster {
           // Check maze walls using the same logic as above
           if (dy === 1) {
             // Moving Down
-            if (
-              (node.y + 1) % 2 === 0 &&
-              this.mazeGrid[Math.floor(node.y / 2)][Math.floor(node.x / 2)].walls[2]
-            ) {
+            const mazeCell = this.getMazeCell(node.x, node.y)
+            if ((node.y + 1) % 2 === 0 && mazeCell?.walls[2]) {
               wallCheck = false
             }
           } else if (dy === -1) {
             // Moving Up
-            if (
-              node.y % 2 === 0 &&
-              this.mazeGrid[Math.floor(node.y / 2)][Math.floor(node.x / 2)].walls[0]
-            ) {
+            const mazeCell = this.getMazeCell(node.x, node.y)
+            if (node.y % 2 === 0 && mazeCell?.walls[0]) {
               wallCheck = false
             }
           } else if (dx === 1) {
             // Moving Right
-            if (
-              (node.x + 1) % 2 === 0 &&
-              this.mazeGrid[Math.floor(node.y / 2)][Math.floor(node.x / 2)].walls[3]
-            ) {
+            const mazeCell = this.getMazeCell(node.x, node.y)
+            if ((node.x + 1) % 2 === 0 && mazeCell?.walls[3]) {
               wallCheck = false
             }
           } else if (dx === -1) {
             // Moving Left
-            if (
-              node.x % 2 === 0 &&
-              this.mazeGrid[Math.floor(node.y / 2)][Math.floor(node.x / 2)].walls[1]
-            ) {
+            const mazeCell = this.getMazeCell(node.x, node.y)
+            if (node.x % 2 === 0 && mazeCell?.walls[1]) {
               wallCheck = false
             }
           }
@@ -667,10 +735,8 @@ class GameMaster {
         // User's snake direction: 0:Down, 1:Right, 2:Up, 3:Left
         if (dy === 1) {
           // Trying to move Down
-          if (
-            (node.y + 1) % 2 === 0 &&
-            this.mazeGrid[Math.floor(node.y / 2)][Math.floor(node.x / 2)].walls[2]
-          ) {
+          const mazeCell = this.getMazeCell(node.x, node.y)
+          if ((node.y + 1) % 2 === 0 && mazeCell?.walls[2]) {
             wallCheck = false
           }
           if (wallCheck) {
@@ -686,10 +752,8 @@ class GameMaster {
           }
         } else if (dy === -1) {
           // Trying to move Up
-          if (
-            node.y % 2 === 0 &&
-            this.mazeGrid[Math.floor(node.y / 2)][Math.floor(node.x / 2)].walls[0]
-          ) {
+          const mazeCell = this.getMazeCell(node.x, node.y)
+          if (node.y % 2 === 0 && mazeCell?.walls[0]) {
             wallCheck = false
           }
           if (wallCheck) {
@@ -705,10 +769,8 @@ class GameMaster {
           }
         } else if (dx === 1) {
           // Trying to move Right
-          if (
-            (node.x + 1) % 2 === 0 &&
-            this.mazeGrid[Math.floor(node.y / 2)][Math.floor(node.x / 2)].walls[3]
-          ) {
+          const mazeCell = this.getMazeCell(node.x, node.y)
+          if ((node.x + 1) % 2 === 0 && mazeCell?.walls[3]) {
             wallCheck = false
           }
           if (wallCheck) {
@@ -724,10 +786,8 @@ class GameMaster {
           }
         } else if (dx === -1) {
           // Trying to move Left
-          if (
-            node.x % 2 === 0 &&
-            this.mazeGrid[Math.floor(node.y / 2)][Math.floor(node.x / 2)].walls[1]
-          ) {
+          const mazeCell = this.getMazeCell(node.x, node.y)
+          if (node.x % 2 === 0 && mazeCell?.walls[1]) {
             wallCheck = false
           }
           if (wallCheck) {
@@ -782,7 +842,13 @@ class GameMaster {
       }
     }
 
-    if (props.visualCycle && this.hamilPath && this.hamilPath.length > 0 && this.hamilDone) {
+    if (
+      props.visualCycle &&
+      this.hamilPath &&
+      this.hamilPath.length > 0 &&
+      this.hamilDone &&
+      this.hamilPath[0]
+    ) {
       context.strokeStyle = theme.hamiltonianPath
       context.lineWidth = Math.max(1, blockSize / 15)
       context.beginPath()
@@ -793,13 +859,13 @@ class GameMaster {
 
       for (let i = 1; i < this.hamilPath.length; i++) {
         const spot = this.hamilPath[i]
-        context.lineTo(spot.x * blockSize + blockSize / 2, spot.y * blockSize + blockSize / 2)
+        if (spot) {
+          context.lineTo(spot.x * blockSize + blockSize / 2, spot.y * blockSize + blockSize / 2)
+        }
       }
 
-      if (
-        this.hamilPath[this.hamilPath.length - 1].nextNode === this.hamilStart &&
-        this.hamilStart
-      ) {
+      const lastSpot = this.hamilPath[this.hamilPath.length - 1]
+      if (lastSpot?.nextNode === this.hamilStart && this.hamilStart) {
         context.lineTo(
           this.hamilStart.x * blockSize + blockSize / 2,
           this.hamilStart.y * blockSize + blockSize / 2,
@@ -865,16 +931,21 @@ async function startGame() {
 
   if (GM.hamilDone) {
     const startNode = GM.hamilPath[0]
-    snakeX = startNode.x * blockSize
-    snakeY = startNode.y * blockSize
-    snakeBody = []
-    gameOver = false // Ensure game is not in game over state
+    if (startNode) {
+      snakeX = startNode.x * blockSize
+      snakeY = startNode.y * blockSize
+      snakeBody = []
+      gameOver = false // Ensure game is not in game over state
 
-    placeFood()
+      placeFood()
 
-    // Start the game loops
-    intervalID = setInterval(preUpdate, 1000 / props.fps)
-    animationFrameId = requestAnimationFrame(gameDrawLoop)
+      // Start the game loops
+      intervalID = setInterval(preUpdate, 1000 / props.fps)
+      animationFrameId = requestAnimationFrame(gameDrawLoop)
+    } else {
+      console.error('Game cannot start: No valid starting position.')
+      updateGameMessage('Error: Failed to find starting position. Please refresh.', true)
+    }
   } else {
     console.error('Game cannot start: Hamiltonian cycle generation failed.')
     updateGameMessage('Error: Failed to generate game paths. Please refresh.', true)
@@ -909,47 +980,57 @@ async function regenerateGamePaths() {
   if (GM.hamilDone) {
     // Reset to starting position with current score preserved
     const startNode = GM.hamilPath[0]
-    snakeX = startNode.x * blockSize
-    snakeY = startNode.y * blockSize
-    snakeBody = [] // Reset snake body for safety
-    score = currentScore // Preserve score
-    gameOver = currentGameOver
+    if (startNode) {
+      snakeX = startNode.x * blockSize
+      snakeY = startNode.y * blockSize
+      snakeBody = [] // Reset snake body for safety
+      score = currentScore // Preserve score
+      gameOver = currentGameOver
 
-    // Place new food
-    placeFood()
+      // Place new food
+      placeFood()
 
-    // Update snake path for visualization
-    if (food) {
-      const foodGridX = Math.floor(food[0] / blockSize)
-      const foodGridY = Math.floor(food[1] / blockSize)
-      if (foodGridX >= 0 && foodGridX < columns && foodGridY >= 0 && foodGridY < rows) {
-        const foodNode = GM.grid[foodGridY][foodGridX]
-        const currentNode = GM.grid[Math.floor(snakeY / blockSize)][Math.floor(snakeX / blockSize)]
-        const currentNodeIndex = GM.hamilPath.indexOf(currentNode)
-        const foodNodeIndex = GM.hamilPath.indexOf(foodNode)
+      // Update snake path for visualization
+      if (food && food[0] !== undefined && food[1] !== undefined) {
+        const foodGridX = Math.floor(food[0] / blockSize)
+        const foodGridY = Math.floor(food[1] / blockSize)
+        if (foodGridX >= 0 && foodGridX < columns && foodGridY >= 0 && foodGridY < rows) {
+          const foodRow = GM.grid[foodGridY]
+          const currentRow = GM.grid[Math.floor(snakeY / blockSize)]
+          const foodNode = foodRow?.[foodGridX]
+          const currentNode = currentRow?.[Math.floor(snakeX / blockSize)]
 
-        if (currentNodeIndex !== -1 && foodNodeIndex !== -1) {
-          GM.snakePath = GM.hamilPath.slice(currentNodeIndex, foodNodeIndex + 1)
-          if (currentNodeIndex > foodNodeIndex) {
-            GM.snakePath = GM.hamilPath
-              .slice(currentNodeIndex)
-              .concat(GM.hamilPath.slice(0, foodNodeIndex + 1))
+          if (foodNode && currentNode) {
+            const currentNodeIndex = GM.hamilPath.indexOf(currentNode)
+            const foodNodeIndex = GM.hamilPath.indexOf(foodNode)
+
+            if (currentNodeIndex !== -1 && foodNodeIndex !== -1) {
+              GM.snakePath = GM.hamilPath.slice(currentNodeIndex, foodNodeIndex + 1)
+              if (currentNodeIndex > foodNodeIndex) {
+                GM.snakePath = GM.hamilPath
+                  .slice(currentNodeIndex)
+                  .concat(GM.hamilPath.slice(0, foodNodeIndex + 1))
+              }
+            }
           }
         }
       }
-    }
 
-    // Only restart the game loop if it was actually running before and game is not over
-    if (wasRunning && !gameOver) {
-      // Ensure we don't have any existing intervals before starting a new one
-      if (intervalID) clearInterval(intervalID)
-      intervalID = setInterval(preUpdate, 1000 / props.fps)
+      // Only restart the game loop if it was actually running before and game is not over
+      if (wasRunning && !gameOver) {
+        // Ensure we don't have any existing intervals before starting a new one
+        if (intervalID) clearInterval(intervalID)
+        intervalID = setInterval(preUpdate, 1000 / props.fps)
 
-      if (animationFrameId) cancelAnimationFrame(animationFrameId)
-      animationFrameId = requestAnimationFrame(gameDrawLoop)
+        if (animationFrameId) cancelAnimationFrame(animationFrameId)
+        animationFrameId = requestAnimationFrame(gameDrawLoop)
+      } else {
+        // Just draw the current state without starting the loop
+        draw()
+      }
     } else {
-      // Just draw the current state without starting the loop
-      draw()
+      console.error('Failed to regenerate game paths: no starting node.')
+      updateGameMessage('Error: Failed to regenerate game paths.', true)
     }
   } else {
     console.error('Failed to regenerate game paths.')
@@ -988,7 +1069,10 @@ function update() {
 
   // Move snake
   for (let i = snakeBody.length - 1; i > 0; i--) {
-    snakeBody[i] = snakeBody[i - 1]
+    const prevSegment = snakeBody[i - 1]
+    if (prevSegment) {
+      snakeBody[i] = prevSegment
+    }
   }
   if (snakeBody.length) {
     snakeBody[0] = [snakeX, snakeY]
@@ -997,7 +1081,9 @@ function update() {
   if (
     typeof snakeX === 'undefined' ||
     typeof snakeY === 'undefined' ||
-    typeof food === 'undefined'
+    !food ||
+    food[0] === undefined ||
+    food[1] === undefined
   ) {
     return
   }
@@ -1005,61 +1091,94 @@ function update() {
   const currentGridX = Math.floor(snakeX / blockSize)
   const currentGridY = Math.floor(snakeY / blockSize)
 
-  if (currentGridX < 0 || currentGridX >= columns || currentGridY < 0 || currentGridY >= rows) {
+  if (
+    currentGridX < 0 ||
+    currentGridX >= columns ||
+    currentGridY < 0 ||
+    currentGridY >= rows ||
+    !GM.grid[currentGridY]
+  ) {
     return
   }
 
   const currentNode = GM.grid[currentGridY][currentGridX]
+  if (!currentNode) return
+
   const foodGridX = Math.floor(food[0] / blockSize)
   const foodGridY = Math.floor(food[1] / blockSize)
 
-  if (foodGridX < 0 || foodGridX >= columns || foodGridY < 0 || foodGridY >= rows) {
+  if (
+    foodGridX < 0 ||
+    foodGridX >= columns ||
+    foodGridY < 0 ||
+    foodGridY >= rows ||
+    !GM.grid[foodGridY]
+  ) {
     const newFoodX = Math.floor(Math.random() * columns) * blockSize
     const newFoodY = Math.floor(Math.random() * rows) * blockSize
-    const newFoodNode = GM.grid[Math.floor(newFoodY / blockSize)][Math.floor(newFoodX / blockSize)]
-    findAndMoveSnake(currentNode, newFoodNode)
+    const newFoodRow = GM.grid[Math.floor(newFoodY / blockSize)]
+    const newFoodNode = newFoodRow?.[Math.floor(newFoodX / blockSize)]
+    if (newFoodNode) {
+      findAndMoveSnake(currentNode, newFoodNode)
+    }
   } else {
-    const foodNode = GM.grid[foodGridY][foodGridX]
-    findAndMoveSnake(currentNode, foodNode)
+    const foodRow = GM.grid[foodGridY]
+    const foodNode = foodRow?.[foodGridX]
+    if (foodNode) {
+      findAndMoveSnake(currentNode, foodNode)
+    }
   }
 
   // Food consumption
   if (snakeX === food[0] && snakeY === food[1]) {
     let lastSnake = snakeBody.length > 0 ? snakeBody[snakeBody.length - 1] : [snakeX, snakeY]
-    let lastNode =
-      GM.grid[Math.floor(lastSnake[1] / blockSize)][Math.floor(lastSnake[0] / blockSize)]
-    let lastNodeIndex = GM.hamilPath.indexOf(lastNode)
+    if (lastSnake && lastSnake[0] !== undefined && lastSnake[1] !== undefined) {
+      const lastRow = GM.grid[Math.floor(lastSnake[1] / blockSize)]
+      let lastNode = lastRow?.[Math.floor(lastSnake[0] / blockSize)]
+      let lastNodeIndex = lastNode ? GM.hamilPath.indexOf(lastNode) : -1
 
-    if (lastNodeIndex === -1) {
-      lastNodeIndex = GM.hamilPath.indexOf(
-        GM.grid[Math.floor(snakeY / blockSize)][Math.floor(snakeX / blockSize)],
-      )
+      if (lastNodeIndex === -1) {
+        const currentRow = GM.grid[Math.floor(snakeY / blockSize)]
+        const currentSnakeNode = currentRow?.[Math.floor(snakeX / blockSize)]
+        if (currentSnakeNode) {
+          lastNodeIndex = GM.hamilPath.indexOf(currentSnakeNode)
+        }
+      }
+
+      if (lastNodeIndex !== -1) {
+        let newSnakeNodeIndex = (lastNodeIndex - 1 + GM.hamilPath.length) % GM.hamilPath.length
+        let newSnakeNode = GM.hamilPath[newSnakeNodeIndex]
+
+        if (newSnakeNode) {
+          snakeBody.push([newSnakeNode.x * blockSize, newSnakeNode.y * blockSize])
+        }
+      }
     }
-
-    let newSnakeNodeIndex = (lastNodeIndex - 1 + GM.hamilPath.length) % GM.hamilPath.length
-    let newSnakeNode = GM.hamilPath[newSnakeNodeIndex]
-
-    snakeBody.push([newSnakeNode.x * blockSize, newSnakeNode.y * blockSize])
     placeFood()
     score++
 
-    if (!gameOver && food) {
+    if (!gameOver && food && food[0] !== undefined && food[1] !== undefined) {
       const foodGridX = Math.floor(food[0] / blockSize)
       const foodGridY = Math.floor(food[1] / blockSize)
       if (foodGridX >= 0 && foodGridX < columns && foodGridY >= 0 && foodGridY < rows) {
-        const foodNode = GM.grid[foodGridY][foodGridX]
+        const foodRow = GM.grid[foodGridY]
+        const foodNode = foodRow?.[foodGridX]
         const currentGridX = Math.floor(snakeX / blockSize)
         const currentGridY = Math.floor(snakeY / blockSize)
-        const currentNode = GM.grid[currentGridY][currentGridX]
-        const currentNodeIndex = GM.hamilPath.indexOf(currentNode)
-        const foodNodeIndex = GM.hamilPath.indexOf(foodNode)
+        const currentRow = GM.grid[currentGridY]
+        const currentNode = currentRow?.[currentGridX]
 
-        if (currentNodeIndex !== -1 && foodNodeIndex !== -1) {
-          GM.snakePath = GM.hamilPath.slice(currentNodeIndex, foodNodeIndex + 1)
-          if (currentNodeIndex > foodNodeIndex) {
-            GM.snakePath = GM.hamilPath
-              .slice(currentNodeIndex)
-              .concat(GM.hamilPath.slice(0, foodNodeIndex + 1))
+        if (foodNode && currentNode) {
+          const currentNodeIndex = GM.hamilPath.indexOf(currentNode)
+          const foodNodeIndex = GM.hamilPath.indexOf(foodNode)
+
+          if (currentNodeIndex !== -1 && foodNodeIndex !== -1) {
+            GM.snakePath = GM.hamilPath.slice(currentNodeIndex, foodNodeIndex + 1)
+            if (currentNodeIndex > foodNodeIndex) {
+              GM.snakePath = GM.hamilPath
+                .slice(currentNodeIndex)
+                .concat(GM.hamilPath.slice(0, foodNodeIndex + 1))
+            }
           }
         }
       }
@@ -1084,38 +1203,44 @@ function findAndMoveSnake(currentNode: Spot, foodNode: Spot) {
 
   let nextNode = findShortcut(currentNode, foodNode)
   if (!nextNode) {
-    nextNode = currentNode.nextNode || GM.hamilPath[0]
+    nextNode = currentNode.nextNode || GM.hamilPath[0] || null
   }
 
-  let nextNum = GM.hamilPath.indexOf(nextNode)
+  let nextNum = nextNode ? GM.hamilPath.indexOf(nextNode) : -1
   if (nextNum === -1) {
     console.error('Next node not found in Hamiltonian path')
     // Emergency fallback: use next node in cycle
     nextNum = GM.getEmergencyMove(currentNodeIndex)
-    nextNode = GM.hamilPath[nextNum]
+    nextNode = GM.hamilPath[nextNum] || null
   }
 
   // Final safety check: ensure the next move won't cause collision
-  const nextX = nextNode.x * blockSize
-  const nextY = nextNode.y * blockSize
+  if (nextNode) {
+    const nextX = nextNode.x * blockSize
+    const nextY = nextNode.y * blockSize
 
-  // Check if next position would collide with snake body
-  const wouldCollide = snakeBody.some((bodyPart) => bodyPart[0] === nextX && bodyPart[1] === nextY)
+    // Check if next position would collide with snake body
+    const wouldCollide = snakeBody.some(
+      (bodyPart) => bodyPart && bodyPart[0] === nextX && bodyPart[1] === nextY,
+    )
 
-  if (wouldCollide) {
-    // Emergency: fall back to Hamiltonian cycle
-    // console.warn('Collision detected, falling back to safe path')
-    nextNum = GM.getEmergencyMove(currentNodeIndex)
-    nextNode = GM.hamilPath[nextNum]
+    if (wouldCollide) {
+      // Emergency: fall back to Hamiltonian cycle
+      // console.warn('Collision detected, falling back to safe path')
+      nextNum = GM.getEmergencyMove(currentNodeIndex)
+      nextNode = GM.hamilPath[nextNum] || null
+    }
+
+    if (nextNode) {
+      GM.snakePath = GM.hamilPath.slice(nextNum, foodNum + 1)
+      if (nextNum > foodNum) {
+        GM.snakePath = GM.hamilPath.slice(nextNum).concat(GM.hamilPath.slice(0, foodNum + 1))
+      }
+
+      snakeX = nextNode.x * blockSize
+      snakeY = nextNode.y * blockSize
+    }
   }
-
-  GM.snakePath = GM.hamilPath.slice(nextNum, foodNum + 1)
-  if (nextNum > foodNum) {
-    GM.snakePath = GM.hamilPath.slice(nextNum).concat(GM.hamilPath.slice(0, foodNum + 1))
-  }
-
-  snakeX = nextNode.x * blockSize
-  snakeY = nextNode.y * blockSize
 }
 
 function draw() {
@@ -1126,8 +1251,10 @@ function draw() {
 
   GM.draw()
 
-  context.fillStyle = 'rgba(250,40,40, 0.7)'
-  context.fillRect(food[0], food[1], blockSize, blockSize)
+  if (food && food[0] !== undefined && food[1] !== undefined) {
+    context.fillStyle = 'rgba(250,40,40, 0.7)'
+    context.fillRect(food[0], food[1], blockSize, blockSize)
+  }
 
   /*
   context.fillStyle = 'rgba(40,180,60, 1)'
@@ -1141,28 +1268,44 @@ function draw() {
   }*/
   // Start at the first segment
   const body = [[snakeX, snakeY], ...snakeBody]
-  context.beginPath()
-  context.moveTo(body[0][0] + blockSize / 2, body[0][1] + blockSize / 2)
+  const firstSegment = body[0]
+  if (firstSegment && firstSegment[0] !== undefined && firstSegment[1] !== undefined) {
+    context.beginPath()
+    context.moveTo(firstSegment[0] + blockSize / 2, firstSegment[1] + blockSize / 2)
 
-  // Draw lines between segments
-  for (let i = 1; i < body.length; i++) {
-    let dist = Math.sqrt((body[i][0] - body[i - 1][0]) ** 2 + (body[i][1] - body[i - 1][1]) ** 2)
-    if (dist <= blockSize * 1.5) {
-      context.lineTo(body[i][0] + blockSize / 2, body[i][1] + blockSize / 2)
-    } else {
-      context.moveTo(body[i][0] + blockSize / 2, body[i][1] + blockSize / 2)
+    // Draw lines between segments
+    for (let i = 1; i < body.length; i++) {
+      const currentSegment = body[i]
+      const prevSegment = body[i - 1]
+      if (
+        currentSegment &&
+        prevSegment &&
+        currentSegment[0] !== undefined &&
+        currentSegment[1] !== undefined &&
+        prevSegment[0] !== undefined &&
+        prevSegment[1] !== undefined
+      ) {
+        let dist = Math.sqrt(
+          (currentSegment[0] - prevSegment[0]) ** 2 + (currentSegment[1] - prevSegment[1]) ** 2,
+        )
+        if (dist <= blockSize * 1.5) {
+          context.lineTo(currentSegment[0] + blockSize / 2, currentSegment[1] + blockSize / 2)
+        } else {
+          context.moveTo(currentSegment[0] + blockSize / 2, currentSegment[1] + blockSize / 2)
+        }
+      }
     }
+    context.lineWidth = blockSize / 1.1 // Thickness of the snake
+    context.strokeStyle = 'rgba(40, 200, 60, 1)' // Snake color
+    context.stroke()
+    context.fillStyle = 'rgba(40, 170, 50, 1)'
+    context.fillRect(
+      firstSegment[0] + 0.02 * blockSize,
+      firstSegment[1] + 0.02 * blockSize,
+      blockSize - 0.04 * blockSize,
+      blockSize - 0.04 * blockSize,
+    )
   }
-  context.lineWidth = blockSize / 1.1 // Thickness of the snake
-  context.strokeStyle = 'rgba(40, 200, 60, 1)' // Snake color
-  context.stroke()
-  context.fillStyle = 'rgba(40, 170, 50, 1)'
-  context.fillRect(
-    body[0][0] + 0.02 * blockSize,
-    body[0][1] + 0.02 * blockSize,
-    blockSize - 0.04 * blockSize,
-    blockSize - 0.04 * blockSize,
-  )
 
   if (gameOver) {
     updateGameMessage(`Hur hände detta... den dog :((`, true)
@@ -1185,7 +1328,14 @@ function checkIntersection(): boolean {
   }
 
   for (let i = 0; i < snakeBody.length; i++) {
-    if (snakeX === snakeBody[i][0] && snakeY === snakeBody[i][1]) {
+    const bodySegment = snakeBody[i]
+    if (
+      bodySegment &&
+      bodySegment[0] !== undefined &&
+      bodySegment[1] !== undefined &&
+      snakeX === bodySegment[0] &&
+      snakeY === bodySegment[1]
+    ) {
       return true
     }
   }
@@ -1199,14 +1349,17 @@ function getDistance(num: number, targetNum: number): number {
 }
 
 function findShortcut(currentNode: Spot, foodNode: Spot): Spot | null {
-  if (!GM.hamilPath || GM.hamilPath.length === 0) return currentNode.nextNode
+  if (!GM.hamilPath || GM.hamilPath.length === 0) {
+    return currentNode.nextNode || GM.hamilPath[0] || null
+  }
 
   const currentNodeIndex = GM.hamilPath.indexOf(currentNode)
   const foodIndex = GM.hamilPath.indexOf(foodNode)
 
   if (currentNodeIndex === -1 || foodIndex === -1) {
     console.error('Node not found in Hamiltonian path')
-    return currentNode.nextNode || GM.hamilPath[0]
+    const fallback = currentNode.nextNode || GM.hamilPath[0] || null
+    return fallback
   }
 
   // Increment total moves for statistics
@@ -1215,10 +1368,15 @@ function findShortcut(currentNode: Spot, foodNode: Spot): Spot | null {
   // Get default next node (Hamiltonian path)
   let nextNode = currentNode.nextNode
   if (!nextNode) {
-    nextNode = GM.hamilPath[(currentNodeIndex + 1) % GM.hamilPath.length]
+    const fallbackNode = GM.hamilPath[(currentNodeIndex + 1) % GM.hamilPath.length]
+    nextNode = fallbackNode || null
   }
 
+  if (!nextNode) return null
+
   const nextNodeIndex = GM.hamilPath.indexOf(nextNode)
+  if (nextNodeIndex === -1) return nextNode
+
   const hamiltonianDistToFood = getDistance(nextNodeIndex, foodIndex)
 
   // Initialize debug info
@@ -1340,10 +1498,11 @@ function placeFood() {
     .flat()
     .map((cell) => [cell.x, cell.y])
     .filter((pos) => {
+      if (!pos || pos[0] === undefined || pos[1] === undefined) return false
       const x = pos[0] * blockSize
       const y = pos[1] * blockSize
       return (
-        !snakeBody.some((body) => body[0] === x && body[1] === y) &&
+        !snakeBody.some((body) => body && body[0] === x && body[1] === y) &&
         !(
           typeof snakeX !== 'undefined' &&
           typeof snakeY !== 'undefined' &&
@@ -1353,10 +1512,19 @@ function placeFood() {
       )
     })
 
-  const randomIndex = Math.floor(Math.random() * freeSpaces.length)
-  const [foodX, foodY] = freeSpaces[randomIndex]
+  if (freeSpaces.length === 0) {
+    // No free spaces left - game should end
+    gameOver = true
+    return
+  }
 
-  food = [foodX * blockSize, foodY * blockSize]
+  const randomIndex = Math.floor(Math.random() * freeSpaces.length)
+  const selectedSpace = freeSpaces[randomIndex]
+
+  if (selectedSpace && selectedSpace[0] !== undefined && selectedSpace[1] !== undefined) {
+    const [foodX, foodY] = selectedSpace
+    food = [foodX * blockSize, foodY * blockSize]
+  }
 }
 
 function updateGameMessage(message: string, show: boolean) {

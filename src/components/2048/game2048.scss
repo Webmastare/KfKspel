@@ -1,5 +1,5 @@
 // Import the centralized theme system
-@import '@/styles/theme.scss';
+@use '@/styles/theme.scss';
 
 .game-2048 {
   display: flex;
