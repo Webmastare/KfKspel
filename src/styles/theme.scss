@@ -1,11 +1,5 @@
 // KfKspel Centralized Theme System
 // This file contains all theme variables and definitions
-// 
-// DESIGN PRINCIPLES:
-// - Games should use standard theme variables (--theme-canvas-bg, --theme-canvas-border, etc.) 
-// - Only create game-specific variables when truly necessary (e.g., 2048 classic colors)
-// - Keep redundant alias variables to a minimum
-// - All canvas elements should use the same base theme for consistency
 
 :root {
   // ================  // === Border & Shadow Colors ===
@@ -110,7 +104,7 @@
   --theme-mine-cell: #f5f5f5;
   --theme-mine-revealed: #e0e0e0;
 
-  // === Game-Specific Variables (Only when necessary) ===
+  // === Game-Specific Variables ===
   // 2048 - Needs specific background for classic mode
   --theme-canvas-2048-bg: #bbada0;
 
@@ -230,11 +224,11 @@
   --theme-2048-tile-4: #3d3530;
   --theme-2048-board: #2d2520;
 
-  // === Game-Specific Variables (Only when necessary) ===
+  // === Game-Specific Variables ===
   // 2048 - Uses different board background in dark mode
   --theme-canvas-2048-bg: var(--theme-2048-board);
 
-  // Kfkbandvagn - Uses accent color  
+  // Kfkbandvagn - Uses accent color
   --theme-canvas-kfkbandvagn-accent: #34d399;
 
   // === Border & Shadow Colors ===

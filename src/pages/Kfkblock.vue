@@ -920,6 +920,7 @@ function updateScore(points) {
 
 // --- Input Handling ---
 function _handleKeydown(e) {
+  controlsMode.value = 0 // Switch to hidden controls on keyboard use
   if (showModal.value) {
     if (['Enter', 'Space'].includes(e.code)) startGame()
     e.preventDefault()
