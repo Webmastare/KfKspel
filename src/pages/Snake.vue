@@ -47,12 +47,41 @@
               @change="updateDifficulty"
               class="form-input"
             >
+              <option value="custom">Anpassad</option>
               <option value="dynamic">Dynamisk</option>
               <option value="easy">Lätt</option>
               <option value="medium">Medel</option>
               <option value="hard">Svår</option>
               <option value="extreme">Extrem</option>
             </select>
+            <div v-if="selectedDifficulty === 'custom'" class="custom-speed-input">
+              <button
+                type="button"
+                @click="decreaseCustomDifficulty"
+                class="speed-btn speed-btn-minus"
+                :disabled="customDifficulty <= 1"
+              >
+                -
+              </button>
+              <input
+                class="speed-input"
+                type="number"
+                name="custom-difficulty"
+                id="custom-difficulty"
+                v-model.number="customDifficulty"
+                min="1"
+                max="100"
+                @input="updateCustomDifficulty"
+              />
+              <button
+                type="button"
+                @click="increaseCustomDifficulty"
+                class="speed-btn speed-btn-plus"
+                :disabled="customDifficulty >= 100"
+              >
+                +
+              </button>
+            </div>
           </div>
 
           <div class="setting-item">
@@ -147,12 +176,11 @@
         <summary>Hur man spelar</summary>
         <div class="instructions-content">
           <p>
-            Styr ormen för att samla mat och väx längre. Undvik att krocka med väggarna eller dig
+            Styr ormen för att samla mat och bli längre. Undvik att krocka med väggarna eller dig
             själv!
           </p>
           <ul>
             <li>Använd piltangenterna på tangentbordet</li>
-            <li>Tryck på knapparna ovan</li>
             <li>Svep på skärmen (mobil)</li>
           </ul>
           <p><strong>Svårighetsgrad:</strong> Dynamisk ökar hastigheten när du växer.</p>
@@ -167,10 +195,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 // Game Constants
 const GRID_SIZE = 20
-const BASE_SPEED = 150 // milliseconds
 
 // Reactive State
 const gameCanvas = ref(null)
@@ -191,6 +218,7 @@ const gameSpeed = ref(8)
 
 // Settings
 const selectedDifficulty = ref('dynamic')
+const customDifficulty = ref(10)
 const foodCount = ref(1)
 const wrapSnake = ref(false)
 const leftRightOnly = ref(false)
@@ -210,18 +238,19 @@ const touchThreshold = 30
 const gameLoopId = ref(null)
 const lastGameUpdate = ref(0)
 
-// Difficulty Settings
-const difficultySettings = {
+// Difficulty Settings - Made reactive for custom difficulty
+const difficultySettings = computed(() => ({
+  custom: { baseSpeed: customDifficulty.value, speedIncrease: false },
   dynamic: { baseSpeed: 8, speedIncrease: true },
   easy: { baseSpeed: 5, speedIncrease: false },
   medium: { baseSpeed: 8, speedIncrease: false },
   hard: { baseSpeed: 15, speedIncrease: false },
   extreme: { baseSpeed: 25, speedIncrease: false },
-}
+}))
 
 // Computed Properties
 const currentSpeed = computed(() => {
-  const settings = difficultySettings[selectedDifficulty.value]
+  const settings = difficultySettings.value[selectedDifficulty.value]
   if (settings.speedIncrease) {
     return Math.min(settings.baseSpeed + Math.floor(snake.value.length / 5), 20)
   }
@@ -229,7 +258,7 @@ const currentSpeed = computed(() => {
 })
 
 const gameInterval = computed(() => {
-  return Math.max(50, BASE_SPEED - currentSpeed.value * 5)
+  return 1000 / currentSpeed.value
 })
 
 // Theme Management (handled globally now)
@@ -237,6 +266,29 @@ const gameInterval = computed(() => {
 function updateDifficulty() {
   gameSpeed.value = currentSpeed.value
   localStorage.setItem('snake-difficulty', selectedDifficulty.value)
+}
+
+function updateCustomDifficulty() {
+  if (customDifficulty.value > 100) customDifficulty.value = 100
+  if (customDifficulty.value < 1) customDifficulty.value = 1
+  if (selectedDifficulty.value === 'custom') {
+    gameSpeed.value = currentSpeed.value
+    localStorage.setItem('snake-custom-difficulty', customDifficulty.value.toString())
+  }
+}
+
+function increaseCustomDifficulty() {
+  if (customDifficulty.value < 100) {
+    customDifficulty.value++
+    updateCustomDifficulty()
+  }
+}
+
+function decreaseCustomDifficulty() {
+  if (customDifficulty.value > 1) {
+    customDifficulty.value--
+    updateCustomDifficulty()
+  }
 }
 
 function updateFoodCount() {
@@ -273,6 +325,9 @@ function initializeGame() {
 
   const savedBestScore = localStorage.getItem('snake-best-score')
   if (savedBestScore) bestScore.value = parseInt(savedBestScore)
+
+  const savedCustomDifficulty = localStorage.getItem('snake-custom-difficulty')
+  if (savedCustomDifficulty) customDifficulty.value = parseInt(savedCustomDifficulty)
 
   console.log('⚙️ Settings loaded:', {
     difficulty: selectedDifficulty.value,
@@ -427,7 +482,7 @@ function gameLoop() {
 }
 
 function update() {
-  // Don't move snake if no direction is set (game hasn't really started yet)
+  // Don't move snake if no direction is set
   if (direction.value.x === 0 && direction.value.y === 0) {
     return
   }
@@ -508,10 +563,10 @@ function draw() {
 
   // Get CSS variables with fallbacks
   const rootStyles = getComputedStyle(document.documentElement)
-  const canvasBg = rootStyles.getPropertyValue('--snake-bg').trim() || '#f5f7f5'
-  const snakeColor = rootStyles.getPropertyValue('--snake-color').trim() || '#22c55e'
-  const snakeHeadColor = rootStyles.getPropertyValue('--snake-head-color').trim() || '#16a34a'
-  const foodColor = rootStyles.getPropertyValue('--food-color').trim() || '#ef4444'
+  const canvasBg = rootStyles.getPropertyValue('--theme-canvas-bg').trim() || '#f5f7f5'
+  const snakeColor = rootStyles.getPropertyValue('--theme-snake-body').trim() || '#22c55e'
+  const snakeHeadColor = rootStyles.getPropertyValue('--theme-snake-head').trim() || '#16a34a'
+  const foodColor = rootStyles.getPropertyValue('--theme-snake-food').trim() || '#ef4444'
   const gridColor = rootStyles.getPropertyValue('--theme-canvas-grid').trim() || '#d4d4d8'
 
   // Clear and fill background
@@ -561,24 +616,7 @@ function draw() {
     )
   })
 
-  // Draw score overlay
-  if (gameStarted.value) {
-    ctx.value.fillStyle = 'rgba(0, 0, 0, 0.7)'
-    ctx.value.font = `${Math.min(cellSize.value, 24)}px Arial`
-    ctx.value.textAlign = 'left'
-    ctx.value.textBaseline = 'top'
-
-    const scoreText = `Score: ${score.value}`
-    const textMetrics = ctx.value.measureText(scoreText)
-    const padding = 8
-
-    // Background for score text
-    ctx.value.fillRect(padding, padding, textMetrics.width + padding * 2, 30)
-
-    // Score text
-    ctx.value.fillStyle = 'white'
-    ctx.value.fillText(scoreText, padding * 2, padding * 2)
-  } // Draw snake
+  // Draw snake
   snake.value.forEach((segment, index) => {
     const x = segment.x * cellSize.value
     const y = segment.y * cellSize.value
@@ -873,4 +911,78 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 @use '@/components/snake/SnakeGame.scss';
+
+.custom-speed-input {
+  display: grid;
+  grid-template-columns: 15% 70% 15%;
+  border-radius: 4px;
+  align-items: center;
+  margin-top: 5px;
+  background-color: var(--theme-input-bg);
+  border: 1px solid var(--theme-input-border);
+}
+
+.speed-btn {
+  background: #4caf50;
+  border: none;
+  color: white;
+  height: 30px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  user-select: none;
+
+  &:hover {
+    background: #45a049;
+    transform: scale(1.1);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+    transform: none;
+  }
+  &.speed-btn-minus {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+  }
+  &.speed-btn-plus {
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+  }
+}
+
+.speed-input {
+  padding: 5px 8px;
+  border: 2px solid #ddd;
+  text-align: center;
+  font-size: 14px;
+  background: white;
+  color: #333;
+
+  &:focus {
+    outline: none;
+    border-color: #4caf50;
+  }
+
+  /* Hide default number input arrows */
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &[type='number'] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+}
 </style>
