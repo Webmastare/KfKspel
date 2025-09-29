@@ -75,18 +75,18 @@ app.post("/kfkblock-scores", async (c: Context) => {
 
     if (error) {
       console.error("Error inserting KfKblock score:", error);
-      return c.json({ error: "Failed to insert score" }, 500);
+      return c.json({ error: "Failed to insert score", cheat: false }, 500);
     }
 
-    return c.json(data, 201);
+    return c.json({ data, cheat: false }, 201);
   } catch (err) {
     console.error("Error parsing request body:", err);
-    return c.json({ error: "Invalid request body" }, 400);
+    return c.json({ error: "Invalid request body", cheat: false }, 400);
   }
 });
 
 // Catch-all route for debugging
-app.all("*", (c: any) => {
+app.all("*", (c: Context) => {
   console.log("Unmatched route called:");
   console.log("Method:", c.req.method);
   console.log("URL:", c.req.url);

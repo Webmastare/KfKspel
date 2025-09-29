@@ -301,9 +301,7 @@ export const useBandvagnStore = defineStore("bandvagn", {
           toCol: number,
           onComplete?: () => void,
         ) => void;
-        triggerTankMove?: (
-          onComplete?: () => void,
-        ) => void;
+        triggerTankMove?: () => void;
       };
     }) {
       this.isLoading = true;
@@ -345,11 +343,18 @@ export const useBandvagnStore = defineStore("bandvagn", {
             p.uuid === action.targetUUID
           );
           if (targetPlayer) {
+            // Use the current (already updated from any prior move) shooter position
             const shooterPos = this.currentPlayer.position;
             const targetPos = targetPlayer.position;
 
-            // Update shooter data immediately (action confirmed)
+            // Update shooter data immediately (tokens etc.)
             this.currentPlayer = result.updatedData;
+            const shooterIndex = this.allPlayers.findIndex((p) =>
+              p.uuid === result.updatedData.uuid
+            );
+            if (shooterIndex !== -1) {
+              this.allPlayers[shooterIndex] = result.updatedData;
+            }
 
             // Trigger animation sequence
             action.animationTrigger.triggerBulletAndExplosion(
@@ -388,53 +393,39 @@ export const useBandvagnStore = defineStore("bandvagn", {
           }
         }
 
-        // Handle move actions with animation
-        if (
-          action.action === "move" &&
-          action.animationTrigger?.triggerTankMove &&
-          this.currentPlayer
-        ) {
-          // Store the result to apply after animation completes
-          const moveResult = result;
+        // Handle move actions: update immediately (no deferred callback)
+        if (action.action === "move" && this.currentPlayer) {
+          if (result.updatedData) {
+            const idx = this.allPlayers.findIndex((p) =>
+              p.uuid === result.updatedData.uuid
+            );
+            if (idx !== -1) this.allPlayers[idx] = result.updatedData;
+            this.currentPlayer = result.updatedData;
+          }
 
-          // Trigger animation sequence
-          action.animationTrigger.triggerTankMove(() => {
-            // After movement animation completes, update player position and logs
-            if (moveResult.updatedData) {
-              // Update player data
-              const currentIndex = this.allPlayers.findIndex((p) =>
-                p.uuid === moveResult.updatedData?.uuid
-              );
-              if (currentIndex !== -1) {
-                this.allPlayers[currentIndex] = moveResult.updatedData;
-              }
-              //this.currentPlayer = moveResult.updatedData;
+          // Update game logs immediately
+          if (result.updatedLogs && this.boardData) {
+            if (Array.isArray(result.updatedLogs)) {
+              this.boardData.logs = result.updatedLogs;
+            } else {
+              this.boardData.logs = [
+                ...this.boardData.logs,
+                result.updatedLogs,
+              ];
             }
+          }
 
-            // Update game logs
-            if (moveResult.updatedLogs && this.boardData) {
-              // Handle both single log and array of logs
-              if (Array.isArray(moveResult.updatedLogs)) {
-                this.boardData.logs = moveResult.updatedLogs;
-              } else {
-                // If it's a single log, append it to existing logs
-                this.boardData.logs = [
-                  ...this.boardData.logs,
-                  moveResult.updatedLogs,
-                ];
-              }
-            }
-          });
+          // Fire animation if provided, but don't wait for it
+          if (action.animationTrigger?.triggerTankMove) {
+            action.animationTrigger.triggerTankMove();
+          }
 
-          // Don't update player data immediately for move actions with animation
           return result;
         }
 
         // For non-shot and non-animated-move actions. Update current player and logs
         if (
           action.action !== "shot" &&
-          !(action.action === "move" &&
-            action.animationTrigger?.triggerTankMove) &&
           result.updatedData
         ) {
           // Update local player data
@@ -444,7 +435,7 @@ export const useBandvagnStore = defineStore("bandvagn", {
           if (currentIndex !== -1) {
             this.allPlayers[currentIndex] = result.updatedData;
           }
-          // this.currentPlayer = result.updatedData;
+          this.currentPlayer = result.updatedData;
           // Update game logs
           if (result.updatedLogs && this.boardData) {
             // Handle both single log and array of logs

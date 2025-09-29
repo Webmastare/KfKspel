@@ -342,7 +342,6 @@ const currentPlayer = computed(() => gameStore.currentPlayer)
 const allPlayers = computed(() => gameStore.allPlayers)
 const boardData = computed(() => gameStore.boardData)
 const isLoading = computed(() => gameStore.isLoading)
-const gameInitialized = computed(() => gameStore.initialized && currentPlayer.value)
 
 function getGameInitialized() {
   console.log('Checking game initialized:', gameStore.initialized, currentPlayer.value)
@@ -573,24 +572,6 @@ watch(
 onMounted(async () => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
-
-  // Handle tab visibility changes to reinitialize Supabase client
-  document.addEventListener('visibilitychange', async () => {
-    console.log('Document visibility changed:', document.visibilityState)
-    if (document.visibilityState === 'visible') {
-      try {
-        // Refresh the session to ensure tokens are valid
-        const { data, error } = await supabase.auth.refreshSession()
-        if (error) {
-          console.warn('Session refresh failed:', error)
-        } else {
-          console.log('Session refreshed successfully')
-        }
-      } catch (refreshError) {
-        console.error('Error refreshing session:', refreshError)
-      }
-    }
-  })
 
   if (authStore.isAuthed) {
     console.log('User authenticated, initializing game store')

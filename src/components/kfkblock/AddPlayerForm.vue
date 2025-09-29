@@ -203,7 +203,6 @@ async function saveScore() {
     block: props.gameData.blocksUsed - 1,
     level: props.level,
     levelClearedRows: props.gameData.levelClearedRows,
-    score: props.score,
   }
 
   const displayName = authStore.profile?.username || authStore.user?.email || 'Authenticated User'
@@ -281,7 +280,6 @@ async function submitPlayerDetails(event) {
       block: props.gameData.blocksUsed - 1, // Total blocks placed (subtract 1 as in original)
       level: props.gameData.level, // Level reached
       levelClearedRows: props.gameData.levelClearedRows, // Rows cleared at current level
-      score: props.score, // Include score in otherData for key calculation
     }
 
     // Use guest form data
@@ -299,7 +297,7 @@ async function submitPlayerDetails(event) {
       RealName: fullName,
       Score: props.score,
       Other: otherData,
-      Key: calculateKey(otherData),
+      Key: calculateKey({ ...otherData, score: props.score }),
     }
 
     console.log('Sending data to API:', dataToSend)

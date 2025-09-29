@@ -118,6 +118,7 @@ async function onSubmit() {
       errorMessage.value = error.message
       return
     }
+    console.log('Login successful:', data)
     userData.value = data.user
     console.log('User logged in:', userData.value)
     emit('close') // Close the form after successful login

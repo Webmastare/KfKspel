@@ -53,6 +53,10 @@
             <h3>Minesweeper</h3>
             <router-link to="/minesweeper" class="play-btn">Spela</router-link>
           </div>
+          <div class="game-card">
+            <h3>Lights Out</h3>
+            <router-link to="/lights-out" class="play-btn">Spela</router-link>
+          </div>
         </div>
 
         <div v-if="showSnakeDetails" class="snake-info">

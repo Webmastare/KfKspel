@@ -19,6 +19,20 @@ const authMode = ref('') // 'login', 'signup', or ''
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
 
+// Listen for visibility change
+document.addEventListener('visibilitychange', async () => {
+  console.log('Document visibility changed:', document.visibilityState)
+  if (document.visibilityState === 'visible' && authStore.isAuthed) {
+    // Refresh the session to ensure tokens are valid
+    const { data, error } = await authStore.refreshSession()
+    if (error) {
+      console.warn('Session refresh failed:', error)
+    } else {
+      console.log('Session refreshed successfully')
+    }
+  }
+})
+
 onMounted(async () => {
   // Initialize theme system first
   themeStore.init()

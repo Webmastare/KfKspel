@@ -53,7 +53,6 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import GamePopup from './GamePopup.vue'
 import type { Player } from '@/composables/kfkbandvagn/player'
-import type { GameBoard } from '@/composables/kfkbandvagn/board'
 import { useBandvagnStore } from '@/stores/bandvagnState'
 import {
   createAnimationState,
@@ -88,6 +87,7 @@ const cellSize = ref(30)
 const zoom = ref(1)
 const pan = ref({ x: 0, y: 0 })
 const isPanning = ref(false)
+const isZooming = ref(false)
 const dragThreshold = 4
 const dragMoved = ref(false)
 const lastPointerPos = ref({ x: 0, y: 0 })
@@ -108,6 +108,30 @@ const isMultiTouch = ref(false)
 // Animation state using animations.ts
 const animationState = ref<AnimationState>(createAnimationState())
 let rafId: number | null = null
+let animFramesRemaining = 0
+
+// Theme cache to avoid style lookups inside the draw loop
+const themeCache = ref({
+  bg: '#000',
+  grid: '#333',
+  text: '#444',
+  modalHeader: '#ff6',
+})
+const boardFont = ref('12px Arial, sans-serif')
+
+function refreshThemeCache() {
+  const hostEl = containerRef.value ?? document.documentElement
+  const styles = getComputedStyle(hostEl)
+  themeCache.value = {
+    bg: styles.getPropertyValue('--canvas-bg-color').trim() || '#000',
+    grid: styles.getPropertyValue('--canvas-grid-color').trim() || '#333',
+    text: styles.getPropertyValue('--canvas-text-color').trim() || '#444',
+    modalHeader: styles.getPropertyValue('--modal-header-color').trim() || '#ff6',
+  }
+  const family = styles.getPropertyValue('--theme-font-family').trim() || 'Arial, sans-serif'
+  const px = Math.max(10, Math.floor(cellSize.value * 0.35))
+  boardFont.value = `${px}px ${family}`
+}
 
 // Computed properties
 const currentPlayer = computed(
@@ -215,8 +239,9 @@ function setupCanvas() {
   // Compute cell size so the entire board fits in the container
   cellSize.value = 30
 
-  // Initial draw
-  drawGame()
+  // Refresh theme cache and schedule a draw
+  refreshThemeCache()
+  ensureLoopActive(1)
 }
 
 function drawGame() {
@@ -284,10 +309,7 @@ function drawPlayers() {
 
     // Draw current player indicator
     if (player.uuid === currentPlayer.value?.uuid) {
-      const hostEl = containerRef.value ?? document.documentElement
-      ctx.value!.strokeStyle = getComputedStyle(hostEl)
-        .getPropertyValue('--modal-header-color')
-        .trim()
+      ctx.value!.strokeStyle = themeCache.value.modalHeader
       ctx.value!.lineWidth = 3
       ctx.value!.beginPath()
       ctx.value!.arc(
@@ -442,11 +464,8 @@ function drawBoard() {
   const cols = boardSize.value.cols
   const shrink = playableSize.value.shrink
 
-  const hostEl = containerRef.value ?? document.documentElement
-  const styles = getComputedStyle(hostEl)
   // Background
-  const bgColor = styles.getPropertyValue('--canvas-bg-color').trim()
-  ctx.value.fillStyle = bgColor
+  ctx.value.fillStyle = themeCache.value.bg
   // Fill the entire visible canvas area, not just the board area
   ctx.value.save()
   ctx.value.setTransform(1, 0, 0, 1, 0, 0) // Reset transform to fill entire canvas
@@ -454,7 +473,7 @@ function drawBoard() {
   ctx.value.restore()
 
   // Grid color
-  ctx.value.strokeStyle = styles.getPropertyValue('--canvas-grid-color').trim()
+  ctx.value.strokeStyle = themeCache.value.grid
   ctx.value.lineWidth = 0.5
 
   // Draw vertical lines
@@ -491,9 +510,8 @@ function drawBoard() {
   }
 
   // Grid indices (like original script)
-  const textColor = styles.getPropertyValue('--canvas-text-color').trim() || '#444'
-  ctx.value.fillStyle = textColor
-  ctx.value.font = `${Math.max(10, Math.floor(cellSize.value * 0.35))}px Arial`
+  ctx.value.fillStyle = themeCache.value.text
+  ctx.value.font = boardFont.value
   ctx.value.textAlign = 'center'
   ctx.value.textBaseline = 'top'
   for (let c = 0; c < cols; c++) {
@@ -526,26 +544,54 @@ function drawAnimations() {
   )
 }
 
-function requestAnimFrame() {
+// Adaptive render loop: runs while active, coasts for a few frames when activity stops
+function startLoop() {
   if (rafId !== null) return
   const loop = () => {
     rafId = null
+
+    // Determine activity this frame
+    const activeNow =
+      isPanning.value ||
+      isMultiTouch.value ||
+      isZooming.value ||
+      hasActiveAnimations(animationState.value)
+
+    // If active, reset coast; otherwise, count down
+    if (activeNow) {
+      animFramesRemaining = 10
+    } else if (animFramesRemaining > 0) {
+      animFramesRemaining -= 1
+    }
+
+    // Draw a frame
     drawGame()
-    if (hasActiveAnimations(animationState.value)) {
+
+    // Continue while there is activity or coast frames left
+    if (activeNow || animFramesRemaining > 0) {
       rafId = requestAnimationFrame(loop)
-    } else {
-      console.log('Stopping animation loop')
     }
   }
   rafId = requestAnimationFrame(loop)
+}
+
+function stopLoop() {
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId)
+    rafId = null
+  }
+}
+
+function ensureLoopActive(minCoast = 3) {
+  animFramesRemaining = Math.max(animFramesRemaining, minCoast)
+  startLoop()
 }
 
 function drawCellHighlight(row: number, col: number) {
   const x = col * cellSize.value
   const y = row * cellSize.value
 
-  const hostEl2 = containerRef.value ?? document.documentElement
-  ctx.value!.strokeStyle = getComputedStyle(hostEl2).getPropertyValue('--modal-header-color').trim()
+  ctx.value!.strokeStyle = themeCache.value.modalHeader
   ctx.value!.lineWidth = 3
   ctx.value!.setLineDash([5, 5])
   ctx.value!.strokeRect(x, y, cellSize.value, cellSize.value)
@@ -649,7 +695,7 @@ function handleCanvasClick(event: MouseEvent) {
     showPopup.value = !showPopup.value
     // Deselect cell
     selectedCell.value = null
-    drawGame()
+    ensureLoopActive(1)
     return
   }
 
@@ -669,7 +715,7 @@ function handleCanvasClick(event: MouseEvent) {
       cellSize.value,
       playerAtCell.color,
     )
-    requestAnimFrame()
+    ensureLoopActive(5)
   }
 
   // Calculate popup position
@@ -680,7 +726,7 @@ function handleCanvasClick(event: MouseEvent) {
   }
 
   showPopup.value = true
-  drawGame()
+  ensureLoopActive(1)
 }
 
 function handleMouseDown(event: MouseEvent) {
@@ -699,14 +745,16 @@ function handleMouseMove(event: MouseEvent) {
   pan.value.x += deltaX / zoom.value
   pan.value.y += deltaY / zoom.value
   lastPointerPos.value = { x: event.clientX, y: event.clientY }
-  requestAnimFrame()
+  ensureLoopActive(10)
 }
 
 function handleMouseUp() {
   isPanning.value = false
+  ensureLoopActive(5)
 }
 
 function handleWheel(event: WheelEvent) {
+  isZooming.value = true
   const delta = event.deltaY > 0 ? 0.9 : 1.1
   const newZoom = Math.max(0.5, Math.min(3, zoom.value * delta))
 
@@ -724,7 +772,9 @@ function handleWheel(event: WheelEvent) {
   pan.value.y = mouseY / newZoom - worldY
 
   zoom.value = newZoom
-  requestAnimFrame()
+  ensureLoopActive(10)
+  // Clear zooming flag after this turn of the event loop
+  setTimeout(() => (isZooming.value = false), 0)
 }
 
 // Touch events
@@ -753,12 +803,12 @@ function handleTouchMove(event: TouchEvent) {
     if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
       pan.value.x += deltaX / zoom.value
       pan.value.y += deltaY / zoom.value
-      drawGame()
+      ensureLoopActive(10)
     }
 
     lastPointerPos.value = { x: touch.clientX, y: touch.clientY }
-    // Ensure we redraw during touch panning using rAF
-    requestAnimFrame()
+    // Ensure we redraw during touch panning
+    ensureLoopActive(10)
   } else if (event.touches.length === 2) {
     const touch1 = event.touches.item(0)!
     const touch2 = event.touches.item(1)!
@@ -770,7 +820,8 @@ function handleTouchMove(event: TouchEvent) {
     const newZoom = Math.max(0.5, Math.min(3, zoom.value * delta))
     zoom.value = newZoom
     lastTouchDistance.value = distance
-    requestAnimFrame()
+    isMultiTouch.value = true
+    ensureLoopActive(10)
   }
 }
 
@@ -783,7 +834,7 @@ function handleTouchEnd() {
 function resetZoom() {
   zoom.value = 1
   pan.value = { x: 0, y: 0 }
-  drawGame()
+  ensureLoopActive(5)
 }
 
 function centerOnPlayer(p?: any) {
@@ -795,7 +846,15 @@ function centerOnPlayer(p?: any) {
   pan.value.x = centerX / zoom.value - (p.position.column * cellSize.value + cellSize.value / 2)
   pan.value.y = centerY / zoom.value - (p.position.row * cellSize.value + cellSize.value / 2)
 
-  drawGame()
+  // Show popup
+  selectedCell.value = { row: p.position.row, col: p.position.column }
+  const { x, y } = boardToScreen(p.position.row, p.position.column)
+  popupPosition.value = {
+    x: Math.min(x + 50, canvasWidth.value - 250),
+    y: Math.max(y - 250, 0),
+  }
+  showPopup.value = true
+  ensureLoopActive(3)
 }
 
 // Animation helper functions
@@ -808,7 +867,7 @@ function triggerExplosion(row: number, col: number, onComplete?: () => void) {
     'explosion',
     onComplete,
   )
-  requestAnimFrame()
+  ensureLoopActive(10)
 }
 
 function triggerBullet(
@@ -832,7 +891,7 @@ function triggerBullet(
     0.05,
     onComplete,
   )
-  requestAnimFrame()
+  ensureLoopActive(10)
 }
 
 // Composite function to trigger bullet followed by explosion
@@ -843,7 +902,6 @@ function triggerTankMove(
   fromCol: number,
   toRow: number,
   toCol: number,
-  onMoveComplete?: () => void,
 ) {
   animationState.value = addTankMove(
     animationState.value,
@@ -853,21 +911,8 @@ function triggerTankMove(
     toCol,
     tankUuid,
     2.0, // 2 cells per second
-    () => {
-      // When movement is complete, trigger click animation and callback
-      animationState.value = addClickAnimation(
-        animationState.value,
-        toRow,
-        toCol,
-        cellSize.value,
-        currentPlayer.value?.color || '#ffffff',
-      )
-      if (onMoveComplete) {
-        onMoveComplete()
-      }
-    },
   )
-  requestAnimFrame()
+  ensureLoopActive(10)
 }
 
 function triggerBulletAndExplosion(
@@ -903,8 +948,8 @@ function handlePopupAction(action: any) {
     const actionWithAnimation = {
       ...action,
       animationTrigger: {
-        triggerTankMove: (onComplete?: () => void) => {
-          triggerTankMove(currentPlayer.value!.uuid, fromRow, fromCol, toRow, toCol, onComplete)
+        triggerTankMove: () => {
+          triggerTankMove(currentPlayer.value!.uuid, fromRow, fromCol, toRow, toCol)
         },
       },
     }
@@ -930,19 +975,26 @@ function handleResize() {
   pendingResizeRaf = requestAnimationFrame(() => {
     pendingResizeRaf = null
     setupCanvas()
+    ensureLoopActive(2)
   })
 }
 
 // Watchers
 watch(
-  [() => allPlayers, () => gameStore.boardData, () => currentPlayer],
+  () => [allPlayers.value, gameStore.boardData, currentPlayer.value],
   () => {
-    nextTick(() => {
-      // Only redraw; avoid full setup to prevent jitter
-      drawGame()
-    })
+    nextTick(() => ensureLoopActive(3))
   },
   { deep: true },
+)
+
+// Keep font cache in sync with cell size
+watch(
+  () => cellSize.value,
+  () => {
+    refreshThemeCache()
+    ensureLoopActive(2)
+  },
 )
 
 onMounted(() => {
@@ -956,8 +1008,11 @@ onMounted(() => {
   img.decoding = 'async'
   img.onload = () => {
     tankSprite.value = img
-    drawGame()
+    ensureLoopActive(2)
   }
+  // Populate theme cache in case CSS loads late
+  refreshThemeCache()
+  ensureLoopActive(1)
 })
 
 onBeforeUnmount(() => {
@@ -970,6 +1025,7 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(rafId)
     rafId = null
   }
+  animFramesRemaining = 0
   // Clear all animations
   animationState.value = createAnimationState()
 })

@@ -24,4 +24,9 @@ export default [
         name: "Snake",
         component: () => import("@/pages/Snake.vue"),
     },
+    {
+        path: "/lights-out",
+        name: "LightsOut",
+        component: () => import("@/pages/LightsOut.vue"),
+    },
 ];

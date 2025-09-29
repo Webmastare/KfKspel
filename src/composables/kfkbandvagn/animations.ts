@@ -70,7 +70,6 @@ export interface TankMoveAnimation {
     progress: number; // 0-1 progress for current phase
     active: boolean;
     speed: number; // cells per second
-    onComplete?: () => void; // Callback when movement finishes
 }
 
 // Color conversion interfaces
@@ -342,7 +341,6 @@ export function createTankMove(
     endCol: number,
     tankUuid: string,
     speed: number = 2.0, // cells per second
-    onComplete?: () => void,
 ): TankMoveAnimation {
     const move: TankMoveAnimation = {
         startRow,
@@ -358,9 +356,7 @@ export function createTankMove(
         speed,
     };
 
-    if (onComplete) {
-        move.onComplete = onComplete;
-    }
+    // No completion callback for tank move animations; UI state updates immediately
 
     return move;
 }
@@ -509,9 +505,6 @@ export function updateTankMove(
                 } else {
                     // Movement complete
                     move.active = false;
-                    if (move.onComplete) {
-                        move.onComplete();
-                    }
                 }
             } else {
                 // Interpolate row position
@@ -525,9 +518,6 @@ export function updateTankMove(
         if (colDistance === 0) {
             // No column movement needed, complete
             move.active = false;
-            if (move.onComplete) {
-                move.onComplete();
-            }
         } else {
             move.progress += speedMultiplier / colDistance;
 
@@ -537,9 +527,6 @@ export function updateTankMove(
                 move.active = false;
 
                 // Movement complete
-                if (move.onComplete) {
-                    move.onComplete();
-                }
             } else {
                 // Interpolate column position
                 move.currentCol = move.startCol +
@@ -673,7 +660,6 @@ export function addTankMove(
     endCol: number,
     tankUuid: string,
     speed: number = 2.0,
-    onComplete?: () => void,
 ): AnimationState {
     // Reset lastUpdate if this is the first animation being added to an empty state
     if (!hasActiveAnimations(state)) {
@@ -688,7 +674,6 @@ export function addTankMove(
             endCol,
             tankUuid,
             speed,
-            onComplete,
         ),
     );
     return state;

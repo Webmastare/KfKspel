@@ -240,7 +240,7 @@ export async function handleGameAction(body: unknown) {
           .from("KfKbandvagn")
           .update(shootQuery)
           .eq("uuid", actionData.targetUUID)
-          .select("playerID, uuid, tokens, position, lives, range, color")
+          .select("playerID, uuid, tokens, position, lives, range, color, taken_tank")
           .single();
 
         if (shotError) {
@@ -314,7 +314,7 @@ export async function handleGameAction(body: unknown) {
       .from("KfKbandvagn")
       .update(updateQuery)
       .eq("uuid", actionData.tank_id)
-      .select("user_id, playerID, uuid, tokens, position, lives, range, color")
+      .select("playerID, uuid, tokens, position, lives, range, color, taken_tank")
       .single();
 
     if (updateError) {
