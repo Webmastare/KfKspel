@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import LandingPage from "@/pages/LandingPage.vue";
+import Feedback from "@/pages/Feedback.vue";
 import gameRouter from "./gamesRouter";
 
 const router = createRouter({
@@ -9,6 +10,11 @@ const router = createRouter({
       path: "/",
       name: "home",
       component: LandingPage,
+    },
+    {
+      path: "/feedback",
+      name: "feedback",
+      component: Feedback,
     },
     ...gameRouter,
   ],

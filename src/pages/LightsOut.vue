@@ -2,25 +2,51 @@
   <div class="app-container">
     <h1>Lights Out</h1>
     <div class="settings">
-      <span class="clicks">Klickar: {{ clicks }}</span>
-      <span class="score">Poäng: {{ score }}</span>
-      <span class="timeLeft">Tid kvar: {{ timeLeft }}</span>
-      <label for="seedCode"><strong>Seed:</strong></label>
-      <input
-        id="seedCode"
-        type="text"
-        :value="seedCode"
-        @input="onSeedInput"
-        placeholder="a1b"
-        maxlength="3"
-      />
-      <button @click="resetGame">Använd</button>
-      <button v-if="gameOver" @click="resetGame" class="restart-btn">Starta om</button>
+      <div class="sub-setting">
+        <span class="clicks">Klickar: {{ clicks }}</span>
+        <span class="score">Poäng: {{ score }}</span>
+        <span class="timeLeft">Tid kvar: {{ timeLeft }}</span>
+        <span class="difficulty-indicator" :class="{ 'hard-mode': isHardMode }">
+          {{ isHardMode ? '🔥 Hard' : 'Normal' }}
+        </span>
+      </div>
+      <div class="sub-setting">
+        <div class="seed-label">
+          <label for="seedCode"><strong>Seed:</strong></label>
+          <button @click="resetGame">Använd</button>
+        </div>
+
+        <input
+          id="seedCode"
+          type="text"
+          :value="seedCode"
+          @input="onSeedInput"
+          placeholder="a1b"
+          maxlength="3"
+        />
+
+        <button
+          @click="restartLevel"
+          class="restart-btn"
+          title="Starta om nivån"
+          aria-label="Starta om nivån"
+        >
+          ↻ Nivå
+        </button>
+        <button
+          @click="resetGame"
+          class="restart-btn entire-game-btn"
+          title="Starta om spelet"
+          aria-label="Starta om spelet"
+        >
+          ↻ Spel
+        </button>
+      </div>
     </div>
     <!-- Leaderboard Section (similar to Kfkblock) -->
     <div class="leaderboard-container">
       <button @click="toggleLeaderboard" class="leaderboard-toggle">
-        <span>🏆 Topplista</span>
+        <span>🏆 Topplista {{ isHardMode ? '(Hard Mode)' : '(Normal)' }}</span>
         <span class="toggle-icon" :class="{ expanded: showLeaderboard }">▼</span>
       </button>
       <div class="leaderboard-wrapper" :class="{ expanded: showLeaderboard }">
@@ -75,15 +101,31 @@
       </div>
     </div>
     <div class="game-wrapper">
-      <div class="game-container" :style="{ gridTemplateColumns: `repeat(${columns}, 1fr)` }">
+      <div
+        class="game-container"
+        :class="{ 'hard-mode': isHardMode }"
+        :style="{ gridTemplateColumns: `repeat(${columns}, 1fr)` }"
+      >
         <Cell
           v-for="(cell, index) in gameBoard"
           :key="index"
-          :isLit="cell.isLit"
           :isClicked="cell.isClicked"
+          :state="cell.state"
+          :isHardMode="isHardMode"
           @pressed="handleCellClick(index)"
         />
       </div>
+    </div>
+
+    <!-- Difficulty toggle -->
+    <div class="difficulty-toggle">
+      <button
+        @click="toggleDifficulty"
+        class="difficulty-btn"
+        :class="{ 'hard-active': isHardMode }"
+      >
+        {{ isHardMode ? '🔥 Hard Mode' : 'Normal Mode' }}
+      </button>
     </div>
 
     <!-- Save score modal -->
@@ -92,10 +134,58 @@
       :score="score"
       :clicks="clicks"
       :seed="seedCode"
+      :difficulty="isHardMode ? 'h' : 'n'"
       :gameOver="gameOver"
       @close="showSaveModal = false"
       @saved="refreshLeaderboard"
     />
+
+    <!-- Game help dropdown -->
+    <details class="game-help">
+      <summary class="help-label">
+        <span>Hur funkar spelet?</span>
+        <span class="toggle-icon">▼</span>
+      </summary>
+      <div class="help-wrapper">
+        <div class="help-content">
+          <h3>Målet</h3>
+          <p>
+            Släck alla lampor på brädet innan tiden (3:00) tar slut. Varje löst bräda ger poäng och
+            nästa nivå blir lite svårare.
+          </p>
+
+          <h3>Så spelar du</h3>
+          <ul>
+            <li v-if="!isHardMode">
+              Klicka på en ruta för att tända/släcka den och dess grannar (upp, ner, vänster,
+              höger).
+            </li>
+            <li v-if="isHardMode">
+              <strong>Hard Mode:</strong> Klicka på en ruta för att ändra tillstånd (av → gul → blå
+              → av) på den och dess grannar. Alla lampor måste vara av för att vinna.
+            </li>
+            <li>Tiden börjar först när du gör ditt första klick.</li>
+            <li>
+              Du kan starta om nuvarande nivå (↻ Nivå) eller hela spelet (↻ Spel) när du vill.
+            </li>
+            <li>Växla mellan Normal och Hard Mode med knappen under spelet.</li>
+          </ul>
+
+          <h3>Seed & nivåer</h3>
+          <p>
+            Spelet använder en seed-kod (3 tecken: 0-9, a-z). Samma seed ger samma nivåer. Nivåerna
+            skapas genom att spelet gör ett antal drag från ett tomt bräde, vilket gör att de alltid
+            går att lösa.
+          </p>
+
+          <h3>Topplista</h3>
+          <p>
+            När tiden är slut kan du spara din poäng och tävla mot andra. Topplistan grupperar
+            resultat per seed och jämför poäng och antal klick.
+          </p>
+        </div>
+      </div>
+    </details>
   </div>
 </template>
 
@@ -109,8 +199,8 @@ import {
 } from '@/components/lightsOut/lightsoutScores'
 
 interface Cell {
-  isLit: boolean
   isClicked: boolean
+  state: number // 0, 1, 2 for hard mode (0 = off, 1 = on/color1, 2 = color2)
 }
 
 const gameBoard: Ref<Cell[]> = ref([])
@@ -131,6 +221,7 @@ const gameOver = ref(false)
 const showLeaderboard = ref(false)
 const leaderboard = ref<LightsOutScoreRow[]>([])
 const showSaveModal = ref(false)
+const isHardMode = ref(false)
 
 const timeLeft = computed(() => {
   const total = Math.max(0, remainingTimeMs.value)
@@ -197,14 +288,19 @@ function useSeed(seed: string) {
 }
 
 const numLitCells = computed(() => {
-  return gameBoard.value.filter((cell: Cell) => cell.isLit).length
+  return gameBoard.value.filter((cell: Cell) => cell.state > 0).length
 })
+
+const maxStates = computed(() => (isHardMode.value ? 3 : 2))
 
 function toggleCell(row: number, col: number) {
   if (row < 0 || row >= rows.value || col < 0 || col >= columns.value) return
 
   const index = row * columns.value + col
-  gameBoard.value[index]!.isLit = !gameBoard.value[index]!.isLit
+  const cell = gameBoard.value[index]!
+
+  // Cycle through states: 0 -> 1 -> 2 -> 0 (or 0 -> 1 -> 0 for normal mode)
+  cell.state = (cell.state + 1) % maxStates.value
 }
 
 function handleCellClick(index: number) {
@@ -237,7 +333,6 @@ function clickCell(index: number) {
 }
 
 function checkGameStatus() {
-  console.log('Lit Cells', numLitCells.value)
   if (numLitCells.value <= 0) {
     score.value++
     // Board Empty generate next board
@@ -248,12 +343,29 @@ function checkGameStatus() {
 async function nextLevel() {
   // Modify the seed in some way to create the following level
   currentSeed.value = currentSeed.value + 5
+  console.log('Next Level Seed:', toBase36(currentSeed.value))
   gameBoard.value = Array.from({ length: rows.value * columns.value }, () => ({
-    isLit: false,
     isClicked: false,
+    state: 0,
   }))
   // Generate board by applying random clicks
   // Do x pseudorandom clicks where x is increaded by a higher score
+  const numClicks = 3 + score.value * 2
+  for (let i = 0; i < numClicks; i++) {
+    const index = Math.floor(
+      ((currentSeed.value + i) * Math.sqrt((i + 1) * 3)) % (columns.value * rows.value),
+    )
+    clickCell(index)
+  }
+}
+
+function restartLevel() {
+  // Restart current level with same seed i.e keep currentSeed
+  gameBoard.value = Array.from({ length: rows.value * columns.value }, () => ({
+    isClicked: false,
+    state: 0,
+  }))
+  // Generate board by applying random clicks
   const numClicks = 3 + score.value * 2
   for (let i = 0; i < numClicks; i++) {
     const index = Math.floor(
@@ -274,6 +386,14 @@ function resetGame() {
   clicks.value = 0
   showSaveModal.value = false
   nextLevel()
+}
+
+function toggleDifficulty() {
+  isHardMode.value = !isHardMode.value
+  // Reset the game when switching modes
+  resetGame()
+  // Refresh leaderboard to show scores for the new difficulty
+  refreshLeaderboard()
 }
 
 onMounted(() => {
@@ -328,7 +448,7 @@ const groupedScores = computed<GroupedSeed[]>(() => {
   return groups
 })
 async function refreshLeaderboard() {
-  leaderboard.value = await getTopLightsOutScores()
+  leaderboard.value = await getTopLightsOutScores(isHardMode.value ? 'h' : 'n')
   console.log('Fetched leaderboard:', leaderboard.value)
 }
 function toggleLeaderboard() {
@@ -384,7 +504,7 @@ watch(gameOver, (isOver) => {
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-direction: row;
+    flex-direction: column;
     gap: 20px;
     background-color: var(--theme-sidebar-bg);
     padding: 15px 25px;
@@ -395,6 +515,23 @@ watch(gameOver, (isOver) => {
     color: var(--theme-sidebar-text);
     transition: background-color 0.3s;
     font-weight: bold;
+    .sub-setting {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: row;
+      gap: 15px;
+    }
+
+    .seed-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      button {
+        padding: 6px 10px;
+      }
+    }
 
     input {
       @extend .form-input;
@@ -407,6 +544,28 @@ watch(gameOver, (isOver) => {
     }
     .restart-btn {
       @extend .button-base;
+    }
+    .entire-game-btn {
+      background: var(--theme-button-danger-bg);
+      color: white;
+      &:hover {
+        background: var(--theme-button-danger-hover);
+      }
+    }
+
+    .difficulty-indicator {
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: var(--theme-bg-secondary);
+      color: var(--theme-text-secondary);
+      font-size: 0.9rem;
+      transition: all 0.3s ease;
+
+      &.hard-mode {
+        background: linear-gradient(135deg, #ff4444, #cc3333);
+        color: white;
+        box-shadow: 0 2px 8px rgba(255, 68, 68, 0.3);
+      }
     }
   }
 }
@@ -528,6 +687,103 @@ watch(gameOver, (isOver) => {
   grid-template-columns: repeat(5, 1fr);
   grid-auto-rows: 1fr;
   gap: clamp(6px, 2vw, 16px);
+  border: 3px solid transparent;
+  border-radius: 8px;
+  transition: border-color 0.3s ease;
+
+  &.hard-mode {
+    border-color: #ff4444;
+    box-shadow: 0 0 15px rgba(255, 68, 68, 0.3);
+  }
+}
+
+/* Difficulty toggle */
+.difficulty-toggle {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.difficulty-btn {
+  @extend .button-base;
+  font-size: 1.1rem;
+  padding: 10px 20px;
+  transition: all 0.3s ease;
+
+  &.hard-active {
+    background: linear-gradient(135deg, #ff4444, #cc3333);
+    color: white;
+    box-shadow: 0 4px 15px rgba(255, 68, 68, 0.4);
+
+    &:hover {
+      background: linear-gradient(135deg, #ff6666, #dd4444);
+      transform: translateY(-2px);
+    }
+  }
+}
+
+/* Help dropdown */
+.game-help {
+  width: min(900px, 92vw);
+  margin: 16px auto 0 auto;
+  background: var(--theme-sidebar-bg);
+  border-radius: 10px;
+  box-shadow: var(--theme-shadow-sm);
+  color: var(--theme-sidebar-text);
+  padding: 0 15px;
+
+  .help-label {
+    cursor: pointer;
+    padding: 12px 4px;
+    font-weight: 700;
+    color: var(--theme-modal-header);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .help-label::-webkit-details-marker {
+    display: none;
+  }
+  .toggle-icon {
+    transition: transform 0.25s ease;
+  }
+  &[open] .toggle-icon {
+    transform: rotate(180deg);
+  }
+  .help-wrapper {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  &[open] .help-wrapper {
+    max-height: 600px; /* enough for content */
+  }
+  .help-content {
+    padding: 4px 4px 10px 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    h3 {
+      margin: 8px 0 4px;
+      font-size: 1.05rem;
+      color: var(--theme-modal-header);
+    }
+    p {
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+    ul {
+      margin: 0 0 10px 18px;
+      padding: 0;
+      li {
+        margin: 4px 0;
+      }
+    }
+  }
+  &[open] .help-content {
+    opacity: 1;
+    transition-delay: 0.05s;
+  }
 }
 
 @media (max-width: 768px) {

@@ -78,7 +78,13 @@ import { submitLightsOutScore } from '@/components/lightsOut/lightsoutScores'
 
 const authStore = useAuthStore()
 
-const props = defineProps<{ score: number; clicks: number; seed: string; gameOver: boolean }>()
+const props = defineProps<{
+  score: number
+  clicks: number
+  seed: string
+  difficulty: string
+  gameOver: boolean
+}>()
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
 
@@ -102,6 +108,7 @@ async function saveScore() {
       score: props.score,
       clicks: props.clicks,
       seed: props.seed,
+      difficulty: props.difficulty,
     })
     emit('saved')
     emit('close')
@@ -142,6 +149,7 @@ async function submitPlayerDetails() {
       score: props.score,
       clicks: props.clicks,
       seed: props.seed,
+      difficulty: props.difficulty,
     })
     emit('saved')
     emit('close')

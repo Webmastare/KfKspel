@@ -37,7 +37,7 @@ app.get(
 app.get("/scores", async (c: Context) => {
   const { data, error } = await supabase
     .from("lightout_scores")
-    .select("playerID, score, clicks, seed, date")
+    .select("playerID, score, clicks, seed, date, difficulty")
     .order("score", { ascending: false })
     .limit(50);
   if (error) return c.json({ error: "Failed to fetch" }, 500);
@@ -47,14 +47,20 @@ app.get("/scores", async (c: Context) => {
 app.post("/submit", async (c: Context) => {
   try {
     const body = await c.req.json();
-    const { playerID, score, clicks, seed, key } = body || {};
+    const { playerID, score, clicks, seed, difficulty, key } = body || {};
     if (
       typeof playerID !== "string" ||
       typeof score !== "number" ||
       typeof clicks !== "number" ||
-      typeof seed !== "string"
+      typeof seed !== "string" ||
+      typeof difficulty !== "string"
     ) {
       return c.json({ error: "Bad request" }, 400);
+    }
+
+    // Validate difficulty is either 'n' or 'h'
+    if (difficulty !== "n" && difficulty !== "h") {
+      return c.json({ error: "Invalid difficulty" }, 400);
     }
 
     const expected = computeKey(score, clicks, seed);
@@ -70,6 +76,7 @@ app.post("/submit", async (c: Context) => {
       score,
       clicks,
       seed,
+      difficulty,
       date: new Date().toISOString(),
     };
     const { data, error } = await supabase.from("lightout_scores").insert([row])

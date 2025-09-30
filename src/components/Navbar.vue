@@ -1,9 +1,7 @@
 <template>
   <nav>
     <router-link to="/">Hem</router-link>
-    <router-link to="/kfkblock">KfKblock</router-link>
-    <router-link to="/minesweeper">Minesweeper</router-link>
-    <router-link to="/2048">2048</router-link>
+    <router-link to="/feedback">💭 Feedback</router-link>
 
     <!-- User Menu -->
     <div class="user-menu" @mouseenter="showUserMenu = true" @mouseleave="showUserMenu = false">

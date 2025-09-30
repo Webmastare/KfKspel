@@ -1,18 +1,28 @@
 <template>
   <div class="cell" :class="{ highlighted: isClicked }" @click="emit('pressed')">
-    <div class="lamp" :class="{ lit: isLit }"></div>
+    <div
+      class="lamp"
+      :class="{
+        'state-1': state === 1,
+        'state-2': state === 2 && isHardMode,
+      }"
+    ></div>
   </div>
 </template>
 
 <script setup lang="ts">
 const props = defineProps({
-  isLit: {
-    type: Boolean,
-    required: true,
-  },
   isClicked: {
     type: Boolean,
     required: true,
+  },
+  state: {
+    type: Number,
+    default: 0,
+  },
+  isHardMode: {
+    type: Boolean,
+    default: false,
   },
 })
 
@@ -51,10 +61,18 @@ const emit = defineEmits(['pressed'])
       box-shadow 0.2s ease,
       transform 0.1s ease;
 
-    &.lit {
+    &.state-1 {
       background-color: var(--theme-light-on);
       box-shadow:
         0 0 10px rgba(232, 232, 171, 0.7),
+        inset 0 0 6px rgba(255, 255, 255, 0.6);
+      transform: scale(0.98);
+    }
+
+    &.state-2 {
+      background-color: #1da11f;
+      box-shadow:
+        0 0 10px rgba(78, 205, 93, 0.7),
         inset 0 0 6px rgba(255, 255, 255, 0.6);
       transform: scale(0.98);
     }

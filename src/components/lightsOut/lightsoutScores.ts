@@ -6,6 +6,7 @@ export type LightsOutScoreRow = {
     clicks: number;
     seed: string;
     date: string;
+    difficulty: string;
 };
 
 // Compute a simple anti-cheat key mirrored on the server
@@ -31,11 +32,13 @@ export function fromBase36(s: string): number {
 }
 
 export async function getTopLightsOutScores(
+    difficulty: string = "n",
     limit = 300,
 ): Promise<LightsOutScoreRow[]> {
     const { data, error } = await supabase
         .from("lightout_scores")
-        .select("playerID, score, clicks, seed, date")
+        .select("playerID, score, clicks, seed, date, difficulty")
+        .eq("difficulty", difficulty)
         .order("score", { ascending: false })
         .order("clicks", { ascending: true })
         .limit(limit);
@@ -52,6 +55,7 @@ export async function submitLightsOutScore(payload: {
     score: number;
     clicks: number;
     seed: string;
+    difficulty: string;
 }) {
     const body = {
         ...payload,
