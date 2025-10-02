@@ -48,6 +48,7 @@ app.post("/submit", async (c: Context) => {
   try {
     const body = await c.req.json();
     const { playerID, score, clicks, seed, difficulty, key } = body || {};
+    console.log("Received score submission:", body);
     if (
       typeof playerID !== "string" ||
       typeof score !== "number" ||

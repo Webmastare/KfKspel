@@ -16,7 +16,7 @@ export async function getTopScores() {
 }
 export async function submitScore(dataToSend) {
   // Submit player score to the Supabase edge function
-  const { data, error } = supabase.functions.invoke('kfkblock/kfkblock-scores', {
+  const { data, error } = await supabase.functions.invoke('kfkblock/kfkblock-scores', {
     method: 'POST',
     body: JSON.stringify(dataToSend),
   })

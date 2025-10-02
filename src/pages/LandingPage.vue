@@ -108,7 +108,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import HamiltonianSnake from '@/components/HamiltonianSnake.vue'
@@ -127,7 +127,7 @@ const visualizationOptions = reactive({
 const showWelcomeCard = ref(true)
 
 // Use global theme store
-const isDarkTheme = themeStore.isDarkMode
+const isDarkTheme = computed(() => themeStore.isDarkMode)
 
 // Initialize theme system
 onMounted(() => {

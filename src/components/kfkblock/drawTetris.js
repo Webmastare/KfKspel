@@ -151,9 +151,9 @@ export function drawNextPieces(nextPieces, nextCtx, blockSize, isDarkMode) {
 
   // Clear canvas with themed background
   nextCtx.fillStyle = colors.background
-  nextCtx.fillRect(0, 0, canvas.width, canvas.height)
+  nextCtx.fillRect(0, 0, parseInt(canvas.style.width), parseInt(canvas.style.height))
 
-  const pieceHeight = canvas.height / 3 // Divide into 3 sections for 3 next pieces
+  const pieceHeight = parseInt(canvas.style.height) / 3 // Divide into 3 sections for 3 next pieces
   const insetBlock = blockSize / 5.5
 
   // Draw each of the 3 next pieces

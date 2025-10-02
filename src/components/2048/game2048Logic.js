@@ -186,7 +186,6 @@ export class Game2048Logic {
         if (this.board[r] && this.board[r][c]) {
           const x = c * this.tileSize
           const y = r * this.tileSize
-          const colorIndex = this.darkMode ? 1 : 0
           const tileColors = {
             ...colors,
             0: [this.darkMode ? colors[0][1] : colors[0][0], colors[0][1]],

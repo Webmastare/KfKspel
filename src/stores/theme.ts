@@ -4,26 +4,14 @@ import { readonly, ref, watch } from "vue";
 type Theme = "light" | "dark";
 
 export const useThemeStore = defineStore("theme", () => {
-    // ========================================
-    // STATE
-    // ========================================
-
     const isDarkMode = ref(false);
     const initialized = ref(false);
 
-    // ========================================
-    // GETTERS
-    // ========================================
-
     const currentTheme = () => isDarkMode.value ? "dark" : "light";
 
-    // ========================================
     // ACTIONS
-    // ========================================
 
-    /**
-     * Initialize theme system - detects system preference and loads saved theme
-     */
+    // Initialize theme system - detects system preference and loads saved theme
     const init = () => {
         if (initialized.value) return;
 
@@ -113,25 +101,6 @@ export const useThemeStore = defineStore("theme", () => {
         isDarkMode.value = prefersDarkQuery.matches;
     };
 
-    /**
-     * Remove old theme-related localStorage entries from individual games
-     */
-    const cleanupOldThemeStorage = () => {
-        const oldThemeKeys = [
-            "theme", // From Kfkblock and others
-            "kfkbandvagn-theme", // From Kfkbandvagn
-            "snake-theme", // If Snake had one
-            "minesweeper-theme", // If Minesweeper had one
-        ];
-
-        oldThemeKeys.forEach((key) => {
-            if (localStorage.getItem(key)) {
-                console.log(`Cleaning up old theme storage: ${key}`);
-                localStorage.removeItem(key);
-            }
-        });
-    };
-
     // ========================================
     // RETURN PUBLIC API
     // ========================================
@@ -149,6 +118,5 @@ export const useThemeStore = defineStore("theme", () => {
         toggleTheme,
         setTheme,
         clearSavedTheme,
-        cleanupOldThemeStorage,
     };
 });

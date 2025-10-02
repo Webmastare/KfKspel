@@ -28,160 +28,87 @@
       text-shadow: var(--theme-shadow-sm);
       transition: color 0.3s;
     }
+  }
 
-    .score-display {
-      background-color: var(--theme-sidebar-bg);
-      padding: 15px 25px;
+  // Stats header (mirrors Snake)
+  .game-stats-header {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+    width: 100%;
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: var(--theme-sidebar-bg);
+      padding: 0.8rem 1.2rem;
       border-radius: 12px;
-      box-shadow: var(--theme-shadow-md);
-      font-size: 1.3rem;
-      font-weight: 600;
-      color: var(--theme-sidebar-text);
-      transition: background-color 0.3s;
+      box-shadow: var(--theme-shadow-sm);
+      min-width: 40%;
 
-      .score-value {
-        color: var(--theme-modal-header);
-        font-weight: bold;
-        font-size: 1.5em;
+      .button-group {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+      }
+
+      .stat-label {
+        font-size: 0.9rem;
+        color: var(--theme-sidebar-text);
+        margin-bottom: 0.25rem;
+        font-weight: 500;
+      }
+
+      .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--theme-sidebar-value);
+      }
+
+      .load-btn {
+        background: var(--theme-button-warning-bg);
+        border-color: var(--theme-button-warning-bg);
+
+        &:hover {
+          background: var(--theme-button-warning-hover);
+        }
+      }
+
+      .close-btn {
+        background: var(--theme-button-decline-bg);
+        border-color: var(--theme-button-decline-border);
+
+        &:hover {
+          background: var(--theme-button-decline-hover);
+        }
       }
     }
   }
 
-  .game-settings {
+  // Controls header (mirrors Snake)
+  .game-controls-header {
     display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    align-items: center;
     justify-content: center;
-    background-color: var(--theme-bg-secondary);
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: var(--theme-shadow-md);
-    transition: background-color 0.3s;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
 
-    .board-size-control {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-
-      label {
-        font-weight: 600;
-        color: var(--theme-text-primary);
-        font-size: 0.95rem;
-      }
-
-      .slider-container {
-        display: flex;
-        gap: 15px;
-        align-items: center;
-
-        .slider-min,
-        .slider-max {
-          font-size: 0.9rem;
-          color: var(--theme-sidebar-text);
-          font-weight: 500;
-        }
-
-        .board-size-slider {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 180px;
-          height: 8px;
-          background: var(--theme-canvas-grid);
-          border-radius: 4px;
-          outline: none;
-          transition: background 0.3s;
-
-          &::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 20px;
-            height: 20px;
-            background: var(--theme-modal-header);
-            border-radius: 50%;
-            cursor: pointer;
-            box-shadow: var(--theme-shadow-sm);
-            transition: background 0.3s;
-          }
-
-          &::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            background: var(--theme-modal-header);
-            border-radius: 50%;
-            cursor: pointer;
-            border: none;
-            box-shadow: var(--theme-shadow-sm);
-          }
-        }
-      }
-    }
-
-    .settings-toggles {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-
-      .checkbox-container {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        cursor: pointer;
-        font-weight: 500;
-        color: var(--theme-text-primary);
-
-        input[type='checkbox'] {
-          width: 18px;
-          height: 18px;
-          accent-color: var(--theme-modal-header);
-          cursor: pointer;
-        }
-      }
-    }
-
-    .load-game-section {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-      background-color: var(--theme-modal-header);
+    .control-header-btn {
+      background: var(--theme-button-primary-bg);
       color: var(--theme-button-primary-text);
-      padding: 15px 20px;
-      border-radius: 8px;
-      box-shadow: var(--theme-shadow-sm);
-      animation: pulse-glow 2s infinite;
-
-      .saved-game-info {
-        font-size: 0.9rem;
-        text-align: center;
-        line-height: 1.4;
-      }
-
-      .load-button {
-        background-color: rgba(255, 255, 255, 0.2);
-        color: white;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-
-        &:hover {
-          background-color: rgba(255, 255, 255, 0.3);
-        }
-      }
-    }
-
-    .action-button {
-      background-color: var(--theme-modal-header);
-      color: var(--theme-button-primary-text);
-      border: none;
-      padding: 12px 24px;
-      border-radius: 8px;
+      border: 1px solid var(--theme-button-primary-border);
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      font-weight: 600;
       cursor: pointer;
-      font-size: 1rem;
-      font-weight: bold;
       transition: all 0.2s ease;
       box-shadow: var(--theme-shadow-sm);
 
       &:hover {
-        background-color: var(--theme-button-success-hover);
         transform: translateY(-1px);
         box-shadow: var(--theme-shadow-md);
       }
@@ -190,13 +117,48 @@
         transform: translateY(0);
       }
 
-      &.restart-button {
-        background-color: var(--theme-button-danger-bg);
+      &.settings-btn {
+        background: var(--theme-sidebar-bg);
+        border-color: var(--theme-sidebar-bg);
+        color: var(--theme-sidebar-text-on-dark);
 
         &:hover {
-          background-color: var(--theme-button-danger-hover);
+          background: var(--theme-sidebar-bg-hover);
         }
       }
+
+      &.restart-btn {
+        background: var(--theme-button-success-bg);
+        border-color: var(--theme-button-success-bg);
+
+        &:hover {
+          background: var(--theme-button-success-hover);
+        }
+      }
+    }
+  }
+
+  // Action buttons (shared)
+  .action-button {
+    background-color: var(--theme-modal-header);
+    color: var(--theme-button-primary-text);
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
+    transition: all 0.2s ease;
+    box-shadow: var(--theme-shadow-sm);
+
+    &:hover {
+      background-color: var(--theme-button-success-hover);
+      transform: translateY(-1px);
+      box-shadow: var(--theme-shadow-md);
+    }
+
+    &:active {
+      transform: translateY(0);
     }
   }
 
@@ -211,14 +173,12 @@
       border: 4px solid var(--theme-canvas-border);
       background-color: var(--theme-canvas-bg);
       border-radius: 12px;
-      box-shadow: 0 0 20px var(--theme-canvas-glow);
       transition: all 0.3s ease;
       touch-action: none;
       user-select: none;
 
       &:focus {
         outline: none;
-        box-shadow: 0 0 25px var(--theme-canvas-glow);
       }
     }
 
@@ -268,20 +228,178 @@
     }
   }
 
+  // Instructions dropdown (mirrors Snake)
   .game-instructions {
-    background-color: var(--theme-sidebar-bg);
-    padding: 15px 25px;
-    border-radius: 8px;
-    text-align: center;
+    width: 100%;
     max-width: 600px;
-    box-shadow: var(--theme-shadow-sm);
-    transition: background-color 0.3s;
+    margin-top: 0.5rem;
 
-    p {
-      margin: 0;
-      color: var(--theme-sidebar-text);
-      font-size: 0.95rem;
-      line-height: 1.5;
+    details {
+      background: var(--theme-sidebar-bg);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--theme-shadow-sm);
+
+      summary {
+        padding: 1rem 1.5rem;
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--theme-sidebar-value);
+        background: var(--theme-controls-bg, var(--theme-sidebar-bg));
+        transition: background-color 0.2s ease;
+
+        &:hover {
+          background: var(--theme-canvas-grid);
+        }
+      }
+
+      .instructions-content {
+        padding: 1.25rem 1.5rem;
+        color: var(--theme-sidebar-text);
+        line-height: 1.6;
+
+        ul {
+          margin: 0.5rem 0 0;
+          padding-left: 1.25rem;
+        }
+      }
+    }
+  }
+
+  // Settings overlay/modal (mirrors Snake)
+  .settings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--theme-bg-overlay);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+  }
+
+  .settings-modal {
+    background: var(--theme-modal-bg);
+    color: var(--theme-input-text);
+    border: 1px solid var(--theme-input-border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    position: relative;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: var(--theme-shadow-lg);
+
+    h2 {
+      text-align: center;
+      margin: 0 0 1rem;
+      font-weight: 600;
+      font-size: 1.6rem;
+      color: var(--theme-input-text);
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .close-settings-button {
+      padding: 0.5rem;
+      width: 2.5rem;
+      height: 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      border-radius: 50%;
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: var(--theme-button-decline-bg);
+      border: 1px solid var(--theme-button-decline-border);
+      color: var(--theme-button-primary-text);
+      box-shadow: 0 2px 10px rgba(244, 67, 54, 0.3);
+      cursor: pointer;
+
+      &:hover {
+        transform: translateY(-1px) scale(1.05);
+        background: rgba(244, 67, 54, 1);
+        box-shadow: 0 4px 15px rgba(244, 67, 54, 0.4);
+      }
+
+      &:active {
+        transform: translateY(0) scale(0.95);
+      }
+    }
+  }
+
+  .settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1rem;
+
+    .setting-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+
+      &.checkbox-item {
+        .checkbox-label {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          cursor: pointer;
+          color: var(--theme-input-text);
+          font-weight: 500;
+
+          input[type='checkbox'] {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--theme-modal-header);
+            cursor: pointer;
+          }
+        }
+      }
+
+      .form-label {
+        color: var(--theme-input-text);
+        font-weight: 600;
+      }
+
+      .form-input {
+        background: var(--theme-input-bg);
+        border: 1px solid var(--theme-input-border);
+        color: var(--theme-input-text);
+        border-radius: 12px;
+        padding: 0.25rem 0.5rem;
+        margin-bottom: 0;
+
+        &.range-input {
+          cursor: pointer;
+          height: 2.25rem;
+
+          &::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--theme-modal-header);
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+          }
+
+          &::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--theme-modal-header);
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+          }
+        }
+      }
     }
   }
 
@@ -292,16 +410,6 @@
 
     .game-header h1 {
       font-size: 2.5rem;
-    }
-
-    .game-settings {
-      flex-direction: column;
-      gap: 15px;
-      padding: 15px;
-
-      .board-size-control .slider-container .board-size-slider {
-        width: 150px;
-      }
     }
 
     .game-container .game-over-modal .modal-content {
@@ -320,22 +428,6 @@
   @media (max-width: 480px) {
     .game-header h1 {
       font-size: 2rem;
-    }
-
-    .game-settings {
-      .board-size-control .slider-container {
-        flex-direction: column;
-        gap: 8px;
-
-        .board-size-slider {
-          width: 120px;
-        }
-      }
-
-      .action-button {
-        padding: 10px 20px;
-        font-size: 0.9rem;
-      }
     }
   }
 }

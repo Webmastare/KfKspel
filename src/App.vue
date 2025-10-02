@@ -36,9 +36,6 @@ document.addEventListener('visibilitychange', async () => {
 onMounted(async () => {
   // Initialize theme system first
   themeStore.init()
-
-  // Clean up old theme storage from individual games
-  themeStore.cleanupOldThemeStorage()
 })
 </script>
 

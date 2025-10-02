@@ -1,51 +1,35 @@
 <template>
   <div class="game-2048">
-    <div>
-      <h1 class="game-header">2048</h1>
-      <div class="score-display">
-        Poäng: <span class="score-value">{{ score }}</span>
+    <!-- Header -->
+    <div class="game-header">
+      <h1>2048</h1>
+    </div>
+
+    <!-- Stats -->
+    <div class="game-stats-header">
+      <div class="stat-item">
+        <div class="stat-label">Poäng</div>
+        <div class="stat-value">{{ score }}</div>
+      </div>
+      <div v-if="hasSavedGame && savedGameScore > score" class="stat-item game-controls-header">
+        <div class="stat-label">Sparat spel</div>
+        <div class="stat-value">{{ savedGameScore }} poäng</div>
+        <div class="button-group">
+          <button class="control-header-btn load-btn" @click="loadGame">💾 Ladda spel</button>
+          <button class="control-header-btn close-btn" @click="hasSavedGame = false">Avbryt</button>
+        </div>
       </div>
     </div>
 
-    <div class="game-settings">
-      <div class="board-size-control">
-        <label for="board-size-slider">
-          Storlek (<span>{{ rows }} x {{ columns }}</span
-          >)
-        </label>
-        <div class="slider-container">
-          <span class="slider-min">2</span>
-          <input
-            id="board-size-slider"
-            v-model="boardSize"
-            type="range"
-            min="2"
-            max="10"
-            class="board-size-slider"
-            @input="updateBoardSize"
-          />
-          <span class="slider-max">10</span>
-        </div>
-      </div>
-
-      <div class="settings-toggles">
-        <label class="checkbox-container">
-          <input v-model="useClassicColors" type="checkbox" @change="drawBoard" />
-          <span class="checkmark"></span>
-          Klassiska färger
-        </label>
-      </div>
-
-      <div v-if="hasSavedGame" class="load-game-section">
-        <div class="saved-game-info">
-          Ladda ditt sparade spel? Du hade {{ savedGameScore }} poäng
-        </div>
-        <button class="action-button load-button" @click="loadGame">Ladda Spel</button>
-      </div>
-
-      <button class="action-button restart-button" @click="resetGame">Starta Om</button>
+    <!-- Controls -->
+    <div class="game-controls-header">
+      <button class="control-header-btn settings-btn" @click="showSettings = true">
+        ⚙️ Inställningar
+      </button>
+      <button class="control-header-btn restart-btn" @click="resetGame">🔄 Starta om</button>
     </div>
 
+    <!-- Game Canvas -->
     <div class="game-container">
       <canvas
         ref="gameCanvas"
@@ -53,7 +37,7 @@
         tabindex="0"
         @touchstart="handleTouchStart"
         @touchend="handleTouchEnd"
-        @touchmove="(e) => e.preventDefault()"
+        @touchmove.prevent
       ></canvas>
 
       <div v-if="gameOver" class="game-over-modal">
@@ -65,14 +49,67 @@
       </div>
     </div>
 
+    <!-- Instructions -->
     <div class="game-instructions">
-      <p>Använd piltangenterna för att flytta brickorna. Kombinera lika nummer för att nå 2048!</p>
+      <details>
+        <summary>Hur man spelar</summary>
+        <div class="instructions-content">
+          <p>
+            Använd piltangenterna för att flytta brickorna. När två brickor med samma nummer
+            krockar, slås de samman till en ny bricka med det dubbla värdet. Försök nå 2048!
+          </p>
+          <ul>
+            <li>Styr med piltangenter eller svep på mobil.</li>
+            <li>Du kan ändra brädstorlek och färgtema i Inställningar.</li>
+            <li>Spelet sparas automatiskt efter varje drag.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <!-- Settings Modal -->
+    <div v-if="showSettings" class="settings-overlay">
+      <div class="settings-modal">
+        <button class="close-settings-button" @click="showSettings = false" aria-label="Stäng">
+          ✕
+        </button>
+        <h2>Inställningar</h2>
+
+        <div class="settings-content">
+          <!-- Board Size -->
+          <div class="setting-item">
+            <label for="board-size-slider" class="form-label">Brädstorlek</label>
+            <input
+              id="board-size-slider"
+              v-model="boardSize"
+              type="range"
+              min="2"
+              max="10"
+              class="form-input range-input"
+              @input="updateBoardSize"
+            />
+            <div class="range-value">{{ rows }} x {{ columns }}</div>
+          </div>
+
+          <!-- Classic Colors -->
+          <div class="setting-item checkbox-item">
+            <label class="checkbox-label">
+              <input v-model="useClassicColors" type="checkbox" @change="applyColorSetting" />
+              <span>Använd klassiska 2048-färger</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="button-group">
+          <button class="action-button" @click="showSettings = false">Stäng</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { Game2048Logic } from '@/components/2048/game2048Logic.js'
 import { useThemeStore } from '@/stores/theme'
 
@@ -89,6 +126,7 @@ const boardSize = ref(4)
 const useClassicColors = ref(false)
 const hasSavedGame = ref(false)
 const savedGameScore = ref(0)
+const showSettings = ref(false)
 
 // Touch handling
 const touchStartX = ref(0)
@@ -118,6 +156,7 @@ function initializeGame() {
   gameLogic.initGame()
 
   checkForSavedGame()
+  console.log('Has saved game:', hasSavedGame.value) // Debug log;
 }
 
 function updateBoardSize() {
@@ -125,6 +164,7 @@ function updateBoardSize() {
   if (size >= 2 && size <= 10) {
     rows.value = size
     columns.value = size
+    localStorage.setItem('2048-board-size', String(size))
     resetGame()
   }
 }
@@ -136,7 +176,6 @@ function resetGame() {
     gameLogic.setBoardSize(rows.value, columns.value)
     gameLogic.resetGame()
   }
-  hasSavedGame.value = false
 }
 
 function drawBoard() {
@@ -144,6 +183,12 @@ function drawBoard() {
     gameLogic.setUseClassicColors(useClassicColors.value)
     gameLogic.drawBoard()
   }
+}
+
+function applyColorSetting() {
+  // Update logic and redraw without resetting game state
+  localStorage.setItem('2048-classic-colors', String(useClassicColors.value))
+  drawBoard()
 }
 
 function saveGame() {
@@ -169,6 +214,7 @@ function loadGame() {
 function checkForSavedGame() {
   const savedState = localStorage.getItem('2048GameState')
   if (savedState) {
+    console.log('Found saved game state:', savedState) // Debug log
     const gameState = JSON.parse(savedState)
     if (gameState.score > 0) {
       hasSavedGame.value = true
@@ -277,6 +323,23 @@ onMounted(async () => {
         initializeGame()
       }
     }, 100)
+  }
+
+  // Load persisted settings
+  const savedClassic = localStorage.getItem('2048-classic-colors')
+  if (savedClassic !== null) {
+    useClassicColors.value = savedClassic === 'true'
+    applyColorSetting()
+  }
+  const savedSize = localStorage.getItem('2048-board-size')
+  if (savedSize) {
+    const sizeNum = parseInt(savedSize)
+    if (!Number.isNaN(sizeNum) && sizeNum >= 2 && sizeNum <= 10) {
+      boardSize.value = sizeNum
+      rows.value = sizeNum
+      columns.value = sizeNum
+      resetGame()
+    }
   }
 
   // Add event listeners

@@ -38,21 +38,43 @@
     <div class="mobile-controls-bar">
       <div class="mobile-top-row">
         <div class="mobile-score-info">
-          <span class="mobile-score">{{ score }}p</span>
-          <span class="mobile-level">Nivå {{ level }}</span>
+          <span class="mobile-score">Poäng: {{ score }}</span>
+          <span class="mobile-level">Nivå: {{ level }}</span>
         </div>
         <div class="mobile-btn-container">
-          <button @click="togglePause" class="mobile-btn">
-            <span v-if="gamePaused && pauseTimer == 0">▶️</span>
+          <button
+            @click="togglePause"
+            class="mobile-btn"
+            :title="gamePaused ? 'Fortsätt' : 'Pausa'"
+          >
+            <span v-if="gamePaused && pauseTimer == 0">▶</span>
             <span v-else-if="gamePaused && pauseTimer > 0">{{ pauseTimer.toFixed(1) }}</span>
-            <span v-else>⏸️</span>
+            <span v-else>⏸</span>
           </button>
-          <button @click="cycleControlsMode" class="mobile-btn">
-            <span v-if="controlsMode === 0">🎮</span>
-            <span v-else-if="controlsMode === 1">🔤</span>
-            <span v-else>🔘</span>
+          <button
+            @click="cycleControlsMode"
+            class="mobile-btn"
+            :title="controlsMode === 1 ? 'Dölj pilar' : 'Visa pilar'"
+          >
+            <span v-if="controlsMode === 1">◆</span>
+            <span v-else>◇</span>
           </button>
-          <button @click="toggleInfo" class="mobile-btn">ℹ️</button>
+          <button @click="toggleInfo" class="mobile-btn" title="Info">ℹ︎</button>
+        </div>
+      </div>
+      <div class="mobile-stats-mini">
+        <div class="mini-stat">
+          <span class="mini-label">Rader</span
+          ><span class="mini-value">{{ levelClearedRows }}</span>
+        </div>
+        <div class="mini-stat">
+          <span class="mini-label">Totala</span><span class="mini-value">{{ linesCleared }}</span>
+        </div>
+        <div class="mini-stat">
+          <span class="mini-label">Tid</span><span class="mini-value">{{ formattedTime }}</span>
+        </div>
+        <div class="mini-stat">
+          <span class="mini-label">Block</span><span class="mini-value">{{ blocksUsed }}</span>
         </div>
       </div>
     </div>
@@ -67,13 +89,15 @@
             <span v-else> Pausa </span>
           </button>
           <button @click="cycleControlsMode" class="sidebar-btn">
-            <span v-if="controlsMode === 0">Dölj</span>
-            <span v-else-if="controlsMode === 1">Pilar</span>
-            <span v-else>Knappar</span>
+            <span v-if="controlsMode === 1">Dölj pilar</span>
+            <span v-else>Visa pilar</span>
           </button>
-          <button @click="toggleInfo" class="sidebar-btn">
-            <span v-if="infoShown"> Dölj Info </span>
-            <span v-else> Visa Info </span>
+          <button
+            @click="toggleInfo"
+            class="sidebar-btn"
+            :title="infoShown ? 'Dölj info' : 'Visa info'"
+          >
+            <span>{{ infoShown ? 'ℹ︎ Dölj' : 'ℹ︎ Info' }}</span>
           </button>
         </div>
         <div class="next-piece-container">
@@ -83,75 +107,54 @@
       </div>
 
       <div class="canvas-outer-wrapper">
+        <AddPlayerForm
+          v-if="showModal"
+          :score="score"
+          :level="level"
+          :linesCleared="linesCleared"
+          :gameData="gameDataForSubmission"
+          :gameOver="gameOver"
+          :gameStarted="gameStarted"
+          @startGame="startGame"
+        />
         <div class="canvas-and-next-container">
           <div class="canvas-container">
-            <AddPlayerForm
-              v-if="showModal"
-              :score="score"
-              :level="level"
-              :linesCleared="linesCleared"
-              :gameData="gameDataForSubmission"
-              :gameOver="gameOver"
-              :gameStarted="gameStarted"
-              @close="showAddPlayerForm = false"
-              @startGame="startGame"
-            />
             <!-- Canvas Overlay Controls -->
             <div class="canvas-overlay-controls">
-              <!-- Rotate Button - Top Left -->
               <button
                 @click="rotate"
                 class="overlay-btn rotate-btn"
-                :class="{
-                  'hidden-mode': controlsMode === 0,
-                  'arrow-mode': controlsMode === 1,
-                  'full-mode': controlsMode === 2,
-                }"
+                :class="{ 'hidden-mode': controlsMode === 0, 'arrow-mode': controlsMode === 1 }"
+                title="Rotera"
               >
-                <span v-if="controlsMode === 1">↻</span>
-                <span v-else>Rotera</span>
+                ↻
               </button>
 
-              <!-- Left Button - Middle Left -->
               <button
                 @click="moveLeft"
                 class="overlay-btn left-btn"
-                :class="{
-                  'hidden-mode': controlsMode === 0,
-                  'arrow-mode': controlsMode === 1,
-                  'full-mode': controlsMode === 2,
-                }"
+                :class="{ 'hidden-mode': controlsMode === 0, 'arrow-mode': controlsMode === 1 }"
+                title="Vänster"
               >
-                <span v-if="controlsMode === 1">←</span>
-                <span v-else>Vänster</span>
+                ←
               </button>
 
-              <!-- Right Button - Middle Right -->
               <button
                 @click="moveRight"
                 class="overlay-btn right-btn"
-                :class="{
-                  'hidden-mode': controlsMode === 0,
-                  'arrow-mode': controlsMode === 1,
-                  'full-mode': controlsMode === 2,
-                }"
+                :class="{ 'hidden-mode': controlsMode === 0, 'arrow-mode': controlsMode === 1 }"
+                title="Höger"
               >
-                <span v-if="controlsMode === 1">→</span>
-                <span v-else>Höger</span>
+                →
               </button>
 
-              <!-- Down Button - Bottom Middle -->
               <button
                 @click="softDrop"
                 class="overlay-btn down-btn"
-                :class="{
-                  'hidden-mode': controlsMode === 0,
-                  'arrow-mode': controlsMode === 1,
-                  'full-mode': controlsMode === 2,
-                }"
+                :class="{ 'hidden-mode': controlsMode === 0, 'arrow-mode': controlsMode === 1 }"
+                title="Ner"
               >
-                <span v-if="controlsMode === 1">↓</span>
-                <span v-else>Ner</span>
+                ↓
               </button>
             </div>
 
@@ -200,27 +203,7 @@
       </div>
     </div>
 
-    <!-- Mobile stats - shows below everything on small screens -->
-    <div class="mobile-stats">
-      <div class="mobile-stats-grid">
-        <div class="mobile-stat-item">
-          <span class="mobile-stat-label">Rader</span>
-          <span class="mobile-stat-value">{{ levelClearedRows }}</span>
-        </div>
-        <div class="mobile-stat-item">
-          <span class="mobile-stat-label">Totala</span>
-          <span class="mobile-stat-value">{{ linesCleared }}</span>
-        </div>
-        <div class="mobile-stat-item">
-          <span class="mobile-stat-label">Tid</span>
-          <span class="mobile-stat-value">{{ formattedTime }}</span>
-        </div>
-        <div class="mobile-stat-item">
-          <span class="mobile-stat-label">Block</span>
-          <span class="mobile-stat-value">{{ blocksUsed }}</span>
-        </div>
-      </div>
-    </div>
+    <!-- Mobile stats moved to top bar -->
 
     <!-- Information Section -->
     <div v-if="infoShown" class="information-container">
@@ -389,8 +372,9 @@ const canvasWidth = ref(COLS * BASE_BLOCK_SIZE)
 const canvasHeight = ref(ROWS * BASE_BLOCK_SIZE)
 const infoShown = ref(false)
 const showLeaderboard = ref(false)
-const showAddPlayerForm = ref(false)
-const controlsMode = ref(1) // 0: hidden, 1: arrows only, 2: full buttons
+const controlsMode = ref(1) // 0: hidden, 1: arrows only
+const autoHideOnKeyboard = ref(true) // hide arrows once when keyboard is first used
+let resizeHandler = null
 const isMobile = ref(false)
 
 const leaderBoardData = ref([])
@@ -406,7 +390,7 @@ const showModal = computed(() => !gameStarted.value || gameOver.value)
 
 const topPlayers = computed(() => {
   // Initialize dummy data if empty
-  return leaderBoardData.value.sort((a, b) => b.Score - a.Score).slice(0, 10)
+  return leaderBoardData.value.sort((a, b) => b.Score - a.Score).slice(0, 100)
 })
 
 const gameDataForSubmission = computed(() => ({
@@ -487,7 +471,10 @@ function toggleLeaderboard() {
 }
 
 function cycleControlsMode() {
-  controlsMode.value = (controlsMode.value + 1) % 3
+  // Toggle between hidden and arrows only
+  controlsMode.value = controlsMode.value === 1 ? 0 : 1
+  // If user turns arrows back on, keep them until they choose to hide
+  if (controlsMode.value === 1) autoHideOnKeyboard.value = false
 }
 
 // --- Board & Canvas Setup ---
@@ -504,7 +491,8 @@ function debounce(func, delay) {
 }
 
 function adjustCanvasSize() {
-  console.log('Adjusting canvas size...')
+  // Device pixel ratio for HiDPI rendering
+  const dpr = Math.ceil(window.devicePixelRatio || 1)
 
   // Check if we're on mobile
   isMobile.value = window.innerWidth <= 768
@@ -513,12 +501,12 @@ function adjustCanvasSize() {
   const hardDropBtn = document.querySelector('.hard-drop-btn')
   const leaderboard = document.querySelector('.leaderboard-container')
   const mobileControls = document.querySelector('.mobile-controls-bar')
-  const mobileStats = document.querySelector('.mobile-stats')
+  const mobileStatsMini = document.querySelector('.mobile-stats-mini')
 
   const hardDropBtnHeight = hardDropBtn ? hardDropBtn.offsetHeight + 10 : 50
   const leaderboardHeight = leaderboard ? leaderboard.offsetHeight : 0
   const mobileControlsHeight = mobileControls ? mobileControls.offsetHeight + 10 : 0
-  const mobileStatsHeight = mobileStats ? mobileStats.offsetHeight + 10 : 0
+  const mobileStatsHeight = mobileStatsMini ? mobileStatsMini.offsetHeight + 10 : 0
   const appContainerVPadding = 10 * 2
   const appContainerHPadding = 10 * 2
   const verticalGapsAroundGame = 15 * 3
@@ -537,7 +525,8 @@ function adjustCanvasSize() {
       verticalGapsAroundGame
 
     // On mobile, canvas takes most of the width, leaving space for next piece
-    const appContainerContentWidth = appContainer.offsetWidth - appContainerHPadding
+    const appContainerContentWidth =
+      (appContainer?.offsetWidth || window.innerWidth) - appContainerHPadding
     const nextPieceWidth = 4 * 25 + 20 // Smaller next piece + gap
     availableWidthForCanvas = appContainerContentWidth - nextPieceWidth
   } else {
@@ -553,7 +542,8 @@ function adjustCanvasSize() {
       appContainerVPadding -
       verticalGapsAroundGame
 
-    const appContainerContentWidth = appContainer.offsetWidth - appContainerHPadding
+    const appContainerContentWidth =
+      (appContainer?.offsetWidth || window.innerWidth) - appContainerHPadding
     availableWidthForCanvas = appContainerContentWidth - sidebarWidth * 2 - gameLayoutGap * 2
   }
 
@@ -571,22 +561,38 @@ function adjustCanvasSize() {
   // Set up main canvas
   const mainCanvas = document.getElementById('tetrisCanvas')
   if (mainCanvas) {
-    mainCanvas.width = canvasWidth.value
-    mainCanvas.height = canvasHeight.value
+    // Backing store size (physical pixels)
+    mainCanvas.width = Math.max(1, Math.floor(canvasWidth.value * dpr))
+    mainCanvas.height = Math.max(1, Math.floor(canvasHeight.value * dpr))
+    // CSS size (logical pixels)
+    mainCanvas.style.width = `${canvasWidth.value}px`
+    mainCanvas.style.height = `${canvasHeight.value}px`
+    // Scale context to keep drawing units in CSS pixels
+    if (ctx.value) ctx.value.setTransform(dpr, 0, 0, dpr, 0, 0)
   }
 
   // Set up next piece canvases
   const nextCanvas = document.getElementById('nextPieceCanvas')
   if (nextCanvas) {
-    nextCanvas.width = 4 * blockSize.value
-    nextCanvas.height = 8 * blockSize.value
+    const cssW = 4 * blockSize.value
+    const cssH = 8 * blockSize.value
+    nextCanvas.width = Math.max(1, Math.floor(cssW * dpr))
+    nextCanvas.height = Math.max(1, Math.floor(cssH * dpr))
+    nextCanvas.style.width = `${cssW}px`
+    nextCanvas.style.height = `${cssH}px`
+    if (nextCtx.value) nextCtx.value.setTransform(dpr, 0, 0, dpr, 0, 0)
   }
 
   const nextCanvasMobile = document.getElementById('nextPieceCanvasMobile')
   if (nextCanvasMobile) {
     const mobileNextSize = Math.min(blockSize.value, 25) // Smaller on mobile
-    nextCanvasMobile.width = 4 * mobileNextSize
-    nextCanvasMobile.height = 8 * mobileNextSize
+    const cssW = 4 * mobileNextSize
+    const cssH = 8 * mobileNextSize
+    nextCanvasMobile.width = Math.max(1, Math.floor(cssW * dpr))
+    nextCanvasMobile.height = Math.max(1, Math.floor(cssH * dpr))
+    nextCanvasMobile.style.width = `${cssW}px`
+    nextCanvasMobile.style.height = `${cssH}px`
+    if (nextCtxMobile.value) nextCtxMobile.value.setTransform(dpr, 0, 0, dpr, 0, 0)
   }
 
   // Refresh display after canvas size changes
@@ -604,7 +610,10 @@ function initializeCanvases() {
   if (nextCanvasMobileEl) nextCtxMobile.value = nextCanvasMobileEl.getContext('2d')
 
   adjustCanvasSize() // Call after contexts are set
-  window.addEventListener('resize', debounce(adjustCanvasSize, 100))
+  if (!resizeHandler) {
+    resizeHandler = debounce(adjustCanvasSize, 100)
+  }
+  window.addEventListener('resize', resizeHandler)
 }
 
 // --- Block Class ---
@@ -695,7 +704,6 @@ function startGame() {
   fillNextPiecesQueue()
   spawnPiece()
   startGameTimer()
-  addKeyboardListeners()
   gameLoopIntervalId.value = setInterval(gameLoop, 1000 / 60) // 60 FPS
 }
 
@@ -818,17 +826,15 @@ function intersects() {
   let intersects = false
   // Check if activeblock intersects
   currentPiece.value.getPositions().forEach((pos) => {
-    if (pos[1] >= 0) {
-      if (
-        pos[1] > ROWS - 1 ||
-        pos[0] < 0 ||
-        pos[0] > COLS - 1 ||
-        (board.value[pos[1]] && board.value[pos[1]][pos[0]] != null)
-      ) {
+    const x = pos[0]
+    const y = pos[1]
+    if (y >= 0) {
+      if (y > ROWS - 1 || x < 0 || x > COLS - 1 || (board.value[y] && board.value[y][x] != null)) {
         intersects = true
       }
-    } else if (pos[1] < 0) {
-      if (pos[1] > ROWS - 1 || pos[0] < 0 || pos[0] > COLS - 1) {
+    } else {
+      // y < 0 (above the visible board): only check horizontal bounds
+      if (x < 0 || x > COLS - 1) {
         intersects = true
       }
     }
@@ -850,23 +856,15 @@ function freezeBlock() {
 
 function filledRow() {
   let clearedRows = 0
-  for (let row = 0; row < board.value.length; row++) {
-    const rowArray = board.value[row]
-    let zeroes = 0
-    for (let col = 0; col < rowArray.length; col++) {
-      const spot = rowArray[col]
-      if (spot === null) {
-        zeroes++
-      }
-    }
-    if (zeroes === 0) {
-      // The row was filled
+  for (let row = board.value.length - 1; row >= 0; row--) {
+    const isFull = board.value[row].every((cell) => cell !== null)
+    if (isFull) {
+      // Remove the full row
+      board.value.splice(row, 1)
+      // Add a new empty row at the top
+      board.value.unshift(Array(COLS).fill(null))
       clearedRows++
-      for (let i = row; i > 1; i--) {
-        for (let j = 0; j < COLS; j++) {
-          board.value[i][j] = board.value[i - 1][j]
-        }
-      }
+      row++ // Re-check the same index after unshifting
     }
   }
   let scoreIncrease = 0
@@ -920,7 +918,11 @@ function updateScore(points) {
 
 // --- Input Handling ---
 function _handleKeydown(e) {
-  controlsMode.value = 0 // Switch to hidden controls on keyboard use
+  // Hide overlay once on first keyboard input if it's currently visible
+  if (controlsMode.value === 1 && autoHideOnKeyboard.value) {
+    controlsMode.value = 0
+    autoHideOnKeyboard.value = false
+  }
   if (showModal.value) {
     if (['Enter', 'Space'].includes(e.code)) startGame()
     e.preventDefault()
@@ -939,8 +941,18 @@ function _handleKeydown(e) {
     return
   }
 
-  if (['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Space'].includes(e.code))
-    e.preventDefault()
+  const movementKeys = [
+    'ArrowLeft',
+    'ArrowRight',
+    'ArrowDown',
+    'ArrowUp',
+    'Space',
+    'KeyA',
+    'KeyD',
+    'KeyS',
+    'KeyW',
+  ]
+  if (movementKeys.includes(e.code)) e.preventDefault()
 
   switch (e.code) {
     case 'ArrowLeft':
@@ -994,6 +1006,8 @@ onMounted(async () => {
   initBoard()
   initializeCanvases() // This will call adjustCanvasSize
   addKeyboardListeners()
+  // Default overlay controls: on for mobile, off for desktop
+  controlsMode.value = isMobile.value ? 1 : 0
   await getTopPlayers()
 })
 
@@ -1001,7 +1015,7 @@ onBeforeUnmount(() => {
   removeKeyboardListeners()
   stopGameTimer()
   clearInterval(gameLoopIntervalId.value)
-  window.removeEventListener('resize', debounce(adjustCanvasSize, 100))
+  if (resizeHandler) window.removeEventListener('resize', resizeHandler)
 })
 </script>
 

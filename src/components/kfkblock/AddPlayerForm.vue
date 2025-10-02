@@ -21,7 +21,9 @@
         <p class="save-prompt">Spara som {{ authStore.profile?.username || 'Användare' }}?</p>
         <div class="button-group-inline">
           <button @click="dontSaveScore" class="btn-decline">Nej Tack</button>
-          <button @click="saveScore" class="btn-save">Spara Poäng</button>
+          <button @click="saveScore" class="btn-save" :disabled="isSubmitting">
+            {{ isSubmitting ? 'Sparar...' : 'Spara Poäng!' }}
+          </button>
         </div>
       </div>
 
@@ -40,6 +42,13 @@
     <button @click="startGame" class="btn-modal-action">
       {{ gameOver || !gameStarted ? (gameStarted ? 'Spela Igen' : 'Starta Spelet') : 'Fortsätt' }}
     </button>
+    <!-- Error State -->
+    <div v-if="userMessage" class="user-message">
+      {{ userMessage }}
+    </div>
+    <div v-if="errorMessage" class="error-message">
+      {{ errorMessage }}
+    </div>
   </div>
 
   <!-- Guest Form Overlay (fixed positioning like auth form) -->
@@ -87,7 +96,6 @@
           {{ isSubmitting ? 'Sparar...' : 'Spara!' }}
         </button>
       </div>
-
       <!-- Error State -->
       <div v-if="errorMessage" class="error-message">
         {{ errorMessage }}
@@ -148,6 +156,7 @@ const showSaveScore = ref(true)
 const authMode = ref('')
 const isSubmitting = ref(false)
 const errorMessage = ref('')
+const userMessage = ref('') // General user messages (e.g. "Saved!")
 const staticGameOverMessage = ref('') // Store the static message once generated
 
 const emit = defineEmits(['close', 'startGame', 'updateLeaderboard'])
@@ -198,6 +207,9 @@ function dontSaveScore() {
 
 async function saveScore() {
   console.log('Saving score for authenticated user...')
+  isSubmitting.value = true
+  userMessage.value = ''
+  errorMessage.value = ''
 
   const otherData = {
     block: props.gameData.blocksUsed - 1,
@@ -213,7 +225,7 @@ async function saveScore() {
     RealName: fullName,
     Score: props.score,
     Other: otherData,
-    Key: otherData.score + otherData.block ** 2 + otherData.levelClearedRows * 3 - 7,
+    Key: calculateKey({ ...otherData, score: props.score }),
   }
 
   try {
@@ -224,7 +236,10 @@ async function saveScore() {
 
     if (data) {
       console.log('Score saved successfully:', data)
+      isSubmitting.value = false
       emit('updateLeaderboard', data) // Notify parent to refresh leaderboard
+      showSaveScore.value = false // Close the modal after saving
+      userMessage.value = 'Sparad!'
     } else {
       console.error('Failed to save score:', data)
       // Could show an error message here
@@ -444,6 +459,13 @@ watch(
 
 .error-message {
   @extend .error-message;
+}
+
+.user-message {
+  @extend .error-message;
+  color: var(--theme-input-text);
+  background: var(--theme-input-bg);
+  border: var(--theme-input-border);
 }
 
 // Responsive design

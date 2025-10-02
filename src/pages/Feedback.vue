@@ -1,7 +1,7 @@
 <template>
   <div class="feedback-container">
     <div class="feedback-form">
-      <h1>Feedback & Bug Reports</h1>
+      <h1>Feedback & Bugg-Rapport</h1>
       <p class="subtitle">
         Hjälp oss förbättra spelen genom att dela dina tankar, buggar eller nya spelidéer!
       </p>
@@ -12,7 +12,7 @@
           <label for="type" class="form-label">Typ av feedback</label>
           <select id="type" v-model="formData.type" class="form-input" required>
             <option value="">Välj typ</option>
-            <option value="bug">🐛 Bugg Rapport</option>
+            <option value="bug">🐛 Bugg-rapport</option>
             <option value="feature">💡 Ny Spelidé</option>
             <option value="improvement">⭐ Förbättringsförslag</option>
             <option value="other">💬 Övrigt</option>
@@ -82,7 +82,7 @@
               <span class="upload-icon">📎</span>
               <p>Klicka för att välja filer eller dra och släpp</p>
               <p class="upload-hint">
-                Bilder: JPG, PNG, GIF, WebP | Videos: MP4, WebM, MOV | Max 30MB
+                Bilder: JPG, PNG, GIF, WebP | Videos: MP4, WebM, MOV | Max 30MB totalt
               </p>
             </div>
             <input
@@ -97,6 +97,20 @@
 
           <!-- File List -->
           <div v-if="files.length > 0" class="file-list">
+            <div class="file-size-summary">
+              <div class="size-bar">
+                <div
+                  class="size-progress"
+                  :style="{ width: `${(totalFileSize / (30 * 1024 * 1024)) * 100}%` }"
+                ></div>
+              </div>
+              <p class="size-text">
+                {{ formatFileSize(totalFileSize) }} / 30MB använt
+                <span v-if="remainingFileSize > 0" class="remaining">
+                  ({{ formatFileSize(remainingFileSize) }} kvar)
+                </span>
+              </p>
+            </div>
             <div v-for="(file, index) in files" :key="index" class="file-item">
               <div class="file-info">
                 <span class="file-name">{{ file.name }}</span>
@@ -143,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { supabase } from '@/utils/supabase'
 
 interface BrowserInfo {
@@ -180,6 +194,13 @@ const browserInfo = ref<BrowserInfo>({
   userAgent: '',
   language: '',
   timezone: '',
+})
+
+const totalFileSize = computed(() => files.value.reduce((sum, file) => sum + file.size, 0))
+
+const remainingFileSize = computed(() => {
+  const maxSize = 30 * 1024 * 1024 // 30MB
+  return Math.max(0, maxSize - totalFileSize.value)
 })
 
 onMounted(() => {
@@ -268,17 +289,24 @@ function addFiles(fileList: File[]) {
     'video/mov',
   ]
 
+  const MAX_TOTAL_SIZE = 30 * 1024 * 1024 // 30MB total
+  const currentTotalSize = files.value.reduce((sum, file) => sum + file.size, 0)
+
   const newFiles = fileList.filter((file) => {
     if (!validTypes.includes(file.type)) {
       errorMessage.value = `Filtypen ${file.type} stöds inte`
       return false
     }
-    if (file.size > 30 * 1024 * 1024) {
-      errorMessage.value = `Filen ${file.name} är för stor (max 30MB)`
-      return false
-    }
     return true
   })
+
+  // Check if adding these files would exceed the total limit
+  const newFilesTotalSize = newFiles.reduce((sum, file) => sum + file.size, 0)
+  if (currentTotalSize + newFilesTotalSize > MAX_TOTAL_SIZE) {
+    const remainingSize = MAX_TOTAL_SIZE - currentTotalSize
+    errorMessage.value = `Total filstorlek får inte överstiga 30MB. Du har ${formatFileSize(remainingSize)} kvar att använda.`
+    return
+  }
 
   files.value.push(...newFiles)
   errorMessage.value = ''
@@ -297,30 +325,37 @@ function formatFileSize(bytes: number): string {
 }
 
 async function uploadFiles(): Promise<string[]> {
-  const uploadedPaths: string[] = []
+  if (files.value.length === 0) return []
 
-  for (const file of files.value) {
-    const formData = new FormData()
+  // Create FormData with all files
+  const formData = new FormData()
+  files.value.forEach((file) => {
     formData.append('file', file)
+  })
 
-    const { data, error } = await supabase.functions.invoke('feedback/upload', {
-      body: formData,
-    })
+  const { data, error } = await supabase.functions.invoke('feedback/upload', {
+    body: formData,
+  })
 
-    if (error) {
-      throw new Error(`Failed to upload ${file.name}: ${error.message}`)
-    }
-
-    if (data?.filePath) {
-      uploadedPaths.push(data.filePath)
-    }
+  if (error) {
+    throw new Error(`Failed to upload files: ${error.message}`)
   }
 
-  return uploadedPaths
+  if (data?.files) {
+    return data.files.map((file: any) => file.filePath)
+  }
+
+  return []
 }
 
 async function submitFeedback() {
   if (isSubmitting.value) return
+
+  // Check total file size before submission
+  if (totalFileSize.value > 30 * 1024 * 1024) {
+    errorMessage.value = 'Total filstorlek överstiger 30MB. Ta bort några filer innan du skickar.'
+    return
+  }
 
   isSubmitting.value = true
   errorMessage.value = ''
@@ -484,6 +519,42 @@ async function submitFeedback() {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.file-size-summary {
+  background: var(--theme-bg-secondary);
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--theme-border);
+  margin-bottom: 8px;
+
+  .size-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--theme-border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+
+    .size-progress {
+      height: 100%;
+      background: linear-gradient(90deg, #4caf50, #ffc107, #f44336);
+      transition: width 0.3s ease;
+      border-radius: 3px;
+    }
+  }
+
+  .size-text {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--theme-text-secondary);
+    text-align: center;
+
+    .remaining {
+      color: var(--theme-accent);
+      font-weight: 500;
+    }
+  }
 }
 
 .file-item {
