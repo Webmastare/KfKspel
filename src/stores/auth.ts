@@ -23,6 +23,7 @@ export const useAuthStore = defineStore("auth", {
       | null,
     profile: null as Profile | null,
     loadingProfile: false,
+    authStateVersion: 0, // Increment to force reactivity in other components
     initialized: false,
   }),
 
@@ -57,6 +58,7 @@ export const useAuthStore = defineStore("auth", {
         } else {
           this.profile = null;
         }
+        this.authStateVersion++; // Trigger reactivity
       });
 
       this.initialized = true;
@@ -68,7 +70,6 @@ export const useAuthStore = defineStore("auth", {
         email,
         password,
       });
-      if (error) throw error;
       return { data, error };
     },
 
@@ -79,7 +80,6 @@ export const useAuthStore = defineStore("auth", {
         password,
         options: meta ? { data: meta } : {},
       });
-      if (error) throw error;
       return { data, error };
     },
 
@@ -112,7 +112,6 @@ export const useAuthStore = defineStore("auth", {
       this.loadingProfile = true;
 
       console.log("Fetching profile for user:", this.user.id);
-      console.log("Supabase instance:", supabase);
       const { data, error } = await supabase
         .from("user_profiles")
         .select("*")

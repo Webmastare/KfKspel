@@ -50,8 +50,8 @@ const props = defineProps({
   },
 })
 
-// emit a single "auth" event with clear payload
-const emit = defineEmits(['close'])
+// emit close on dismiss and success on successful auth
+const emit = defineEmits(['close', 'success'])
 
 // form fields
 const email = ref('')
@@ -83,7 +83,8 @@ async function onSubmit() {
     const { data, error } = await authStore.signUp(email.value, password.value, meta)
     if (error) {
       console.error('Signup error:', error)
-      errorMessage.value = error.message
+      errorMessage.value =
+        getErrorMessage(error.code) || error.message || 'Kunde inte registrera användare'
       return
     }
     userData.value = data.user
@@ -110,6 +111,7 @@ async function onSubmit() {
     await authStore.completeSignup()
 
     console.log('Signup completed successfully')
+    emit('success')
     emit('close') // Close the form after submission
   } else if (props.mode === 'login') {
     // Call the signIn function from supabase-auth.js
@@ -121,11 +123,23 @@ async function onSubmit() {
     console.log('Login successful:', data)
     userData.value = data.user
     console.log('User logged in:', userData.value)
+    emit('success')
     emit('close') // Close the form after successful login
   } else {
     errorMessage.value = 'Invalid authentication mode'
     return
   }
+}
+
+function getErrorMessage(code) {
+  const errorMessages = {
+    user_already_exists: 'Användaren används redan',
+    email_address_invalid: 'Ogiltig e-postadress',
+    weak_password: 'Lösenordet är för svagt',
+    email_exists: 'E-postadressen används redan',
+    same_password: 'Det nya lösenordet måste vara annorlunda än det gamla',
+  }
+  return errorMessages[code] || null
 }
 </script>
 

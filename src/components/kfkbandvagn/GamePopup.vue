@@ -190,14 +190,12 @@ async function performAction(actionType, targetUUID = null) {
     const action = {
       action: actionType,
       tank_id: props.currentPlayer?.uuid || '',
-      targetCell:
-        actionType === 'move'
-          ? {
-              row: props.cell.row,
-              col: props.cell.col,
-            }
-          : undefined,
-      targetUUID: targetUUID,
+    }
+    if (actionType === 'move') {
+      action.targetCell = { row: props.cell.row, col: props.cell.col }
+    }
+    if (targetUUID) {
+      action.targetUUID = targetUUID
     }
 
     await emit('action', action)

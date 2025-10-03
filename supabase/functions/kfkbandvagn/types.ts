@@ -118,6 +118,7 @@ export const ERROR_CODES = {
   PLAYER_ALREADY_DEAD: "player_already_dead",
   NOT_IN_RANGE: "not_in_range",
   NO_FREE_TANKS: "no_free_tanks",
+  PLAYER_ALREADY_EXISTS: "player_already_exists",
   VALIDATION_ERROR: "validation_error",
   INVALID_SESSION: "invalid_session",
   INTERNAL_ERROR: "internal_error",

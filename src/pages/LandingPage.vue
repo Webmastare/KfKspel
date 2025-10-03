@@ -26,12 +26,10 @@
     <div class="overlay-content" :style="{ display: showWelcomeCard ? '' : 'none' }">
       <div class="welcome-card" v-if="showWelcomeCard">
         <h1 class="title">Välkommen till KfKSpel</h1>
-        <p class="subtitle">
-          Välkommen till spelhörnan! Här kommer det upp något nytt spel ibland när någon i
-          webmästeriet pallar. Har du förslag eller är intresserad av att hjälpa till? Sök
-          webmästeriet!
-        </p>
-        <p class="subtitle">Tips: Logga in för att spara dina framsteg!</p>
+        <div class="autotype">
+          <p class="subtitle">{{ typedText }}</p>
+        </div>
+
         <div class="game-grid">
           <div class="game-card">
             <h3>KfKblock</h3>
@@ -126,12 +124,42 @@ const visualizationOptions = reactive({
 })
 const showWelcomeCard = ref(true)
 
+// Typewriter (multi-line) config and state
+const typewriterLines = [
+  'Välkommen till spelhörnan! Här kommer det upp något nytt spel ibland när någon i webmästeriet pallar.',
+  'Har du förslag eller är intresserad av att hjälpa till?',
+  'Sök webmästeriet!',
+  '',
+  'Tips: Logga in för att spara dina framsteg!',
+]
+const typedText = ref('')
+const typingSpeedMs = 40 // per character
+const linePauseMs = 0 // between lines
+
+async function runTypewriter() {
+  typedText.value = ''
+  for (const line of typewriterLines) {
+    for (const ch of line) {
+      typedText.value += ch
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, typingSpeedMs))
+    }
+    if (line !== typewriterLines[typewriterLines.length - 1]) {
+      typedText.value += '\n'
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, linePauseMs))
+    }
+  }
+}
+
 // Use global theme store
 const isDarkTheme = computed(() => themeStore.isDarkMode)
 
 // Initialize theme system
 onMounted(() => {
   themeStore.init()
+  // Start the typewriter after theme init
+  runTypewriter()
 })
 
 function toggleSnakeView() {
@@ -206,6 +234,42 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
     margin-bottom: 3rem;
     font-weight: 300;
     z-index: 1;
+  }
+}
+
+.autotype {
+  display: flex;
+  justify-content: center;
+
+  .subtitle {
+    font-family: monospace;
+    margin-inline: auto;
+    white-space: pre-wrap; // preserve newlines
+    position: relative;
+    overflow: visible;
+    font-size: 1.2rem;
+
+    // blinking caret
+    &::after {
+      content: '';
+      display: inline-block;
+      width: 0.12em;
+      height: 1em;
+      margin-left: 2px;
+      background: var(--theme-text-secondary);
+      animation: blink 0.8s step-end infinite;
+      vertical-align: -0.1em;
+    }
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
   }
 }
 

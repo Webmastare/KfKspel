@@ -47,6 +47,15 @@
       <p>Laddar spel...</p>
     </div>
   </div>
+
+  <div v-if="isDebugging" class="debug-overlay">
+    <div class="debug-item">Canvas: {{ canvasWidth }}x{{ canvasHeight }} @ {{ dpr }}x</div>
+    <div class="debug-item">Cell Size: {{ cellSize }}px</div>
+    <div class="debug-item">
+      Zoom: {{ zoom.toFixed(2) }}, Pan: ({{ pan.x.toFixed(1) }}, {{ pan.y.toFixed(1) }})
+    </div>
+    <div class="debug-item">Animation Frames Remaining: {{ animFramesRemaining }}</div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -66,6 +75,7 @@ import {
   renderAnimations,
   type AnimationState,
 } from '@/composables/kfkbandvagn/animations'
+import { start } from 'repl'
 
 // Store
 const gameStore = useBandvagnStore()
@@ -108,7 +118,9 @@ const isMultiTouch = ref(false)
 // Animation state using animations.ts
 const animationState = ref<AnimationState>(createAnimationState())
 let rafId: number | null = null
-let animFramesRemaining = 0
+const animFramesRemaining = ref(0)
+
+const isDebugging = ref(true)
 
 // Theme cache to avoid style lookups inside the draw loop
 const themeCache = ref({
@@ -545,46 +557,28 @@ function drawAnimations() {
 }
 
 // Adaptive render loop: runs while active, coasts for a few frames when activity stops
-function startLoop() {
-  if (rafId !== null) return
-  const loop = () => {
-    rafId = null
+function updateLoop() {
+  const activeNow =
+    isPanning.value ||
+    isMultiTouch.value ||
+    isZooming.value ||
+    hasActiveAnimations(animationState.value)
 
-    // Determine activity this frame
-    const activeNow =
-      isPanning.value ||
-      isMultiTouch.value ||
-      isZooming.value ||
-      hasActiveAnimations(animationState.value)
-
-    // If active, reset coast; otherwise, count down
-    if (activeNow) {
-      animFramesRemaining = 10
-    } else if (animFramesRemaining > 0) {
-      animFramesRemaining -= 1
-    }
-
-    // Draw a frame
+  // If active, reset coast; otherwise, count down
+  if (activeNow) {
+    animFramesRemaining.value = 10
+  } else if (animFramesRemaining.value > 0) {
+    animFramesRemaining.value -= 1
+  }
+  // Continue while there is activity or coast frames left
+  if (activeNow || animFramesRemaining.value > 0) {
     drawGame()
-
-    // Continue while there is activity or coast frames left
-    if (activeNow || animFramesRemaining > 0) {
-      rafId = requestAnimationFrame(loop)
-    }
   }
-  rafId = requestAnimationFrame(loop)
-}
-
-function stopLoop() {
-  if (rafId !== null) {
-    cancelAnimationFrame(rafId)
-    rafId = null
-  }
+  requestAnimationFrame(updateLoop)
 }
 
 function ensureLoopActive(minCoast = 3) {
-  animFramesRemaining = Math.max(animFramesRemaining, minCoast)
-  startLoop()
+  animFramesRemaining.value = Math.max(animFramesRemaining.value, minCoast)
 }
 
 function drawCellHighlight(row: number, col: number) {
@@ -1012,6 +1006,7 @@ onMounted(() => {
   }
   // Populate theme cache in case CSS loads late
   refreshThemeCache()
+  updateLoop()
   ensureLoopActive(1)
 })
 
@@ -1025,7 +1020,7 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(rafId)
     rafId = null
   }
-  animFramesRemaining = 0
+  animFramesRemaining.value = 0
   // Clear all animations
   animationState.value = createAnimationState()
 })

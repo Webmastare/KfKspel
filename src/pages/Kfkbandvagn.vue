@@ -157,7 +157,7 @@
           <!-- Game Canvas -->
           <BandvagnCanvas
             ref="canvasRef"
-            v-if="getGameInitialized()"
+            v-if="isGameInitialized"
             @actionPerformed="handleActionPerformed"
           />
 
@@ -170,7 +170,10 @@
           <!-- No player state -->
           <div v-else class="no-player-container">
             <h2>Välkommen till KfKbandvagn!</h2>
-            <p>Du behöver logga in och skapa en bandvagn för att spela.</p>
+            <p>
+              Du behöver <span v-if="!authStore.isAuthed">logga in och</span> skapa en bandvagn för
+              att spela.
+            </p>
             <button @click="openPlayerModal" class="button-base">Skapa Bandvagn</button>
           </div>
         </div>
@@ -342,11 +345,10 @@ const currentPlayer = computed(() => gameStore.currentPlayer)
 const allPlayers = computed(() => gameStore.allPlayers)
 const boardData = computed(() => gameStore.boardData)
 const isLoading = computed(() => gameStore.isLoading)
-
-function getGameInitialized() {
-  console.log('Checking game initialized:', gameStore.initialized, currentPlayer.value)
-  return gameStore.initialized && currentPlayer.value
-}
+const isGameInitialized = computed(() => {
+  console.log('Game initialized:', gameStore.initialized, currentPlayer.value)
+  return currentPlayer.value
+})
 
 // Only show players that have an active tank and are alive (or show all if desired)
 const playersToShow = computed(() => {
@@ -544,19 +546,21 @@ watch(
     console.log(`Auth state version changed: ${oldVersion} -> ${newVersion}`)
 
     if (authStore.isAuthed) {
-      console.log('User authenticated, initializing game store')
-      try {
-        await gameStore.initialize()
+      if (!gameStore.initialized) {
+        console.log('User authenticated, initializing game store')
+        try {
+          await gameStore.initialize()
 
-        // Check if user needs to create a player
-        if (!currentPlayer.value) {
-          showPlayerModal.value = true
-        } else {
-          // Close player modal if it's open and we now have a player
-          showPlayerModal.value = false
+          // Check if user needs to create a player
+          if (!currentPlayer.value) {
+            showPlayerModal.value = true
+          } else {
+            // Close player modal if it's open and we now have a player
+            showPlayerModal.value = false
+          }
+        } catch (error) {
+          console.error('Failed to initialize game store after auth change:', error)
         }
-      } catch (error) {
-        console.error('Failed to initialize game store after auth change:', error)
       }
     } else {
       console.log('User logged out, resetting game store')

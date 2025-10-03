@@ -11,7 +11,7 @@
     />
 
     <!-- Player Creation Form State -->
-    <div v-else class="modal-overlay">
+    <div v-else-if="!showAuthForm && showPlayerCreationForm" class="modal-overlay">
       <div class="modal-content">
         <div class="player-creation-form">
           <button type="button" class="close-form-button" @click="closeModal">&#215;</button>
@@ -143,6 +143,7 @@ const playerColor = ref('#4CAF50') // Default green
 const isSubmitting = ref(false)
 const errorMessage = ref('')
 const showAuthForm = ref(false)
+const showPlayerCreationForm = ref(true)
 const authMode = ref('')
 const showExistingPlayerOption = ref(true)
 
@@ -176,11 +177,26 @@ function closeAuthForm() {
   authMode.value = ''
 }
 
-function handleAuthSuccess() {
+async function handleAuthSuccess() {
   showAuthForm.value = false
+  showPlayerCreationForm.value = false
   authMode.value = ''
-  // Refresh to show player creation form
-  authStore.fetchProfile()
+  // After login/signup, refresh profile and game state, then decide whether to show create form
+  try {
+    await gameStore.fetchGameState()
+  } catch (e) {
+    console.warn('Failed to fetch game state after auth', e)
+  }
+  if (gameStore.currentPlayer) {
+    // User already has a tank; close modal and notify parent
+    emit('playerCreated')
+  } else {
+    // No tank yet, keep creation form visible
+    // Pre-fill playerID suggestion
+    if (authStore.profile?.username) {
+      playerID.value = authStore.profile.username
+    }
+  }
 }
 
 // Form validation
@@ -277,6 +293,20 @@ onMounted(() => {
     // Use part of email as suggestion
     const emailUsername = authStore.user.email.split('@')[0]
     playerID.value = emailUsername.substring(0, 15) // Limit length
+  }
+
+  // If already authenticated, fetch game state and close if tank exists
+  if (authStore.isAuthed) {
+    setTimeout(async () => {
+      try {
+        await gameStore.fetchGameState()
+        if (gameStore.currentPlayer) {
+          emit('playerCreated')
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 0)
   }
 })
 </script>

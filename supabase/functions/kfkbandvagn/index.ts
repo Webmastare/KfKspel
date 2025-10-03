@@ -47,13 +47,52 @@ app.post("/auth/create", async (c: Context) => {
     );
     return c.json(errorResponse, 500);
   }
-  console.log("Created new player:", response);
+
+  // Determine proper status code based on error code if present
+  const respObj: Record<string, unknown> = response as Record<string, unknown>;
+  const isError = ("success" in respObj && respObj.success === false) ||
+    ("error" in respObj && typeof respObj.error === "object" &&
+      respObj.error !== null);
+  if (isError) {
+    const err = (respObj.error ?? {}) as { code?: string };
+    const code = typeof err.code === "string" ? err.code : undefined;
+    const status = code === ERROR_CODES.PLAYER_ALREADY_EXISTS
+      ? 409
+      : code === ERROR_CODES.NO_FREE_TANKS
+      ? 409
+      : code === ERROR_CODES.VALIDATION_ERROR
+      ? 400
+      : 500;
+    return c.json(response, status);
+  }
+
   return c.json(response, 201);
 });
 
 app.post("/auth/login", async (c: Context) => {
   const reqBody = await c.req.json();
   const response = await handleLogin(reqBody);
+  // If error, map to status codes
+  const respLogin: Record<string, unknown> = response as Record<
+    string,
+    unknown
+  >;
+  const isLoginError =
+    ("success" in respLogin && respLogin.success === false) ||
+    ("error" in respLogin && typeof respLogin.error === "object" &&
+      respLogin.error !== null);
+  if (isLoginError) {
+    const err = (respLogin.error ?? {}) as { code?: string };
+    const code = typeof err.code === "string" ? err.code : undefined;
+    const status = code === ERROR_CODES.NO_PLAYER_FOUND
+      ? 404
+      : code === ERROR_CODES.MULTIPLE_PLAYERS_FOUND
+      ? 409
+      : code === ERROR_CODES.VALIDATION_ERROR
+      ? 400
+      : 500;
+    return c.json(response, status);
+  }
   return c.json(response, 200);
 });
 
@@ -134,19 +173,12 @@ app.all("*", (c: Context) => {
   const path = new URL(c.req.url).pathname;
   console.warn(`Unhandled route: ${method} ${path}`);
   // Return JSON 404 response
-  const response = new Response(
-    JSON.stringify({
-      success: false,
-      error: "NOT_FOUND",
-      message: `Endpoint ${method} ${path} not found`,
-      timestamp: new Date().toISOString(),
-    }),
-    {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    },
-  );
-  return c.json(response, 404);
+  return c.json({
+    success: false,
+    error: "NOT_FOUND",
+    message: `Endpoint ${method} ${path} not found`,
+    timestamp: new Date().toISOString(),
+  }, 404);
 });
 
 // Export for Deno Deploy

@@ -168,7 +168,7 @@ export function getErrorMessage(errorCode: ApiErrorCode): string {
         case API_ERROR_CODES.MULTIPLE_PLAYERS_FOUND:
             return "Flera spelare hittades med samma namn";
         case API_ERROR_CODES.PLAYER_ALREADY_EXISTS:
-            return "Spelarnamnet används redan";
+            return "Du har redan en bandvagn";
         case API_ERROR_CODES.INVALID_PLAYER_ID:
             return "Ogiltigt spelarnamn";
         case API_ERROR_CODES.PLAYER_DEAD:
@@ -331,6 +331,7 @@ export function formatAPIError(error: unknown): string {
         const errorMessages: Record<string, string> = {
             "no_player_found": "Ingen spelare hittades",
             "no_free_tanks": "Inga lediga tanks",
+            "player_already_exists": "Du har redan en bandvagn",
             "missing_tokens": "Inte nog med tokens",
             "invalid_action": "Ogiltigt drag",
             "not_in_range": "Inte inom räckvidd",

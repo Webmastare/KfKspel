@@ -20,6 +20,28 @@ export async function handleCreatePlayer(body: unknown) {
 
     const supabase = createServiceClient();
 
+    // Guard: prevent creating multiple tanks for the same user
+    const { data: existingPlayers, error: existingErr } = await supabase
+      .from("KfKbandvagn")
+      .select("uuid, user_id, taken_tank")
+      .eq("user_id", createData.user_id)
+      .eq("taken_tank", true);
+
+    if (existingErr) {
+      console.error("Error checking existing players:", existingErr);
+      return createErrorResponse(
+        ERROR_CODES.INTERNAL_ERROR,
+        existingErr.message,
+      );
+    }
+
+    if (existingPlayers && existingPlayers.length > 0) {
+      return createErrorResponse(
+        ERROR_CODES.PLAYER_ALREADY_EXISTS,
+        "User already has a tank",
+      );
+    }
+
     // Fetch all current players to find available tank
     const { data: currentData, error: selectError } = await supabase
       .from("KfKbandvagn")
