@@ -9,7 +9,7 @@ import FeedbackAdmin from "@/pages/FeedbackAdmin.vue";
 import gameRouter from "./gamesRouter";
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHashHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: "/",

@@ -27,13 +27,13 @@
 
       <button @click="startGame" class="control-header-btn">Starta Om</button>
 
-      <button @click="showSettings = true" class="control-header-btn">⚙️</button>
+      <button @click="toggleShowSettings" class="control-header-btn">⚙️</button>
     </div>
 
     <!-- Settings Overlay -->
     <div v-if="showSettings" class="settings-overlay">
       <div class="settings-modal">
-        <button type="button" class="close-settings-button" @click="showSettings = false">
+        <button type="button" class="close-settings-button" @click="toggleShowSettings">
           &#215;
         </button>
         <h2>Inställningar</h2>
@@ -113,7 +113,7 @@
         </div>
 
         <div class="button-group">
-          <button @click="showSettings = false" class="submit-button primary">Stäng</button>
+          <button @click="toggleShowSettings" class="submit-button primary">Stäng</button>
         </div>
       </div>
     </div>
@@ -196,6 +196,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { useThemeStore } from '@/stores/theme'
 // Game Constants
 const GRID_SIZE = 20
 
@@ -261,7 +262,14 @@ const gameInterval = computed(() => {
   return 1000 / currentSpeed.value
 })
 
-// Theme Management (handled globally now)
+// Theme management
+const themeStore = useThemeStore()
+watch(themeStore.currentTheme, () => {
+  nextTick(() => {
+    console.log('Theme changed, redrawing canvas')
+    draw()
+  })
+})
 
 function updateDifficulty() {
   gameSpeed.value = currentSpeed.value
@@ -359,10 +367,6 @@ function setupCanvas() {
   }
 
   ctx.value = canvas.getContext('2d')
-  if (!ctx.value) {
-    console.error('Could not get canvas context')
-    return false
-  }
 
   // Responsive canvas sizing
   const containerWidth = Math.min(window.innerWidth - 40, 600)
@@ -375,7 +379,6 @@ function setupCanvas() {
 
   canvas.width = canvasWidth.value
   canvas.height = canvasHeight.value
-
   return true
 }
 
@@ -418,10 +421,16 @@ function startGame() {
   gameLoopId.value = setInterval(gameLoop, 16) // ~60 FPS
 }
 
-function togglePause() {
-  if (!gameStarted.value || gameOver.value) return
+function toggleShowSettings() {
+  showSettings.value = !showSettings.value
+  togglePause()
+}
 
-  if (gamePaused.value) {
+function togglePause() {
+  if (direction.value.x === 0 && direction.value.y === 0) return
+
+  // If pressed while paused with countdown, pause immediately
+  if (gamePaused.value && pauseCountdown.value === 0) {
     // Resume with countdown
     pauseCountdown.value = 3
     const countdownInterval = setInterval(() => {
@@ -605,18 +614,7 @@ function draw() {
   })
 
   // Draw snake
-  snake.value.forEach((segment, index) => {
-    ctx.value.fillStyle = index === 0 ? snakeHeadColor : snakeColor
-    const padding = index === 0 ? 1 : 2
-    ctx.value.fillRect(
-      segment.x * cellSize.value + padding,
-      segment.y * cellSize.value + padding,
-      cellSize.value - padding * 2,
-      cellSize.value - padding * 2,
-    )
-  })
-
-  // Draw snake
+  /*
   snake.value.forEach((segment, index) => {
     const x = segment.x * cellSize.value
     const y = segment.y * cellSize.value
@@ -673,7 +671,87 @@ function draw() {
       ctx.value.fillStyle = snakeColor
       ctx.value.fillRect(x + 3, y + 3, cellSize.value - 6, cellSize.value - 6)
     }
-  })
+  })*/
+
+  const firstSegment = snake.value[0]
+  if (firstSegment) {
+    const headX = firstSegment.x * cellSize.value
+    const headY = firstSegment.y * cellSize.value
+
+    ctx.value.beginPath()
+    ctx.value.moveTo(headX + 0.5 * cellSize.value, headY + 0.5 * cellSize.value)
+
+    // Draw lines between segments
+    for (let i = 1; i < snake.value.length; i++) {
+      const currX = snake.value[i].x * cellSize.value
+      const currY = snake.value[i].y * cellSize.value
+      const prevX = snake.value[i - 1].x * cellSize.value
+      const prevY = snake.value[i - 1].y * cellSize.value
+      const dist = Math.sqrt((currX - prevX) ** 2 + (currY - prevY) ** 2)
+      if (dist <= cellSize.value * 1.5) {
+        ctx.value.lineTo(currX + cellSize.value / 2, currY + cellSize.value / 2)
+      } else {
+        ctx.value.moveTo(currX + cellSize.value / 2, currY + cellSize.value / 2)
+      }
+    }
+
+    ctx.value.lineWidth = 0.85 * cellSize.value // Thickness of the snake
+    ctx.value.strokeStyle = snakeColor
+    ctx.value.stroke()
+
+    // Snake head
+    ctx.value.fillStyle = snakeHeadColor
+    const offset = cellSize.value * 0.07
+    ctx.value.fillRect(
+      headX + offset,
+      headY + offset,
+      cellSize.value - offset * 2,
+      cellSize.value - offset * 2,
+    )
+
+    // Eyes
+    ctx.value.fillStyle = 'white'
+    const eyeSize = cellSize.value * 0.15
+    const eyeOffset = cellSize.value * 0.3
+
+    if (direction.value.x === 1) {
+      // Right
+      ctx.value.fillRect(headX + cellSize.value - eyeOffset, headY + eyeOffset, eyeSize, eyeSize)
+      ctx.value.fillRect(
+        headX + cellSize.value - eyeOffset,
+        headY + cellSize.value - eyeOffset - eyeSize,
+        eyeSize,
+        eyeSize,
+      )
+    } else if (direction.value.x === -1) {
+      // Left
+      ctx.value.fillRect(headX + eyeOffset - eyeSize, headY + eyeOffset, eyeSize, eyeSize)
+      ctx.value.fillRect(
+        headX + eyeOffset - eyeSize,
+        headY + cellSize.value - eyeOffset - eyeSize,
+        eyeSize,
+        eyeSize,
+      )
+    } else if (direction.value.y === -1) {
+      // Up
+      ctx.value.fillRect(headX + eyeOffset, headY + eyeOffset - eyeSize, eyeSize, eyeSize)
+      ctx.value.fillRect(
+        headX + cellSize.value - eyeOffset - eyeSize,
+        headY + eyeOffset - eyeSize,
+        eyeSize,
+        eyeSize,
+      )
+    } else {
+      // Down
+      ctx.value.fillRect(headX + eyeOffset, headY + cellSize.value - eyeOffset, eyeSize, eyeSize)
+      ctx.value.fillRect(
+        headX + cellSize.value - eyeOffset - eyeSize,
+        headY + cellSize.value - eyeOffset,
+        eyeSize,
+        eyeSize,
+      )
+    }
+  }
 
   // Draw food
   food.value.forEach((f) => {
@@ -786,7 +864,12 @@ function turnRight() {
 
 function handleKeyPress(event) {
   // Handle start/restart/pause keys
-  if (event.code === 'Space' || event.code === 'Enter') {
+  if (
+    event.code === 'Space' ||
+    event.code === 'Enter' ||
+    event.code === 'Escape' ||
+    event.code === 'KeyP'
+  ) {
     if (gameStarted.value && !gameOver.value) {
       togglePause()
     } else if (gameOver.value) {
@@ -887,9 +970,8 @@ function handleTouchEnd(event) {
 }
 
 function handleResize() {
-  if (setupCanvas()) {
-    draw() // Redraw after resize
-  }
+  setupCanvas()
+  draw() // Redraw after resize
 }
 
 // Lifecycle

@@ -63,25 +63,25 @@
               @click="toggleVisualization('cycle')"
               :class="{ active: visualizationOptions.cycle }"
             >
-              Show Hamiltonian Cycle
+              Visa Hamiltonian Cycle
             </button>
             <button
               @click="toggleVisualization('path')"
               :class="{ active: visualizationOptions.path }"
             >
-              Show Snake Path
+              Visa Snake Vägen
             </button>
             <button
               @click="toggleVisualization('generation')"
               :class="{ active: visualizationOptions.generation }"
             >
-              Show Generation Process
+              Visa Generationsprocess (Startar om spelet)
             </button>
             <button @click="debugMode = !debugMode" :class="{ active: debugMode, debug: true }">
-              Shortcuts Info
+              Genvägsdebug
             </button>
             <div class="fps-control">
-              <label for="fps">Snake Speed (FPS): </label>
+              <label for="fps">Snake Hastighet (FPS): </label>
               <input
                 type="range"
                 name="fps"

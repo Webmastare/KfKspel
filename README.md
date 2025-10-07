@@ -44,4 +44,10 @@ KfKbandvagn:
 
 - Reviving players that are dead, consumes 1 token?
 
+## TODO
+
+KfKbandvagn
+
+- Stänger inte create form när man skapar ett nytt konto
+
 Skapad av Kasper Storck 2025

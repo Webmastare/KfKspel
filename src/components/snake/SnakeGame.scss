@@ -278,18 +278,9 @@
 // Game Container
 .game-container {
   position: relative;
-  margin-bottom: 2rem;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  background: var(--snake-bg);
-
-  .kfkblock-canvas {
-    display: block;
-    background: var(--snake-bg);
-    touch-action: none;
-    user-select: none;
-  }
 
   // Game Over Overlay
   .game-over-overlay {
@@ -298,14 +289,15 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.6);
+    opacity: 0.8;
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 10;
 
     .game-over-content {
-      background: var(--modal-bg-color);
+      background: var(--theme-modal-bg);
       padding: 2rem;
       border-radius: 16px;
       text-align: center;
@@ -401,6 +393,9 @@
         margin: 0;
       }
     }
+  }
+  canvas {
+    display: block;
   }
 }
 

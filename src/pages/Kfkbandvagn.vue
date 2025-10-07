@@ -70,7 +70,8 @@
             </ul>
           </div>
           <!-- Shrink status inside spelstatus dropdown -->
-          <div class="shrink-status" v-if="boardData">
+          <!-- TODO: Not implemented yet placeholder-->
+          <div class="shrink-status" v-if="boardData && false">
             <div class="shrink-row">
               <span class="label">Nästa krympning:</span>
               <span class="value">{{ nextShrinkCountdown }}</span>

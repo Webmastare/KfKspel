@@ -158,6 +158,14 @@
               </button>
             </div>
 
+            <!-- Pause Overlay -->
+            <div v-if="gamePaused && gameStarted" class="pause-overlay">
+              <div class="pause-content">
+                <h2 v-if="pauseTimer === 0">Pausad</h2>
+                <h2 v-else>{{ pauseTimer.toFixed(1) }}</h2>
+              </div>
+            </div>
+
             <canvas class="kfkblock-canvas" id="tetrisCanvas"></canvas>
           </div>
 
@@ -389,8 +397,16 @@ const formattedTime = computed(() => {
 const showModal = computed(() => !gameStarted.value || gameOver.value)
 
 const topPlayers = computed(() => {
-  // Initialize dummy data if empty
-  return leaderBoardData.value.sort((a, b) => b.Score - a.Score).slice(0, 100)
+  const sorted = leaderBoardData.value.sort((a, b) => b.Score - a.Score)
+  let addedPlayers = []
+  for (let i = 0; i < sorted.length; i++) {
+    const player = sorted[i]
+    if (addedPlayers.some((p) => p.playerID === player.playerID)) {
+      continue
+    }
+    addedPlayers.push(player)
+  }
+  return addedPlayers.slice(0, 100)
 })
 
 const gameDataForSubmission = computed(() => ({
@@ -442,22 +458,20 @@ function refreshDisplay() {
 }
 
 function togglePause() {
-  if (gamePaused.value) {
+  if (gameStarted.value && gamePaused.value && pauseTimer.value === 0) {
     // Resuming game
     pauseTimer.value = 3 // Give a 3 second countdown
     // Start countdown, when reaching 0 unpause
     const countdownInterval = setInterval(() => {
-      if (pauseTimer.value > 0) {
-        pauseTimer.value -= 0.1
-      } else {
-        clearInterval(countdownInterval)
-        pauseTimer.value = 0
+      pauseTimer.value -= 0.1
+      if (pauseTimer.value <= 0) {
         gamePaused.value = false
+        pauseTimer.value = 0
+        clearInterval(countdownInterval)
       }
     }, 100)
   } else {
     // Pausing game
-    pauseTimer.value = 0
     gamePaused.value = true
   }
 }
@@ -711,7 +725,6 @@ function endGame() {
   gameOver.value = true
   clearInterval(gameLoopIntervalId.value)
   stopGameTimer()
-  removeKeyboardListeners()
   drawBoard(
     ctx.value,
     board.value,
@@ -923,21 +936,16 @@ function _handleKeydown(e) {
     controlsMode.value = 0
     autoHideOnKeyboard.value = false
   }
-  if (showModal.value) {
-    if (['Enter', 'Space'].includes(e.code)) startGame()
-    e.preventDefault()
-    return
-  }
 
   // Pause handling
-  if (e.code == 'Escape' || e.code == 'KeyP') {
-    if (!gameStarted.value) return
+  if ((e.code == 'Escape' || e.code == 'KeyP') && gameStarted.value && !gameOver.value) {
     togglePause()
     e.preventDefault()
-    return
   }
 
-  if (gameOver.value || gamePaused.value || !gameStarted.value) {
+  if (gameOver.value || gamePaused.value || !gameStarted.value || showModal.value) {
+    console.log('Ignoring key press, game not active')
+    e.preventDefault()
     return
   }
 
