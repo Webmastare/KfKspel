@@ -37,4 +37,11 @@ KfKblock:
 - Anti-cheat, use a hash score for the score and validate each tick to detect tampering.
 - Pause before game is started shouldn't have timer
 
+KfKbandvagn:
+
+- Start on a larger board and then shrink it once a day forcing players closer together
+- Have upgrades on the board that players can move to and pick up, like a long range missile that has unlimited range? Free tokens that can be picked up?
+
+- Reviving players that are dead, consumes 1 token?
+
 Skapad av Kasper Storck 2025

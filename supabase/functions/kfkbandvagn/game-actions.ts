@@ -75,7 +75,7 @@ async function addBandvagnLog(
 }
 
 // Handle game actions (equivalent to /doActionKfKbandvagn)
-export async function handleGameAction(body: unknown) {
+export async function handleGameAction(body: unknown, userId: string) {
   try {
     const actionData: ActionRequest = validateActionRequest(body);
 
@@ -96,19 +96,26 @@ export async function handleGameAction(body: unknown) {
       );
     }
 
-    // Find the current user
+    // Find the current user by tank id
     const currentUser = currentData?.find((player: Player) =>
       player.uuid === actionData.tank_id
     );
     if (!currentUser) {
       return createErrorResponse(ERROR_CODES.USER_NOT_FOUND, "User not found");
     }
-
-    // Check if player is alive for most actions
-    if (currentUser.lives <= 0 && actionData.action !== "life") {
+    // Verify the tank is still alive
+    if (currentUser.lives <= 0) {
       return createErrorResponse(
         ERROR_CODES.PLAYER_ALREADY_DEAD,
-        "Dead players cannot perform this action",
+        "Your tank is destroyed. You cannot perform actions.",
+      );
+    }
+
+    // Verify the authenticated user owns this tank
+    if (currentUser.user_id !== userId) {
+      return createErrorResponse(
+        ERROR_CODES.INVALID_SESSION,
+        "You are not authorized to control this tank",
       );
     }
 
@@ -156,7 +163,48 @@ export async function handleGameAction(body: unknown) {
           );
         }
 
-        // TODO: Add board boundary validation here when we have board size
+        // Fetch board to validate playable bounds (cannot move into already-shrunk area)
+        const { data: boardData, error: boardError } = await supabase
+          .from("KfKbandvagnBoard")
+          .select("size, has_shrunked")
+          .eq("active_board", true)
+          .single();
+
+        if (boardError || !boardData) {
+          console.error(
+            "Error fetching board for move validation:",
+            boardError,
+          );
+          return createErrorResponse(
+            ERROR_CODES.INTERNAL_ERROR,
+            "Failed to validate move against board",
+          );
+        }
+
+        const totalRows = boardData.size?.rows ?? 0;
+        const totalCols = boardData.size?.columns ?? 0;
+        const hs = boardData.has_shrunked || { row: 0, column: 0 };
+        // Playable inclusive bounds
+        const minRow = hs.row;
+        const maxRow = Math.max(hs.row, totalRows - hs.row - 1);
+        const minCol = hs.column;
+        const maxCol = Math.max(hs.column, totalCols - hs.column - 1);
+
+        const inTotalBounds = targetRow >= 0 &&
+          targetCol >= 0 &&
+          targetRow < totalRows &&
+          targetCol < totalCols;
+        const inPlayable = targetRow >= minRow &&
+          targetRow <= maxRow &&
+          targetCol >= minCol &&
+          targetCol <= maxCol;
+
+        if (!inTotalBounds || !inPlayable) {
+          return createErrorResponse(
+            ERROR_CODES.INVALID_ACTION,
+            "Target position is outside the playable area",
+          );
+        }
 
         updateQuery = {
           tokens: currentUser.tokens - requiredTokens,
@@ -240,7 +288,9 @@ export async function handleGameAction(body: unknown) {
           .from("KfKbandvagn")
           .update(shootQuery)
           .eq("uuid", actionData.targetUUID)
-          .select("playerID, uuid, tokens, position, lives, range, color, taken_tank")
+          .select(
+            "playerID, uuid, tokens, position, lives, range, color, taken_tank",
+          )
           .single();
 
         if (shotError) {
@@ -314,7 +364,9 @@ export async function handleGameAction(body: unknown) {
       .from("KfKbandvagn")
       .update(updateQuery)
       .eq("uuid", actionData.tank_id)
-      .select("playerID, uuid, tokens, position, lives, range, color, taken_tank")
+      .select(
+        "playerID, uuid, tokens, position, lives, range, color, taken_tank",
+      )
       .single();
 
     if (updateError) {

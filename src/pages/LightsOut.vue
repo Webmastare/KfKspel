@@ -454,13 +454,11 @@ async function refreshLeaderboard() {
 function toggleLeaderboard() {
   showLeaderboard.value = !showLeaderboard.value
 }
-function formatDate(d: string) {
-  try {
-    const date = new Date(d)
-    return date.toLocaleDateString()
-  } catch {
-    return d
-  }
+
+function formatDate(dateStr: string) {
+  // Return date in YYYY-MM-DD format
+  const d = new Date(dateStr)
+  return d.toISOString().split('T')[0]
 }
 
 // Show save modal when time runs out

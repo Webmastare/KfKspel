@@ -33,13 +33,26 @@ export async function handleBoardShrink() {
       );
     }
 
-    const currentShrink = boardData.shrink || 0;
     const boardSize = boardData.size;
-    const newShrink = currentShrink + 1;
+    const hasShrunked = boardData.has_shrunked || { row: 0, column: 0 };
+    const toShrink = boardData.to_shrink || { row: 0, column: 0 };
+    const nextHasShrunked = {
+      row: Math.min(
+        boardSize.rows,
+        (hasShrunked.row || 0) + (toShrink.row || 0),
+      ),
+      column: Math.min(
+        boardSize.columns,
+        (hasShrunked.column || 0) + (toShrink.column || 0),
+      ),
+    };
 
-    // Calculate effective board size after shrink
-    const effectiveRows = Math.max(1, boardSize.rows - newShrink);
-    const effectiveCols = Math.max(1, boardSize.columns - newShrink);
+    // Calculate effective board size after applying shrink on both sides
+    const effectiveRows = Math.max(1, boardSize.rows - nextHasShrunked.row * 2);
+    const effectiveCols = Math.max(
+      1,
+      boardSize.columns - nextHasShrunked.column * 2,
+    );
 
     console.log(
       `Shrinking board from ${boardSize.rows}x${boardSize.columns} to ${effectiveRows}x${effectiveCols}`,
@@ -49,10 +62,25 @@ export async function handleBoardShrink() {
     const nextShrinkTime = new Date();
     nextShrinkTime.setDate(nextShrinkTime.getDate() + 1); // Next shrink in 24 hours
 
+    // Decide next to_shrink plan (default 1 per side, but clamp to keep at least 1x1 playable)
+    const maxNextRowShrinkPerSide = Math.max(
+      0,
+      Math.floor((boardSize.rows - nextHasShrunked.row * 2 - 1) / 2),
+    );
+    const maxNextColShrinkPerSide = Math.max(
+      0,
+      Math.floor((boardSize.columns - nextHasShrunked.column * 2 - 1) / 2),
+    );
+    const plannedToShrink = {
+      row: Math.min(1, maxNextRowShrinkPerSide),
+      column: Math.min(1, maxNextColShrinkPerSide),
+    };
+
     const { error: updateBoardError } = await supabase
       .from("KfKbandvagnBoard")
       .update({
-        shrink: newShrink,
+        has_shrunked: nextHasShrunked,
+        to_shrink: plannedToShrink,
         next_shrink: nextShrinkTime.toISOString(),
       })
       .eq("active_board", true);
@@ -86,11 +114,25 @@ export async function handleBoardShrink() {
       const { position } = player;
 
       // Check if player is outside new bounds
-      if (position.row >= effectiveRows || position.column >= effectiveCols) {
+      if (
+        position.row < nextHasShrunked.row ||
+        position.row >= boardSize.rows - nextHasShrunked.row ||
+        position.column < nextHasShrunked.column ||
+        position.column >= boardSize.columns - nextHasShrunked.column
+      ) {
         // Move player to nearest safe position and reduce lives by 1
         const newPosition = {
-          row: Math.max(0, Math.min(position.row, effectiveRows - 1)),
-          column: Math.max(0, Math.min(position.column, effectiveCols - 1)),
+          row: Math.max(
+            nextHasShrunked.row,
+            Math.min(position.row, boardSize.rows - nextHasShrunked.row - 1),
+          ),
+          column: Math.max(
+            nextHasShrunked.column,
+            Math.min(
+              position.column,
+              boardSize.columns - nextHasShrunked.column - 1,
+            ),
+          ),
         };
 
         const newLives = Math.max(0, player.lives - 1);
@@ -155,7 +197,8 @@ export async function handleBoardShrink() {
       action: "board_shrink",
       timestamp: new Date().toISOString(),
       details: {
-        newShrinkLevel: newShrink,
+        has_shrunked: nextHasShrunked,
+        to_shrink_applied: toShrink,
         effectiveSize: { rows: effectiveRows, cols: effectiveCols },
         playersAffected: playersToUpdate.length,
       },
@@ -183,10 +226,10 @@ export async function handleBoardShrink() {
     );
 
     return createSuccessResponse({
-      shrinkLevel: newShrink,
+      has_shrunked: nextHasShrunked,
       effectiveSize: { rows: effectiveRows, cols: effectiveCols },
       playersAffected: playersToUpdate.length,
-      nextShrink: nextShrinkTime.toISOString(),
+      next_shrink: nextShrinkTime.toISOString(),
     }, "Board shrink completed successfully");
   } catch (error) {
     console.error("Error in handleBoardShrink:", error);
@@ -303,12 +346,12 @@ export async function handleTokenDistribution() {
   }
 }
 
-// Handle heart spawning (called by cron job at random intervals)
-export async function handleHeartSpawn() {
+// Handle item spawning (called by cron job at random intervals)
+export async function handleItemsSpawn() {
   try {
     const supabase = createServiceClient();
 
-    console.log("Starting heart spawn process");
+    console.log("Starting item spawn process");
 
     // Get board data and players
     const { data: boardData, error: boardError } = await supabase
@@ -339,11 +382,20 @@ export async function handleHeartSpawn() {
       );
     }
 
-    // Calculate effective board size
+    // Calculate playable bounds using the new shrink model
     const boardSize = boardData.size;
-    const shrink = boardData.shrink || 0;
-    const effectiveRows = Math.max(1, boardSize.rows - shrink);
-    const effectiveCols = Math.max(1, boardSize.columns - shrink);
+    const hasShrunked = boardData.has_shrunked || { row: 0, column: 0 };
+    // Playable area is from [hasShrunked.row, rows - hasShrunked.row - 1] and same for columns
+    const playableTop = hasShrunked.row;
+    const playableBottom = Math.max(
+      hasShrunked.row,
+      boardSize.rows - hasShrunked.row - 1,
+    );
+    const playableLeft = hasShrunked.column;
+    const playableRight = Math.max(
+      hasShrunked.column,
+      boardSize.columns - hasShrunked.column - 1,
+    );
 
     // Find occupied positions
     const occupiedPositions =
@@ -352,8 +404,8 @@ export async function handleHeartSpawn() {
 
     // Generate available positions for heart spawn
     const availablePositions = [];
-    for (let row = 0; row < effectiveRows; row++) {
-      for (let col = 0; col < effectiveCols; col++) {
+    for (let row = playableTop; row <= playableBottom; row++) {
+      for (let col = playableLeft; col <= playableRight; col++) {
         const isOccupied = occupiedPositions.some((pos) =>
           pos.row === row && pos.column === col
         );
@@ -364,71 +416,17 @@ export async function handleHeartSpawn() {
     }
 
     if (availablePositions.length === 0) {
-      console.log("No available positions for heart spawn");
+      console.log("No available positions for spawning items");
       return createSuccessResponse(
-        { heartsSpawned: 0 },
-        "No available positions for heart spawn",
+        { itemsSpawned: 0 },
+        "No available positions for spawning items",
       );
     }
-
-    // Spawn 1-3 hearts randomly
-    const heartsToSpawn = Math.floor(Math.random() * 3) + 1;
-    const spawnedHearts = [];
-
-    for (
-      let i = 0;
-      i < Math.min(heartsToSpawn, availablePositions.length);
-      i++
-    ) {
-      const randomIndex = Math.floor(Math.random() * availablePositions.length);
-      const position = availablePositions.splice(randomIndex, 1)[0];
-      spawnedHearts.push(position);
-    }
-
-    // TODO: Store heart positions in database
-    // For now, we'll just log the event
-
-    // Add log entry about heart spawn
-    const logEntry: GameLog = {
-      playerID: "SYSTEM",
-      action: "heart_spawn",
-      timestamp: new Date().toISOString(),
-      details: {
-        heartsSpawned: spawnedHearts.length,
-        positions: spawnedHearts,
-      },
-    };
-
-    // Update logs
-    const currentLogs = boardData.logs || [];
-    let updatedLogs = [...currentLogs, logEntry];
-    if (updatedLogs.length > 100) {
-      updatedLogs = updatedLogs.slice(-100);
-    }
-
-    const { error: logError } = await supabase
-      .from("KfKbandvagnBoard")
-      .update({ logs: updatedLogs })
-      .eq("active_board", true);
-
-    if (logError) {
-      console.error("Error updating logs:", logError);
-      // Don't fail the whole operation for log errors
-    }
-
-    console.log(
-      `Heart spawn completed. Spawned ${spawnedHearts.length} hearts`,
-    );
-
-    return createSuccessResponse({
-      heartsSpawned: spawnedHearts.length,
-      positions: spawnedHearts,
-    }, "Heart spawn completed successfully");
   } catch (error) {
-    console.error("Error in handleHeartSpawn:", error);
+    console.error("Error in handleItemsSpawn:", error);
     return createErrorResponse(
       ERROR_CODES.INTERNAL_ERROR,
-      error instanceof Error ? error.message : "Heart spawn failed",
+      error instanceof Error ? error.message : "Items spawn failed",
     );
   }
 }

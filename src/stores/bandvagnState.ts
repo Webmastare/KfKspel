@@ -48,10 +48,10 @@ export const useBandvagnStore = defineStore("bandvagn", {
 
     playableBoardSize: (state) => {
       if (!state.boardData) return { rows: 0, cols: 0 };
-      const shrink = state.boardData.shrink || 0;
+      const hs = (state.boardData as any).has_shrunked || { row: 0, column: 0 };
       return {
-        rows: Math.max(1, state.boardData.rows - shrink * 2),
-        cols: Math.max(1, state.boardData.cols - shrink * 2),
+        rows: Math.max(1, state.boardData.rows - hs.row * 2),
+        cols: Math.max(1, state.boardData.cols - hs.column * 2),
       };
     },
 
@@ -80,14 +80,18 @@ export const useBandvagnStore = defineStore("bandvagn", {
       const totalPlayers = state.allPlayers.filter((p: Player) =>
         p.taken_tank
       ).length;
+      const hs = (state.boardData as any)?.has_shrunked ||
+        { row: 0, column: 0 };
+      const ts = (state.boardData as any)?.to_shrink || { row: 0, column: 0 };
       return {
         alivePlayers,
         totalPlayers,
-        boardShrink: state.boardData?.shrink || 0,
+        boardShrink: hs,
+        nextShrink: ts,
+        nextShrinkAt: (state.boardData as any)?.next_shrink || null,
       };
     },
   },
-
   actions: {
     // Initialize the store
     async initialize() {
@@ -147,11 +151,14 @@ export const useBandvagnStore = defineStore("bandvagn", {
           this.boardData = {
             rows: gameState.boardData.size!.rows,
             cols: gameState.boardData.size!.columns,
-            shrink: gameState.boardData.shrink,
+            has_shrunked: (gameState.boardData as any).has_shrunked ||
+              { row: 0, column: 0 },
+            to_shrink: (gameState.boardData as any).to_shrink ||
+              { row: 0, column: 0 },
             logs: gameState.boardData.logs,
-            upgrades: gameState.boardData.upgrades || [],
-            time_to_shrink: gameState.boardData.time_to_shrink || "",
-          };
+            upgrades: (gameState.boardData as any).upgrades || [],
+            next_shrink: (gameState.boardData as any).next_shrink || "",
+          } as unknown as GameBoard;
         }
 
         // Fetch the current user's tank directly via RLS-protected client query
@@ -518,13 +525,22 @@ export const useBandvagnStore = defineStore("bandvagn", {
     canMoveToCell(row: number, column: number): boolean {
       if (!this.currentPlayer) return false;
 
-      const playableSize = this.playableBoardSize;
-      const shrink = this.boardData?.shrink || 0;
+      const hs = (this.boardData as any)?.has_shrunked || { row: 0, column: 0 };
 
       // Check if cell is within board bounds
       if (
         row < 0 || row >= this.boardSize.rows ||
         column < 0 || column >= this.boardSize.cols
+      ) {
+        return false;
+      }
+
+      // Disallow moving into already shrunk (non-playable) area
+      if (
+        row < hs.row ||
+        row >= this.boardSize.rows - hs.row ||
+        column < hs.column ||
+        column >= this.boardSize.cols - hs.column
       ) {
         return false;
       }

@@ -1,4 +1,8 @@
-import { createRouter, createWebHistory } from "vue-router";
+import {
+  createRouter,
+  createWebHashHistory,
+  createWebHistory,
+} from "vue-router";
 import LandingPage from "@/pages/LandingPage.vue";
 import Feedback from "@/pages/Feedback.vue";
 import FeedbackAdmin from "@/pages/FeedbackAdmin.vue";

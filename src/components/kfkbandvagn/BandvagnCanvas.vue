@@ -47,15 +47,6 @@
       <p>Laddar spel...</p>
     </div>
   </div>
-
-  <div v-if="isDebugging" class="debug-overlay">
-    <div class="debug-item">Canvas: {{ canvasWidth }}x{{ canvasHeight }} @ {{ dpr }}x</div>
-    <div class="debug-item">Cell Size: {{ cellSize }}px</div>
-    <div class="debug-item">
-      Zoom: {{ zoom.toFixed(2) }}, Pan: ({{ pan.x.toFixed(1) }}, {{ pan.y.toFixed(1) }})
-    </div>
-    <div class="debug-item">Animation Frames Remaining: {{ animFramesRemaining }}</div>
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -75,7 +66,6 @@ import {
   renderAnimations,
   type AnimationState,
 } from '@/composables/kfkbandvagn/animations'
-import { start } from 'repl'
 
 // Store
 const gameStore = useBandvagnStore()
@@ -105,6 +95,8 @@ const isLoading = ref(false)
 const dpr = ref(window.devicePixelRatio || 1)
 const tankSprite = ref<HTMLImageElement | null>(null)
 const SPRITE_RATIO = 16 / 24 // width / height, from original impl
+// Cache for tinted sprites by color to avoid per-frame canvas creation
+const tintedSpriteCache = new Map<string, HTMLCanvasElement>()
 
 // Popup state
 const showPopup = ref(false)
@@ -119,8 +111,6 @@ const isMultiTouch = ref(false)
 const animationState = ref<AnimationState>(createAnimationState())
 let rafId: number | null = null
 const animFramesRemaining = ref(0)
-
-const isDebugging = ref(true)
 
 // Theme cache to avoid style lookups inside the draw loop
 const themeCache = ref({
@@ -161,11 +151,11 @@ const boardSize = computed(() => {
 })
 
 const playableSize = computed(() => {
-  const shrink = gameStore.boardData?.shrink || 0
+  const hs = (gameStore.boardData as any)?.has_shrunked || { row: 0, column: 0 }
   return {
-    rows: Math.max(1, boardSize.value.rows - shrink * 2),
-    cols: Math.max(1, boardSize.value.cols - shrink * 2),
-    shrink,
+    rows: Math.max(1, boardSize.value.rows - hs.row * 2),
+    cols: Math.max(1, boardSize.value.cols - hs.column * 2),
+    has_shrunked: hs,
   }
 })
 
@@ -386,25 +376,29 @@ function drawTank(
     const destX = x + (size - destW) / 2
     const destY = y + (size - destH) / 2
 
-    // Offscreen tinting that preserves shading
-    const off = document.createElement('canvas')
-    off.width = sprite.naturalWidth
-    off.height = sprite.naturalHeight
-    const octx = off.getContext('2d')!
-    octx.imageSmoothingEnabled = false
-    octx.clearRect(0, 0, off.width, off.height)
-    // Fill with tint color and multiply with sprite luminance
-    octx.fillStyle = color
-    octx.fillRect(0, 0, off.width, off.height)
-    octx.globalCompositeOperation = 'multiply'
-    octx.drawImage(sprite, 0, 0)
-    // Keep sprite alpha
-    octx.globalCompositeOperation = 'destination-in'
-    octx.drawImage(sprite, 0, 0)
-    octx.globalCompositeOperation = 'source-over'
-
+    // Get or create tinted sprite for this color
+    let tinted = tintedSpriteCache.get(color)
+    if (!tinted) {
+      const off = document.createElement('canvas')
+      off.width = sprite.naturalWidth
+      off.height = sprite.naturalHeight
+      const octx = off.getContext('2d')!
+      octx.imageSmoothingEnabled = false
+      // Fill with tint color and multiply with sprite luminance
+      octx.clearRect(0, 0, off.width, off.height)
+      octx.fillStyle = color
+      octx.fillRect(0, 0, off.width, off.height)
+      octx.globalCompositeOperation = 'multiply'
+      octx.drawImage(sprite, 0, 0)
+      // Keep sprite alpha
+      octx.globalCompositeOperation = 'destination-in'
+      octx.drawImage(sprite, 0, 0)
+      octx.globalCompositeOperation = 'source-over'
+      tintedSpriteCache.set(color, off)
+      tinted = off
+    }
     // Draw tinted sprite scaled
-    context.drawImage(off, destX, destY, destW, destH)
+    context.drawImage(tinted, destX, destY, destW, destH)
   } else {
     // Fallback to simple rectangle tank if image not loaded
     const bodyW = size * 0.8
@@ -474,7 +468,14 @@ function drawBoard() {
 
   const rows = boardSize.value.rows
   const cols = boardSize.value.cols
-  const shrink = playableSize.value.shrink
+  const hs = (gameStore.boardData && (gameStore.boardData as any).has_shrunked) || {
+    row: 0,
+    column: 0,
+  }
+  const ts = (gameStore.boardData && (gameStore.boardData as any).to_shrink) || {
+    row: 0,
+    column: 0,
+  }
 
   // Background
   ctx.value.fillStyle = themeCache.value.bg
@@ -484,40 +485,91 @@ function drawBoard() {
   ctx.value.fillRect(0, 0, canvasRef.value!.width, canvasRef.value!.height)
   ctx.value.restore()
 
+  // Determine visible board region in content coordinates to limit draw work
+  const viewLeft = Math.max(0, -pan.value.x)
+  const viewTop = Math.max(0, -pan.value.y)
+  const viewRight = Math.min(cols * cellSize.value, viewLeft + canvasWidth.value / zoom.value)
+  const viewBottom = Math.min(rows * cellSize.value, viewTop + canvasHeight.value / zoom.value)
+  const startCol = Math.max(0, Math.floor(viewLeft / cellSize.value) - 1)
+  const endCol = Math.min(cols, Math.ceil(viewRight / cellSize.value) + 1)
+  const startRow = Math.max(0, Math.floor(viewTop / cellSize.value) - 1)
+  const endRow = Math.min(rows, Math.ceil(viewBottom / cellSize.value) + 1)
+
   // Grid color
   ctx.value.strokeStyle = themeCache.value.grid
   ctx.value.lineWidth = 0.5
 
-  // Draw vertical lines
-  for (let col = 0; col <= cols; col++) {
-    const x = Math.floor(col * cellSize.value)
-    ctx.value.beginPath()
-    ctx.value.moveTo(x, 0)
-    ctx.value.lineTo(x, rows * cellSize.value)
-    ctx.value.stroke()
+  // Batch draw vertical lines
+  ctx.value.beginPath()
+  for (let col = startCol; col <= endCol; col++) {
+    const x = Math.floor(col * cellSize.value) + 0.5
+    ctx.value.moveTo(x, startRow * cellSize.value)
+    ctx.value.lineTo(x, endRow * cellSize.value)
   }
+  ctx.value.stroke()
 
-  // Draw horizontal lines
-  for (let row = 0; row <= rows; row++) {
+  // Batch draw horizontal lines
+  ctx.value.beginPath()
+  for (let row = startRow; row <= endRow; row++) {
     const y = Math.floor(row * cellSize.value) + 0.5
-    ctx.value.beginPath()
-    ctx.value.moveTo(0, y)
-    ctx.value.lineTo(cols * cellSize.value, y)
-    ctx.value.stroke()
+    ctx.value.moveTo(startCol * cellSize.value, y)
+    ctx.value.lineTo(endCol * cellSize.value, y)
+  }
+  ctx.value.stroke()
+
+  // Draw overlays for already shrunk and to-be-shrunk zones
+  const top = hs.row
+  const left = hs.column
+  const bottomStart = rows - hs.row
+  const rightStart = cols - hs.column
+  // Already shrunk areas - slight red (draw as 4 rectangles instead of per-cell)
+  if (top > 0 || left > 0) {
+    ctx.value.fillStyle = 'rgba(255, 64, 64, 0.25)'
+    // Top band
+    ctx.value.fillRect(0, 0, cols * cellSize.value, top * cellSize.value)
+    // Bottom band
+    ctx.value.fillRect(0, bottomStart * cellSize.value, cols * cellSize.value, top * cellSize.value)
+    // Left band (trim to exclude top/bottom corners)
+    const middleY = top * cellSize.value
+    const middleH = Math.max(0, (rows - top * 2) * cellSize.value)
+    if (left > 0 && middleH > 0) {
+      ctx.value.fillRect(0, middleY, left * cellSize.value, middleH)
+    }
+    // Right band (trim to exclude top/bottom corners)
+    if (left > 0 && middleH > 0) {
+      ctx.value.fillRect(rightStart * cellSize.value, middleY, left * cellSize.value, middleH)
+    }
   }
 
-  // Playable area background overlay for shrink
-  if (shrink > 0) {
-    ctx.value.fillStyle = 'rgba(240, 60, 80, 0.3)' // Same red overlay as vanilla
-
-    // Draw shrink areas for all edges of the board (like your vanilla JS loop)
-    for (let i = 0; i <= rows - 1; i++) {
-      for (let j = 0; j <= cols - 1; j++) {
-        // Check if this cell is in a shrink zone
-        if (i < shrink || i >= rows - shrink || j < shrink || j >= cols - shrink) {
-          ctx.value.fillRect(j * cellSize.value, i * cellSize.value, cellSize.value, cellSize.value)
-        }
-      }
+  // To be shrunk areas - yellowish
+  if (ts.row > 0 || ts.column > 0) {
+    ctx.value.fillStyle = 'rgba(255, 215, 0, 0.25)'
+    const innerW = (cols - left * 2) * cellSize.value
+    const innerH = (rows - top * 2) * cellSize.value
+    const innerX = left * cellSize.value
+    const innerY = top * cellSize.value
+    // Top to-shrink band
+    const topH = Math.max(0, Math.min(ts.row, rows - 2 * top)) * cellSize.value
+    if (topH > 0) {
+      ctx.value.fillRect(innerX, innerY, innerW, topH)
+    }
+    // Bottom to-shrink band
+    const bottomH = Math.max(0, Math.min(ts.row, rows - 2 * top)) * cellSize.value
+    if (bottomH > 0) {
+      ctx.value.fillRect(innerX, innerY + innerH - bottomH, innerW, bottomH)
+    }
+    // Middle height for side bands to avoid overlapping top/bottom corners
+    const middleY2 = innerY + topH
+    const middleH2 = Math.max(0, innerH - topH - bottomH)
+    // Left to-shrink band (only middle area)
+    const leftW = Math.max(0, Math.min(ts.column, cols - 2 * left)) * cellSize.value
+    if (leftW > 0 && middleH2 > 0) {
+      ctx.value.fillRect(innerX, middleY2, leftW, middleH2)
+    }
+    // Right to-shrink band (only middle area)
+    const rightW = Math.max(0, Math.min(ts.column, cols - 2 * left)) * cellSize.value
+    if (rightW > 0 && middleH2 > 0) {
+      ctx.value.fillRect(innerX + innerW - rightW, middleY2, rightW, middleH2)
     }
   }
 
@@ -526,13 +578,13 @@ function drawBoard() {
   ctx.value.font = boardFont.value
   ctx.value.textAlign = 'center'
   ctx.value.textBaseline = 'top'
-  for (let c = 0; c < cols; c++) {
+  for (let c = startCol; c < endCol; c++) {
     const x = c * cellSize.value + cellSize.value / 2
     ctx.value.fillText(String(c), x, 5 - Math.min(pan.value.y, cellSize.value))
   }
   ctx.value.textAlign = 'left'
   ctx.value.textBaseline = 'middle'
-  for (let r = 0; r < rows; r++) {
+  for (let r = startRow; r < endRow; r++) {
     const y = r * cellSize.value + cellSize.value / 2
     ctx.value.fillText(String(r), 5 - Math.min(pan.value.x, cellSize.value), y)
   }
@@ -557,7 +609,13 @@ function drawAnimations() {
 }
 
 // Adaptive render loop: runs while active, coasts for a few frames when activity stops
+let lastDrawTime = 0
 function updateLoop() {
+  // Optional FPS calc (disabled by default to avoid console overhead)
+  // const now = performance.now()
+  // const fps = 1000 / (now - lastDrawTime)
+  // lastDrawTime = now
+
   const activeNow =
     isPanning.value ||
     isMultiTouch.value ||
@@ -574,7 +632,7 @@ function updateLoop() {
   if (activeNow || animFramesRemaining.value > 0) {
     drawGame()
   }
-  requestAnimationFrame(updateLoop)
+  rafId = requestAnimationFrame(updateLoop)
 }
 
 function ensureLoopActive(minCoast = 3) {

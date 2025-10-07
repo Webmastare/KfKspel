@@ -40,3 +40,14 @@ export async function validateUserSession(authHeader: string | undefined) {
         throw new Error("Authentication failed");
     }
 }
+
+// Validate that the request is made with the Service Role key (admin-only)
+export function validateAdminAuthHeader(
+    authHeader: string | undefined,
+): boolean {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) return false;
+    const token = authHeader.substring(7);
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!serviceKey) return false;
+    return token === serviceKey;
+}

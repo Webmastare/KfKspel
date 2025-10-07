@@ -19,12 +19,17 @@ export async function handleGameReset() {
     console.log("Starting game reset (clear players and re-populate)");
 
     // Fetch active board to get size
+    // Initialize/reset the board with the new shrink model
+    const nextShrinkTime = new Date();
+    nextShrinkTime.setDate(nextShrinkTime.getDate() + 1); // Next shrink in 24 hours
+
     const { data: boardData, error: boardError } = await supabase
       .from("KfKbandvagnBoard")
       .update({
         size: { rows: 50, columns: 50 },
-        shrink: 0,
-        next_shrink: null,
+        has_shrunked: { row: 0, column: 0 },
+        to_shrink: { row: 1, column: 1 },
+        next_shrink: nextShrinkTime.toISOString(),
         upgrades: [],
         logs: [],
       })
@@ -116,9 +121,8 @@ export async function handleGameReset() {
     const { error: resetBoardError } = await supabase
       .from("KfKbandvagnBoard")
       .update({
-        shrink: 0,
+        // Keep has_shrunked/to_shrink/next_shrink set above; just write the reset log
         logs: [resetLogEntry],
-        next_shrink: null,
       })
       .eq("active_board", true);
 
@@ -246,8 +250,9 @@ export async function handleAdminStats() {
       },
       board: {
         size: boardData?.size,
-        shrinkLevel: boardData?.shrink || 0,
-        nextShrink: boardData?.next_shrink,
+        has_shrunked: boardData?.has_shrunked || { row: 0, column: 0 },
+        to_shrink: boardData?.to_shrink || { row: 0, column: 0 },
+        next_shrink: boardData?.next_shrink || null,
       },
       resources: {
         tokens: tokenStats,

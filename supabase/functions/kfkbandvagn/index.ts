@@ -5,7 +5,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createApp } from "../_shared/app.ts";
 import { Context } from "hono";
-import { validateUserSession } from "../_shared/auth.ts";
+import {
+  validateAdminAuthHeader,
+  validateUserSession,
+} from "../_shared/auth.ts";
 import { createErrorResponse } from "../_shared/validation.ts";
 import { ERROR_CODES } from "./types.ts";
 
@@ -137,18 +140,58 @@ app.post("/game/action", async (c: Context) => {
     );
     return c.json(response, 401);
   }
-  const response = await handleGameAction(reqBody);
+  const response = await handleGameAction(reqBody, user.id);
+  // Map error codes to status codes
+  const respObj: Record<string, unknown> = response as Record<string, unknown>;
+  const isError = ("success" in respObj && respObj.success === false) ||
+    ("error" in respObj && typeof respObj.error === "object" &&
+      respObj.error !== null);
+  if (isError) {
+    const err = (respObj.error ?? {}) as { code?: string };
+    const code = typeof err.code === "string" ? err.code : undefined;
+    const status = code === ERROR_CODES.INVALID_SESSION
+      ? 403
+      : code === ERROR_CODES.VALIDATION_ERROR
+      ? 400
+      : code === ERROR_CODES.PLAYER_ALREADY_DEAD
+      ? 403
+      : code === ERROR_CODES.USER_NOT_FOUND
+      ? 404
+      : code === ERROR_CODES.NO_TARGETED_USER
+      ? 404
+      : code === ERROR_CODES.MISSING_TOKENS
+      ? 409
+      : code === ERROR_CODES.INVALID_ACTION
+      ? 409
+      : 500;
+    return c.json(response, status);
+  }
   return c.json(response, 200);
 });
 
 // Automated/cron endpoints (for system use) Change to patch or put?
 app.post("/system/shrink", async (c: Context) => {
-  // In production, we'd want to validate this is coming from a trusted source
+  const authHeader = c.req.header("Authorization");
+  if (!validateAdminAuthHeader(authHeader)) {
+    const response = createErrorResponse(
+      ERROR_CODES.INVALID_SESSION,
+      "Admin authorization required",
+    );
+    return c.json(response, 403);
+  }
   const response = await handleBoardShrink();
   return c.json(response, 200);
 });
 
 app.post("/system/distribute", async (c: Context) => {
+  const authHeader = c.req.header("Authorization");
+  if (!validateAdminAuthHeader(authHeader)) {
+    const response = createErrorResponse(
+      ERROR_CODES.INVALID_SESSION,
+      "Admin authorization required",
+    );
+    return c.json(response, 403);
+  }
   const response = await handleTokenDistribution();
   return c.json(response, 200);
 });
@@ -156,13 +199,27 @@ app.post("/system/distribute", async (c: Context) => {
 // Admin endpoints (require admin privileges)
 // Note: In production, you'd want proper admin authentication
 app.post("/admin/reset", async (c: Context) => {
-  // TODO: Add admin authentication check
+  const authHeader = c.req.header("Authorization");
+  if (!validateAdminAuthHeader(authHeader)) {
+    const response = createErrorResponse(
+      ERROR_CODES.INVALID_SESSION,
+      "Admin authorization required",
+    );
+    return c.json(response, 403);
+  }
   const response = await handleGameReset();
   return c.json(response, 200);
 });
 
 app.get("/admin/stats", async (c: Context) => {
-  // TODO: Add admin authentication check
+  const authHeader = c.req.header("Authorization");
+  if (!validateAdminAuthHeader(authHeader)) {
+    const response = createErrorResponse(
+      ERROR_CODES.INVALID_SESSION,
+      "Admin authorization required",
+    );
+    return c.json(response, 403);
+  }
   const response = await handleAdminStats();
   return c.json(response, 200);
 });

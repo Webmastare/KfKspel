@@ -25,8 +25,12 @@ export interface Player {
 export interface GameBoard {
   rows: number;
   cols: number;
-  shrink: number;
-  nextShrink?: string;
+  // Planned shrink per side for the next shrink operation
+  to_shrink: { row: number; column: number };
+  // Total amount already shrunk per side (top/bottom share row, left/right share column)
+  has_shrunked: { row: number; column: number };
+  // Next scheduled shrink ISO timestamp
+  next_shrink?: string;
 }
 
 export interface GameLog {
@@ -43,9 +47,11 @@ export interface BoardData {
     rows: number;
     columns: number;
   };
-  shrink: number;
+  to_shrink: { row: number; column: number };
+  has_shrunked: { row: number; column: number };
   upgrades?: Record<string, unknown>;
   logs: GameLog[];
+  next_shrink?: string;
 }
 
 // Action types

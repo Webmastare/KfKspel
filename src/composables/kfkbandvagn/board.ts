@@ -19,9 +19,12 @@ export interface GameBoard {
     size?: { rows: number; columns: number }; // Optional size object
     rows: number;
     cols: number;
-    shrink: number; // Current shrink level
+    // How much has already been shrunk on each side (applied equally top/bottom and left/right)
+    has_shrunked: { row: number; column: number };
+    // How much will be shrunk on next shrink (per side)
+    to_shrink: { row: number; column: number };
     upgrades?: [];
-    time_to_shrink?: string; // Timestamp for next shrink
+    next_shrink?: string; // ISO timestamp for next shrink
     logs: GameLog[];
 }
 
@@ -55,14 +58,15 @@ export function isPositionInBounds(
     position: Position,
     board: GameBoard,
 ): boolean {
-    const effectiveRows = board.rows - board.shrink;
-    const effectiveCols = board.cols - board.shrink;
-
+    const top = board.has_shrunked?.row || 0;
+    const left = board.has_shrunked?.column || 0;
+    const bottomBound = board.rows - top;
+    const rightBound = board.cols - left;
     return (
-        position.row >= 0 &&
-        position.row < effectiveRows &&
-        position.column >= 0 &&
-        position.column < effectiveCols
+        position.row >= top &&
+        position.row < bottomBound &&
+        position.column >= left &&
+        position.column < rightBound
     );
 }
 
@@ -72,9 +76,10 @@ export function isPositionInBounds(
 export function getPlayableBoardSize(
     board: GameBoard,
 ): { rows: number; cols: number } {
+    const hs = board.has_shrunked || { row: 0, column: 0 };
     return {
-        rows: Math.max(1, board.rows - board.shrink),
-        cols: Math.max(1, board.cols - board.shrink),
+        rows: Math.max(1, board.rows - hs.row * 2),
+        cols: Math.max(1, board.cols - hs.column * 2),
     };
 }
 
@@ -82,18 +87,40 @@ export function getPlayableBoardSize(
  * Get all positions that will be affected by the next board shrink
  */
 export function getPositionsToShrink(board: GameBoard): Position[] {
-    const currentSize = getPlayableBoardSize(board);
-    const newRows = Math.max(1, currentSize.rows - 1);
-    const newCols = Math.max(1, currentSize.cols - 1);
-
+    const hs = board.has_shrunked || { row: 0, column: 0 };
+    const ts = board.to_shrink || { row: 0, column: 0 };
     const positions: Position[] = [];
+    const topStart = hs.row;
+    const topEnd = Math.min(board.rows, hs.row + ts.row) - 1;
+    const bottomStart = Math.max(0, board.rows - (hs.row + ts.row));
+    const bottomEnd = board.rows - hs.row - 1;
+    const leftStart = hs.column;
+    const leftEnd = Math.min(board.cols, hs.column + ts.column) - 1;
+    const rightStart = Math.max(0, board.cols - (hs.column + ts.column));
+    const rightEnd = board.cols - hs.column - 1;
 
-    // Add positions that will be out of bounds after shrink
-    for (let row = 0; row < currentSize.rows; row++) {
-        for (let col = 0; col < currentSize.cols; col++) {
-            if (row >= newRows || col >= newCols) {
-                positions.push({ row, column: col });
-            }
+    // Top band
+    for (let r = topStart; r <= topEnd; r++) {
+        for (let c = hs.column; c < board.cols - hs.column; c++) {
+            positions.push({ row: r, column: c });
+        }
+    }
+    // Bottom band
+    for (let r = bottomStart; r <= bottomEnd; r++) {
+        for (let c = hs.column; c < board.cols - hs.column; c++) {
+            positions.push({ row: r, column: c });
+        }
+    }
+    // Left band
+    for (let c = leftStart; c <= leftEnd; c++) {
+        for (let r = hs.row; r < board.rows - hs.row; r++) {
+            positions.push({ row: r, column: c });
+        }
+    }
+    // Right band
+    for (let c = rightStart; c <= rightEnd; c++) {
+        for (let r = hs.row; r < board.rows - hs.row; r++) {
+            positions.push({ row: r, column: c });
         }
     }
 

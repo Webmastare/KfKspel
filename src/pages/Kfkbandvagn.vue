@@ -69,6 +69,20 @@
               </li>
             </ul>
           </div>
+          <!-- Shrink status inside spelstatus dropdown -->
+          <div class="shrink-status" v-if="boardData">
+            <div class="shrink-row">
+              <span class="label">Nästa krympning:</span>
+              <span class="value">{{ nextShrinkCountdown }}</span>
+            </div>
+            <div class="shrink-row">
+              <span class="label">Krympningens storlek:</span>
+              <span class="value"
+                >rad: {{ boardData.to_shrink?.row || 0 }}, kol:
+                {{ boardData.to_shrink?.column || 0 }}</span
+              >
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -367,6 +381,21 @@ const playersToShow = computed(() => {
 const recentLogs = computed(() => {
   if (!boardData.value?.logs) return []
   return boardData.value.logs.slice().reverse()
+})
+
+// Next shrink countdown
+const nextShrinkCountdown = computed(() => {
+  const ts = boardData.value && boardData.value.next_shrink
+  if (!ts) return '–'
+  const now = Date.now()
+  const target = new Date(ts).getTime()
+  const diff = Math.max(0, target - now)
+  const days = Math.floor(diff / (24 * 60 * 60 * 1000))
+  const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
+  const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000))
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
 })
 
 // UI Controls
@@ -676,5 +705,25 @@ h1 {
   color: var(--theme-text-primary);
   font-size: 0.9rem;
   line-height: 1.4;
+}
+
+.shrink-status {
+  margin: 12px 0 20px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border-light);
+  .shrink-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    .label {
+      color: var(--theme-text-secondary);
+    }
+    .value {
+      color: var(--theme-text-primary);
+      font-weight: 600;
+    }
+  }
 }
 </style>

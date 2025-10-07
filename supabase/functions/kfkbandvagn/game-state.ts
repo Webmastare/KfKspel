@@ -36,7 +36,7 @@ export async function handleGetGameState() {
     // Fetch board data
     const { data: boardData, error: boardError } = await supabase
       .from("KfKbandvagnBoard")
-      .select("size, shrink, upgrades, logs")
+      .select("size, to_shrink, has_shrunked, upgrades, logs, next_shrink")
       .eq("active_board", true)
       .single();
 
@@ -134,7 +134,7 @@ export async function handleGetGameStats() {
     // Get board info
     const { data: boardData, error: boardError } = await supabase
       .from("KfKbandvagnBoard")
-      .select("size, shrink, logs")
+      .select("size, has_shrunked, to_shrink, logs, next_shrink")
       .single();
 
     if (boardError) {
@@ -165,7 +165,11 @@ export async function handleGetGameStats() {
       },
       board: {
         size: boardData?.size,
-        shrink: boardData?.shrink,
+        has_shrunked: (boardData as unknown as BoardData | undefined)
+          ?.has_shrunked,
+        to_shrink: (boardData as unknown as BoardData | undefined)?.to_shrink,
+        next_shrink: (boardData as unknown as BoardData | undefined)
+          ?.next_shrink,
       },
       economy: {
         totalTokens,
