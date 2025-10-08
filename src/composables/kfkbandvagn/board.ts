@@ -16,6 +16,8 @@ export interface GameLog {
 
 // Game board interface
 export interface GameBoard {
+    board_id?: string;
+    active_board: boolean;
     size?: { rows: number; columns: number }; // Optional size object
     rows: number;
     cols: number;

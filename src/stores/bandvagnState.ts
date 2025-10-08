@@ -1,6 +1,5 @@
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
-import { getGameState } from "@/composables/kfkbandvagn/board";
 import {
   createPlayerAPI,
   loginPlayerAPI,
@@ -10,6 +9,12 @@ import type { Player } from "@/composables/kfkbandvagn/player";
 import type { GameBoard } from "@/composables/kfkbandvagn/board";
 import type { GameActionType } from "@/composables/kfkbandvagn/gameActions";
 import { supabase } from "@/utils/supabase";
+import {
+  fetchGameStateClient,
+  type RealtimeStatus,
+  subscribeToBandvagn,
+  unsubscribeRealtime,
+} from "@/composables/kfkbandvagn/database";
 
 export const useBandvagnStore = defineStore("bandvagn", {
   state: () => ({
@@ -22,13 +27,16 @@ export const useBandvagnStore = defineStore("bandvagn", {
     initialized: false,
     isLoading: false,
     error: null as string | null,
-    lastFetch: null as Date | null,
     selectedCell: null as { row: number; column: number } | null,
 
     // Auto-refresh settings
     autoRefreshEnabled: true,
     refreshInterval: 3600000, // 1 hour
     refreshTimeoutId: null as number | null,
+
+    // Realtime
+    realtimeStatus: "disconnected" as RealtimeStatus,
+    lastRealtimeUpdate: null as Date | null,
   }),
 
   getters: {
@@ -63,14 +71,6 @@ export const useBandvagnStore = defineStore("bandvagn", {
       state.allPlayers.filter((p: Player) =>
         p.uuid !== state.currentPlayer?.uuid && p.taken_tank
       ),
-
-    // Data freshness
-    isDataFresh: (state) => {
-      if (!state.lastFetch) return false;
-      const now = new Date();
-      const timeDiff = now.getTime() - state.lastFetch.getTime();
-      return timeDiff < 30000; // Fresh if less than 30 seconds old
-    },
 
     // Game status
     gameStats: (state) => {
@@ -123,6 +123,9 @@ export const useBandvagnStore = defineStore("bandvagn", {
           this.startAutoRefresh();
         }
 
+        // Start realtime subscription
+        this.startRealtime();
+
         console.log("Bandvagn store initialized successfully");
       } catch (error) {
         console.error("Failed to initialize bandvagn store:", error);
@@ -140,8 +143,8 @@ export const useBandvagnStore = defineStore("bandvagn", {
       this.error = null;
 
       try {
-        console.log("Fetching game state from server...");
-        const gameState = await getGameState();
+        console.log("Fetching game state...");
+        const gameState = await fetchGameStateClient();
 
         // Update players data (from Edge Function - service role, safe)
         this.allPlayers = gameState.playerData || [];
@@ -164,7 +167,7 @@ export const useBandvagnStore = defineStore("bandvagn", {
         // Fetch the current user's tank directly via RLS-protected client query
         await this.fetchCurrentUserTank();
 
-        this.lastFetch = new Date();
+        this.lastRealtimeUpdate = new Date();
         console.log("Game state updated:", {
           players: this.allPlayers.length,
           currentPlayer: !!this.currentPlayer,
@@ -179,6 +182,77 @@ export const useBandvagnStore = defineStore("bandvagn", {
       } finally {
         this.isLoading = false;
       }
+    },
+
+    // Start realtime subscriptions
+    startRealtime() {
+      // Avoid duplicate subscriptions
+      this.stopRealtime();
+
+      const onStatusChange = (status: RealtimeStatus) => {
+        this.realtimeStatus = status;
+      };
+
+      const onPlayerChange = (
+        row: Player,
+        type: "INSERT" | "UPDATE" | "DELETE",
+      ) => {
+        // Ignore if we don't have a board yet
+        if (!row) return;
+
+        if (type === "DELETE") {
+          const idx = this.allPlayers.findIndex((p) => p.uuid === row.uuid);
+          if (idx !== -1) this.allPlayers.splice(idx, 1);
+          if (this.currentPlayer?.uuid === row.uuid) this.currentPlayer = null;
+          return;
+        }
+
+        // Upsert player row
+        const idx = this.allPlayers.findIndex((p) => p.uuid === row.uuid);
+        const updated: Player = {
+          uuid: row.uuid,
+          playerID: row.playerID,
+          position: row.position,
+          lives: row.lives,
+          tokens: row.tokens,
+          range: row.range,
+          taken_tank: !!row.taken_tank,
+          color: row.color,
+        };
+        if (idx === -1) this.allPlayers.push(updated);
+        else this.allPlayers[idx] = updated;
+
+        // Keep currentPlayer reference fresh
+        if (this.currentPlayer?.uuid === row.uuid) {
+          this.currentPlayer = updated;
+        }
+        // Update last realtime update timestamp
+        this.lastRealtimeUpdate = new Date();
+      };
+
+      const onBoardChange = (
+        row: GameBoard,
+        _type: "INSERT" | "UPDATE" | "DELETE",
+      ) => {
+        if (_type === "DELETE") return;
+        // Map to GameBoard shape
+        this.boardData = {
+          rows: row.size?.rows ?? this.boardData?.rows ?? 0,
+          cols: row.size?.columns ?? this.boardData?.cols ?? 0,
+          has_shrunked: (row as any).has_shrunked || { row: 0, column: 0 },
+          to_shrink: (row as any).to_shrink || { row: 0, column: 0 },
+          logs: row.logs || [],
+          upgrades: (row as any).upgrades || [],
+          next_shrink: (row as any).next_shrink || "",
+        } as unknown as GameBoard;
+      };
+      // Start subscription
+      subscribeToBandvagn({ onStatusChange, onPlayerChange, onBoardChange });
+    },
+
+    stopRealtime() {
+      unsubscribeRealtime();
+      this.realtimeStatus = "disconnected";
     },
 
     // Fetch only the current user's tank using Supabase client (RLS-protected)
@@ -510,12 +584,6 @@ export const useBandvagnStore = defineStore("bandvagn", {
       }
     },
 
-    // Manual refresh with force option
-    async forceRefresh() {
-      this.lastFetch = null; // Force fresh data
-      await this.fetchGameState();
-    },
-
     // Cell selection helpers
     selectCell(cell: { row: number; column: number } | null) {
       this.selectedCell = cell;
@@ -606,13 +674,13 @@ export const useBandvagnStore = defineStore("bandvagn", {
     // Cleanup when user logs out
     reset() {
       this.stopAutoRefresh();
+      this.stopRealtime();
       this.allPlayers = [];
       this.currentPlayer = null;
       this.boardData = null;
       this.initialized = false;
       this.isLoading = false;
       this.error = null;
-      this.lastFetch = null;
       this.selectedCell = null;
     },
   },

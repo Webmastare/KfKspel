@@ -18,6 +18,7 @@ export interface Player {
     range: number; // Attack/interaction range
     taken_tank: boolean; // Whether the tank is taken
     color: string; // Player color (hex format)
+    user_id?: string;
 }
 
 // Type for player creation data

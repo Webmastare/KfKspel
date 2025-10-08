@@ -39,6 +39,12 @@ KfKblock:
 
 KfKbandvagn:
 
+- Max actions per time period e.g. 10 seconds, enforce on client and edge function, UI to show if action is allowed. Disable buttons.
+
+- Update board and player data can happen from the client instead of calling the edge function.
+- Subscribe to table changes with real-time.
+- On table change we do animations, e.g. moving tanks, shooting etc.
+
 - Start on a larger board and then shrink it once a day forcing players closer together
 - Have upgrades on the board that players can move to and pick up, like a long range missile that has unlimited range? Free tokens that can be picked up?
 
@@ -49,5 +55,8 @@ KfKbandvagn:
 KfKbandvagn
 
 - Stänger inte create form när man skapar ett nytt konto
+- Man får endast 10% av någons tokens när de dör
+- Förflyttas snabbare accelerera och få högre fart om man kör längre?
+- Förflyttas med range
 
 Skapad av Kasper Storck 2025

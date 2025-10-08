@@ -109,6 +109,10 @@
       <!-- Desktop sidebar -->
       <div class="sidebar desktop-only">
         <div class="sidebar-btn-container">
+          <div class="sidebar-btn-with-indicator">
+            <span class="rt-indicator" :class="rtClass" title="Realtime status"></span>
+            <span>{{ timeSinceRefreshed }}</span>
+          </div>
           <button @click="refreshGameState" class="sidebar-btn" :disabled="isLoading">
             <span v-if="isLoading">Laddar...</span>
             <span v-else>Uppdatera</span>
@@ -338,7 +342,6 @@ import { useAuthStore } from '@/stores/auth'
 import { useBandvagnStore } from '@/stores/bandvagnState'
 import PlayerCreation from '@/components/kfkbandvagn/PlayerCreation.vue'
 import BandvagnCanvas from '@/components/kfkbandvagn/BandvagnCanvas.vue'
-import { supabase } from '@/utils/supabase'
 
 // Canvas reference
 const canvasRef = ref(null)
@@ -360,6 +363,46 @@ const currentPlayer = computed(() => gameStore.currentPlayer)
 const allPlayers = computed(() => gameStore.allPlayers)
 const boardData = computed(() => gameStore.boardData)
 const isLoading = computed(() => gameStore.isLoading)
+const rtClass = computed(() => {
+  const s = gameStore.realtimeStatus
+  return s === 'connected'
+    ? 'connected'
+    : s === 'connecting'
+      ? 'connecting'
+      : s === 'error'
+        ? 'error'
+        : 'disconnected'
+})
+
+// Simple interval-driven text (no computed needed)
+const timeSinceRefreshed = ref('Aldrig')
+let timeTickerId = null
+
+function formatSince(date) {
+  if (!date) return 'Aldrig'
+  const now = Date.now()
+  const past = date.getTime()
+  const diff = Math.max(0, now - past)
+  const days = Math.floor(diff / (24 * 60 * 60 * 1000))
+  const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
+  const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000))
+  const seconds = Math.floor((diff % (60 * 1000)) / 1000)
+  if (days > 1) return '>1d'
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${minutes}m`
+  if (minutes > 0) return `${minutes}m ${seconds}s`
+  return `${seconds}s`
+}
+
+function startTimeTicker() {
+  // Update immediately and then every second
+  timeSinceRefreshed.value = formatSince(gameStore.lastRealtimeUpdate ?? null)
+  if (timeTickerId) clearInterval(timeTickerId)
+  timeTickerId = window.setInterval(() => {
+    timeSinceRefreshed.value = formatSince(gameStore.lastRealtimeUpdate ?? null)
+  }, 1000)
+}
+
 const isGameInitialized = computed(() => {
   console.log('Game initialized:', gameStore.initialized, currentPlayer.value)
   return currentPlayer.value
@@ -606,6 +649,7 @@ watch(
 onMounted(async () => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
+  startTimeTicker()
 
   if (authStore.isAuthed) {
     console.log('User authenticated, initializing game store')
@@ -619,6 +663,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', checkMobile)
+  if (timeTickerId) clearInterval(timeTickerId)
 })
 </script>
 
@@ -706,6 +751,29 @@ h1 {
   color: var(--theme-text-primary);
   font-size: 0.9rem;
   line-height: 1.4;
+}
+
+.sidebar-btn-with-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rt-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--theme-border-light);
+  background: gray;
+}
+.rt-indicator.connected {
+  background: #28a745;
+}
+.rt-indicator.connecting {
+  background: #ffc107;
+}
+.rt-indicator.error,
+.rt-indicator.disconnected {
+  background: #dc3545;
 }
 
 .shrink-status {
