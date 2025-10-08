@@ -23,6 +23,7 @@
       :other-players="otherPlayersAtCell"
       :can-move="canMoveToCell"
       :can-shoot="canShootAtCell"
+      :is-on-cooldown="isOnCooldown"
       :position="popupPosition"
       @action="handlePopupAction"
       @close="closePopup"
@@ -74,6 +75,14 @@ const gameStore = useBandvagnStore()
 const emit = defineEmits<{
   (e: 'actionPerformed', payload: any): void
 }>()
+
+// Props
+const props = defineProps({
+  isOnCooldown: {
+    type: Boolean,
+    default: false,
+  },
+})
 
 // Refs
 const containerRef = ref<HTMLDivElement | null>(null)

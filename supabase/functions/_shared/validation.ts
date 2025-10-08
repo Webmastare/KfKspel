@@ -120,6 +120,18 @@ export function validateActionRequest(body: unknown): ActionRequest {
         result.targetUUID = data.targetUUID;
     }
 
+    // Upgrade count for range/life multi-upgrades
+    if (data.action === "range" || data.action === "life") {
+        if (data.count !== undefined) {
+            const c = Number(data.count);
+            if (!Number.isFinite(c) || c < 1) {
+                throw new Error("count must be a positive number");
+            }
+            // Clamp to a safe upper bound to avoid abuse
+            result.count = Math.min(100, Math.floor(c));
+        }
+    }
+
     return result;
 }
 

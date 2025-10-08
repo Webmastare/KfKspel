@@ -33,8 +33,8 @@
         <button
           @click="performAction('move')"
           class="action-btn move-btn"
-          :disabled="!canAffordMove || isActionInProgress"
-          :class="{ disabled: !canAffordMove || isActionInProgress }"
+          :disabled="!canAffordMove || isActionInProgress || props.isOnCooldown"
+          :class="{ disabled: !canAffordMove || isActionInProgress || props.isOnCooldown }"
         >
           <span class="btn-icon">🚶‍♂️</span>
           <span class="btn-text">Flytta Hit</span>
@@ -48,8 +48,8 @@
           <button
             @click="performAction('shot', aliveTargets[0].uuid)"
             class="action-btn shoot-btn"
-            :disabled="!canAffordShot || isActionInProgress"
-            :class="{ disabled: !canAffordShot || isActionInProgress }"
+            :disabled="!canAffordShot || isActionInProgress || props.isOnCooldown"
+            :class="{ disabled: !canAffordShot || isActionInProgress || props.isOnCooldown }"
           >
             <span class="btn-icon">🎯</span>
             <span class="btn-text">Skjut {{ aliveTargets[0].playerID }}</span>
@@ -116,6 +116,10 @@ const props = defineProps({
     default: false,
   },
   canShoot: {
+    type: Boolean,
+    default: false,
+  },
+  isOnCooldown: {
     type: Boolean,
     default: false,
   },

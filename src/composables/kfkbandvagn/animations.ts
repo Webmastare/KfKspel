@@ -662,7 +662,7 @@ export function addTankMove(
         active: true,
         velocity: 0,
         acceleration: 3.0, // cells/s^2 (gentle acceleration)
-        maxVelocity: 4.0, // cells/s (capped speed)
+        maxVelocity: 8.0, // cells/s (capped speed)
     };
     state.tankMoves.push(move);
     return state;

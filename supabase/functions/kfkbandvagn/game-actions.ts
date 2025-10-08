@@ -219,6 +219,14 @@ export async function handleGameAction(body: unknown, userId: string) {
           to: newPosition,
           distance: distance,
           cost: requiredTokens,
+          before: {
+            tokens: currentUser.tokens,
+            position: currentUser.position,
+          },
+          after: {
+            tokens: currentUser.tokens - requiredTokens,
+            position: newPosition,
+          },
         };
         break;
       }
@@ -306,6 +314,18 @@ export async function handleGameAction(body: unknown, userId: string) {
           targetUser: targetUser.playerID,
           targetUUID: targetUser.uuid,
           targetUserLives: targetUser.lives - 1,
+          before: {
+            shooter: { tokens: currentUser.tokens },
+            target: { lives: targetUser.lives, tokens: targetUser.tokens },
+          },
+          after: {
+            shooter: { tokens: updateQuery.tokens },
+            target: {
+              lives: (shotData as Player).lives,
+              tokens: (shotData as Player).tokens,
+            },
+          },
+          cost: shotTokenCost,
         };
 
         console.log("Player shot:", shotData);
@@ -313,42 +333,62 @@ export async function handleGameAction(body: unknown, userId: string) {
       }
 
       case "range": {
-        const rangeTokenCost = 3;
+        const perCost = 3;
+        const count = Math.max(1, Math.floor(actionData.count ?? 1));
+        const totalCost = perCost * count;
 
         // Check if user has enough tokens
-        if (currentUser.tokens < rangeTokenCost) {
+        if (currentUser.tokens < totalCost) {
           return createErrorResponse(
             ERROR_CODES.MISSING_TOKENS,
-            `Not enough tokens. Need ${rangeTokenCost}, have ${currentUser.tokens}`,
+            `Not enough tokens. Need ${totalCost}, have ${currentUser.tokens}`,
           );
         }
 
         updateQuery = {
-          tokens: currentUser.tokens - rangeTokenCost,
-          range: currentUser.range + 1,
+          tokens: currentUser.tokens - totalCost,
+          range: currentUser.range + count,
         };
 
-        detailsQuery = { range: updateQuery.range };
+        detailsQuery = {
+          before: { range: currentUser.range, tokens: currentUser.tokens },
+          after: {
+            range: (currentUser.range + count),
+            tokens: (currentUser.tokens - totalCost),
+          },
+          count,
+          cost: totalCost,
+        };
         break;
       }
 
       case "life": {
-        const lifeTokenCost = 3;
+        const perCost = 3;
+        const count = Math.max(1, Math.floor(actionData.count ?? 1));
+        const totalCost = perCost * count;
 
         // Check if user has enough tokens
-        if (currentUser.tokens < lifeTokenCost) {
+        if (currentUser.tokens < totalCost) {
           return createErrorResponse(
             ERROR_CODES.MISSING_TOKENS,
-            `Not enough tokens. Need ${lifeTokenCost}, have ${currentUser.tokens}`,
+            `Not enough tokens. Need ${totalCost}, have ${currentUser.tokens}`,
           );
         }
 
         updateQuery = {
-          tokens: currentUser.tokens - lifeTokenCost,
-          lives: currentUser.lives + 1,
+          tokens: currentUser.tokens - totalCost,
+          lives: currentUser.lives + count,
         };
 
-        detailsQuery = { lives: updateQuery.lives };
+        detailsQuery = {
+          before: { lives: currentUser.lives, tokens: currentUser.tokens },
+          after: {
+            lives: (currentUser.lives + count),
+            tokens: (currentUser.tokens - totalCost),
+          },
+          count,
+          cost: totalCost,
+        };
         break;
       }
 

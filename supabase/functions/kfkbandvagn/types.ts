@@ -78,6 +78,7 @@ export interface ActionRequest {
   action: GameActionType;
   moveDirection?: MoveDirection;
   targetUUID?: string;
+  count?: number; // for multi-upgrades (range/life)
 }
 
 export interface ApiResponse<T = unknown> {

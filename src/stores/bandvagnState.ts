@@ -37,6 +37,10 @@ export const useBandvagnStore = defineStore("bandvagn", {
     // Realtime
     realtimeStatus: "disconnected" as RealtimeStatus,
     lastRealtimeUpdate: null as Date | null,
+
+    // Client-side action cooldown (UI-only)
+    actionCooldownUntil: null as Date | null,
+    minActionCooldownMs: 5000,
   }),
 
   getters: {
@@ -90,6 +94,16 @@ export const useBandvagnStore = defineStore("bandvagn", {
         nextShrink: ts,
         nextShrinkAt: (state.boardData as any)?.next_shrink || null,
       };
+    },
+
+    // Action cooldown helpers
+    isActionOnCooldown: (state) => {
+      if (!state.actionCooldownUntil) return false;
+      return state.actionCooldownUntil.getTime() - Date.now() > 0;
+    },
+    actionCooldownRemainingMs: (state) => {
+      if (!state.actionCooldownUntil) return 0;
+      return Math.max(0, state.actionCooldownUntil.getTime() - Date.now());
     },
   },
   actions: {
@@ -374,6 +388,7 @@ export const useBandvagnStore = defineStore("bandvagn", {
       tank_id: string;
       targetCell?: { row: number; col: number };
       targetUUID?: string;
+      count?: number;
       animationTrigger?: {
         triggerBulletAndExplosion?: (
           fromRow: number,
@@ -385,6 +400,11 @@ export const useBandvagnStore = defineStore("bandvagn", {
         triggerTankMove?: () => void;
       };
     }) {
+      // Client-side guard against spamming while on cooldown
+      if (this.isActionOnCooldown) {
+        const secs = Math.ceil(this.actionCooldownRemainingMs / 1000);
+        throw new Error(`Vänta ${secs}s innan nästa handling`);
+      }
       this.isLoading = true;
       this.error = null;
 
@@ -408,6 +428,11 @@ export const useBandvagnStore = defineStore("bandvagn", {
           actionRequest.targetUUID = action.targetUUID;
         }
 
+        // Include count for multi-upgrades
+        if ((action.action === "range" || action.action === "life") && action.count) {
+          actionRequest.count = Math.max(1, Math.floor(action.count));
+        }
+
         console.log("Performing action:", actionRequest);
         const result = await performGameAction(actionRequest);
         console.log("Action result:", result);
@@ -423,15 +448,8 @@ export const useBandvagnStore = defineStore("bandvagn", {
             p.uuid === action.targetUUID
           );
           if (targetPlayer) {
-            // Update shooter data immediately (tokens etc.)
-            this.currentPlayer = result.updatedData;
-            const shooterIndex = this.allPlayers.findIndex((p) =>
-              p.uuid === result.updatedData.uuid
-            );
-            if (shooterIndex !== -1) {
-              this.allPlayers[shooterIndex] = result.updatedData;
-            }
-
+            // Start client-side cooldown on successful action
+            this.startActionCooldown();
             return result;
           }
         }
@@ -443,15 +461,13 @@ export const useBandvagnStore = defineStore("bandvagn", {
           if (action.animationTrigger?.triggerTankMove) {
             action.animationTrigger.triggerTankMove();
           }
-
+          // Start client-side cooldown on successful action
+          this.startActionCooldown();
           return result;
         }
 
         // For non-shot and non-animated-move actions. Update current player and logs
-        if (
-          action.action !== "shot" &&
-          result.updatedData
-        ) {
+        if (result.updatedData) {
           // Update local player data
           const currentIndex = this.allPlayers.findIndex((p) =>
             p.uuid === result.updatedData?.uuid
@@ -462,6 +478,8 @@ export const useBandvagnStore = defineStore("bandvagn", {
           this.currentPlayer = result.updatedData;
         }
         console.log("Game state refreshed successfully.");
+        // Start client-side cooldown on successful action
+        this.startActionCooldown();
         return result;
       } catch (error) {
         console.error("Action failed:", error);
@@ -612,6 +630,16 @@ export const useBandvagnStore = defineStore("bandvagn", {
       this.isLoading = false;
       this.error = null;
       this.selectedCell = null;
+      this.actionCooldownUntil = null;
+    },
+
+    // Cooldown controls (UI-only, easy to move server-side later)
+    startActionCooldown(durationMs?: number) {
+      const d = durationMs ?? this.minActionCooldownMs;
+      this.actionCooldownUntil = new Date(Date.now() + d);
+    },
+    clearActionCooldown() {
+      this.actionCooldownUntil = null;
     },
   },
 });

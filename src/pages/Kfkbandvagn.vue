@@ -109,6 +109,10 @@
       <!-- Desktop sidebar -->
       <div class="sidebar desktop-only">
         <div class="sidebar-btn-container">
+          <!-- Cooldown countdown shown above realtime status -->
+          <div v-if="isOnCooldown" class="cooldown-row" title="Vänta innan nästa handling">
+            ⏱ Nästa handling: {{ actionCountdownText }}
+          </div>
           <div class="sidebar-btn-with-indicator">
             <span class="rt-indicator" :class="rtClass" title="Realtime status"></span>
             <span>{{ timeSinceRefreshed }}</span>
@@ -128,7 +132,7 @@
           <button
             @click="showUpgradeModal('range')"
             class="action-btn"
-            :disabled="currentPlayer.tokens < 3"
+            :disabled="currentPlayer.tokens < 3 || isOnCooldown"
           >
             Köp Räckvidd <br />
             (3 tokens)
@@ -136,7 +140,7 @@
           <button
             @click="showUpgradeModal('life')"
             class="action-btn"
-            :disabled="currentPlayer.tokens < 3"
+            :disabled="currentPlayer.tokens < 3 || isOnCooldown"
           >
             Köp Liv <br />
             (3 tokens)
@@ -158,17 +162,63 @@
           <div v-if="showUpgradeDialog" class="upgrade-modal auth-form">
             <div class="form-base">
               <h3>Bekräfta Köp</h3>
+              <!-- Input to buy multiple upgrades at once -->
+              <div class="multi-upgrade-input">
+                <button
+                  type="button"
+                  @click="multiUpgradeCount--"
+                  class="upgrade-btn-minus"
+                  :disabled="multiUpgradeCount <= 1"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  name="custom-difficulty"
+                  id="custom-difficulty"
+                  v-model.number="multiUpgradeCount"
+                  min="1"
+                  max="100"
+                  @input="updateMultipleUpgrades"
+                />
+                <button
+                  type="button"
+                  @click="multiUpgradeCount++"
+                  class="upgrade-btn-plus"
+                  :disabled="multiUpgradeCount >= 100"
+                >
+                  +
+                </button>
+              </div>
+
               <p v-if="upgradeType === 'range'">
-                Vill du köpa ökad räckvidd för 3 tokens?<br />
-                Din nuvarande räckvidd: {{ currentPlayer?.range || 0 }}
+                Vill du köpa +{{ normalizedCount }} räckvidd för
+                {{ totalUpgradeCost }} tokens?<br />
+                Din nuvarande räckvidd: {{ currentPlayer?.range || 0 }} →
+                {{ (currentPlayer?.range || 0) + normalizedCount }}
               </p>
               <p v-if="upgradeType === 'life'">
-                Vill du köpa ett extra liv för 3 tokens?<br />
-                Dina nuvarande liv: {{ currentPlayer?.lives || 0 }}
+                Vill du köpa +{{ normalizedCount }} liv för {{ totalUpgradeCost }} tokens?<br />
+                Dina nuvarande liv: {{ currentPlayer?.lives || 0 }} →
+                {{ (currentPlayer?.lives || 0) + normalizedCount }}
+              </p>
+              <p
+                v-if="!canAffordSelectedUpgrade"
+                style="color: var(--theme-text-secondary); margin-top: 4px"
+              >
+                För dyrt: du har {{ currentPlayer?.tokens || 0 }} tokens, behöver
+                {{ totalUpgradeCost }}.
               </p>
               <div class="button-group">
                 <button @click="cancelUpgrade" class="button-base decline">Avbryt</button>
-                <button @click="confirmUpgrade" class="button-base">Köp</button>
+                <button
+                  @click="confirmUpgrade"
+                  class="button-base"
+                  :disabled="isOnCooldown || !canAffordSelectedUpgrade"
+                >
+                  <span v-if="isOnCooldown">Vänta {{ actionCountdownText }}</span>
+                  <span v-else>Köp ({{ totalUpgradeCost }}t)</span>
+                </button>
               </div>
             </div>
           </div>
@@ -177,6 +227,7 @@
           <BandvagnCanvas
             ref="canvasRef"
             v-if="isGameInitialized"
+            :isOnCooldown="isOnCooldown"
             @actionPerformed="handleActionPerformed"
           />
 
@@ -202,14 +253,14 @@
           <button
             @click="showUpgradeModal('range')"
             class="mobile-action-btn"
-            :disabled="currentPlayer.tokens < 3"
+            :disabled="currentPlayer.tokens < 3 || isOnCooldown"
           >
             Räckvidd (3t)
           </button>
           <button
             @click="showUpgradeModal('life')"
             class="mobile-action-btn"
-            :disabled="currentPlayer.tokens < 3"
+            :disabled="currentPlayer.tokens < 3 || isOnCooldown"
           >
             Liv (3t)
           </button>
@@ -355,6 +406,7 @@ const infoShown = ref(false)
 const showStats = ref(false)
 const showPlayerModal = ref(false)
 const showUpgradeDialog = ref(false)
+const multiUpgradeCount = ref(1)
 const upgradeType = ref('')
 const isMobile = ref(false)
 
@@ -374,8 +426,22 @@ const rtClass = computed(() => {
         : 'disconnected'
 })
 
+// Upgrade modal helpers (dynamic cost and affordability)
+const perUpgradeCost = computed(() =>
+  upgradeType.value === 'range' || upgradeType.value === 'life' ? 3 : 0,
+)
+const normalizedCount = computed(() =>
+  Math.max(1, Math.min(100, Number(multiUpgradeCount.value) || 1)),
+)
+const totalUpgradeCost = computed(() => perUpgradeCost.value * normalizedCount.value)
+const canAffordSelectedUpgrade = computed(
+  () => (currentPlayer.value?.tokens || 0) >= totalUpgradeCost.value,
+)
+
 // Simple interval-driven text (no computed needed)
 const timeSinceRefreshed = ref('Aldrig')
+const actionCountdownText = ref(0) // forces cooldown countdown to update each second
+const isOnCooldown = ref(false) // forces cooldown state to update each second
 let timeTickerId = null
 
 function formatSince(date) {
@@ -399,12 +465,16 @@ function startTimeTicker() {
   timeSinceRefreshed.value = formatSince(gameStore.lastRealtimeUpdate ?? null)
   if (timeTickerId) clearInterval(timeTickerId)
   timeTickerId = window.setInterval(() => {
+    // Time since last game state update
     timeSinceRefreshed.value = formatSince(gameStore.lastRealtimeUpdate ?? null)
-  }, 1000)
+    // tick cooldown countdown so computed re-evaluates
+    const timeLeft = getActionCooldown()
+    actionCountdownText.value = `${timeLeft}s`
+    isOnCooldown.value = timeLeft > 0
+  }, 100)
 }
 
 const isGameInitialized = computed(() => {
-  console.log('Game initialized:', gameStore.initialized, currentPlayer.value)
   return currentPlayer.value
 })
 
@@ -426,6 +496,15 @@ const recentLogs = computed(() => {
   if (!boardData.value?.logs) return []
   return boardData.value.logs.slice().reverse()
 })
+
+// Action cooldown (UI-only) derived from store and shown in sidebar
+function getActionCooldown() {
+  if (!gameStore.actionCooldownUntil) return 0
+  const ms = Math.max(0, gameStore.actionCooldownUntil.getTime() - Date.now())
+  if (!ms || ms <= 0) return 0
+  const secs = Math.ceil(ms / 1000)
+  return secs
+}
 
 // Next shrink countdown
 const nextShrinkCountdown = computed(() => {
@@ -479,13 +558,6 @@ function focusOnPlayer(player) {
 
 async function handleActionPerformed(action) {
   try {
-    // For shot actions, provide animation trigger
-    if (action.action === 'shot' && canvasRef.value) {
-      action.animationTrigger = {
-        triggerBulletAndExplosion: canvasRef.value.triggerBulletAndExplosion,
-      }
-    }
-
     await gameStore.performAction(action)
   } catch (error) {
     console.error('Action failed:', error)
@@ -494,6 +566,11 @@ async function handleActionPerformed(action) {
 }
 
 // Upgrade system
+function updateMultipleUpgrades() {
+  if (multiUpgradeCount.value > 100) multiUpgradeCount.value = 100
+  if (multiUpgradeCount.value < 1) multiUpgradeCount.value = 1
+}
+
 function showUpgradeModal(type) {
   upgradeType.value = type
   showUpgradeDialog.value = true
@@ -505,11 +582,11 @@ function cancelUpgrade() {
 }
 
 async function confirmUpgrade() {
-  console.log('Confirming upgrade:', upgradeType.value)
   try {
     await gameStore.performAction({
       action: upgradeType.value,
       tank_id: currentPlayer.value?.uuid || '',
+      count: Math.max(1, Number(multiUpgradeCount.value) || 1),
     })
     showUpgradeDialog.value = false
     upgradeType.value = ''
@@ -540,31 +617,44 @@ function getDetailedLogInfo(log) {
   switch (log.action) {
     case 'shot':
       if (log.details?.targetUser) {
-        actionDescription = `Sköt ${log.details.targetUser} (${log.details.targetUserLives} liv kvar)`
+        const beforeLives = log.details?.before?.target?.lives ?? log.details?.targetUserLives + 1
+        const afterLives = log.details?.after?.target?.lives ?? log.details?.targetUserLives
+        actionDescription = `Sköt ${log.details.targetUser} (${beforeLives} → ${afterLives} liv)`
       } else {
         actionDescription = 'Sköt'
       }
       break
 
     case 'move':
-      if (log.details?.position) {
-        actionDescription = `Flyttade till (${log.details.position.row}, ${log.details.position.column})`
+      if (log.details?.from && log.details?.to) {
+        const from = log.details.from
+        const to = log.details.to
+        const cost = log.details?.cost
+        actionDescription = `Flyttade (${from.row}, ${from.column}) → (${to.row}, ${to.column})${cost ? ` (kostade ${cost}t)` : ''}`
       } else {
         actionDescription = 'Flyttade'
       }
       break
 
     case 'range':
-      if (log.details?.range) {
-        actionDescription = `Köpte räckvidd (${log.details.range - 1} → ${log.details.range})`
+      if (log.details?.before?.range != null && log.details?.after?.range != null) {
+        const before = log.details.before.range
+        const after = log.details.after.range
+        const count = log.details?.count || after - before
+        const cost = log.details?.cost
+        actionDescription = `Köpte räckvidd +${count} (${before} → ${after})${cost ? ` för ${cost}t` : ''}`
       } else {
         actionDescription = 'Köpte räckvidd'
       }
       break
 
     case 'life':
-      if (log.details?.lives) {
-        actionDescription = `Köpte liv (${log.details.lives - 1} → ${log.details.lives})`
+      if (log.details?.before?.lives != null && log.details?.after?.lives != null) {
+        const before = log.details.before.lives
+        const after = log.details.after.lives
+        const count = log.details?.count || after - before
+        const cost = log.details?.cost
+        actionDescription = `Köpte liv +${count} (${before} → ${after})${cost ? ` för ${cost}t` : ''}`
       } else {
         actionDescription = 'Köpte liv'
       }
@@ -757,6 +847,11 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.cooldown-row {
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: var(--theme-text-secondary);
 }
 .rt-indicator {
   width: 10px;

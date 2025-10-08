@@ -179,6 +179,18 @@
     transform: translateY(0);
   }
 
+  &:disabled {
+    background: var(--theme-button-secondary-hover);
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.7;
+    transform: translateY(0);
+
+    &::before {
+      display: none;
+    }
+  }
+
   &.decline {
     background: var(--theme-button-decline-bg);
     border-color: var(--theme-button-decline-border);
