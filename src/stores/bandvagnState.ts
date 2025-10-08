@@ -415,7 +415,6 @@ export const useBandvagnStore = defineStore("bandvagn", {
         // Handle shot actions with animation
         if (
           action.action === "shot" &&
-          action.animationTrigger?.triggerBulletAndExplosion &&
           action.targetUUID &&
           this.currentPlayer
         ) {
@@ -424,10 +423,6 @@ export const useBandvagnStore = defineStore("bandvagn", {
             p.uuid === action.targetUUID
           );
           if (targetPlayer) {
-            // Use the current (already updated from any prior move) shooter position
-            const shooterPos = this.currentPlayer.position;
-            const targetPos = targetPlayer.position;
-
             // Update shooter data immediately (tokens etc.)
             this.currentPlayer = result.updatedData;
             const shooterIndex = this.allPlayers.findIndex((p) =>
@@ -437,66 +432,14 @@ export const useBandvagnStore = defineStore("bandvagn", {
               this.allPlayers[shooterIndex] = result.updatedData;
             }
 
-            // Trigger animation sequence
-            action.animationTrigger.triggerBulletAndExplosion(
-              shooterPos.row,
-              shooterPos.column,
-              targetPos.row,
-              targetPos.column,
-              () => {
-                // After explosion completes, update the target's data
-                if (result.shotData) {
-                  const targetIndex = this.allPlayers.findIndex((p) =>
-                    p.uuid === action.targetUUID
-                  );
-                  if (targetIndex !== -1) {
-                    this.allPlayers[targetIndex] = result.shotData;
-                  }
-                }
-
-                // Update game logs
-                if (result.updatedLogs && this.boardData) {
-                  // Handle both single log and array of logs
-                  if (Array.isArray(result.updatedLogs)) {
-                    this.boardData.logs = result.updatedLogs;
-                  } else {
-                    // If it's a single log, append it to existing logs
-                    this.boardData.logs = [
-                      ...this.boardData.logs,
-                      result.updatedLogs,
-                    ];
-                  }
-                }
-              },
-            );
-
             return result;
           }
         }
-
-        // Handle move actions: update immediately (no deferred callback)
+        // Handle move actions: do NOT update position immediately.
+        // Insert logs right away so the canvas log-watcher can animate instantly,
+        // and let realtime/state updates catch up the actual position.
         if (action.action === "move" && this.currentPlayer) {
-          if (result.updatedData) {
-            const idx = this.allPlayers.findIndex((p) =>
-              p.uuid === result.updatedData.uuid
-            );
-            if (idx !== -1) this.allPlayers[idx] = result.updatedData;
-            this.currentPlayer = result.updatedData;
-          }
-
-          // Update game logs immediately
-          if (result.updatedLogs && this.boardData) {
-            if (Array.isArray(result.updatedLogs)) {
-              this.boardData.logs = result.updatedLogs;
-            } else {
-              this.boardData.logs = [
-                ...this.boardData.logs,
-                result.updatedLogs,
-              ];
-            }
-          }
-
-          // Fire animation if provided, but don't wait for it
+          // Fire local animation immediately (logs watcher will dedupe)
           if (action.animationTrigger?.triggerTankMove) {
             action.animationTrigger.triggerTankMove();
           }
@@ -517,19 +460,6 @@ export const useBandvagnStore = defineStore("bandvagn", {
             this.allPlayers[currentIndex] = result.updatedData;
           }
           this.currentPlayer = result.updatedData;
-          // Update game logs
-          if (result.updatedLogs && this.boardData) {
-            // Handle both single log and array of logs
-            if (Array.isArray(result.updatedLogs)) {
-              this.boardData.logs = result.updatedLogs;
-            } else {
-              // If it's a single log, append it to existing logs
-              this.boardData.logs = [
-                ...this.boardData.logs,
-                result.updatedLogs,
-              ];
-            }
-          }
         }
         console.log("Game state refreshed successfully.");
         return result;

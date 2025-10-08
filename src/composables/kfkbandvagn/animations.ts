@@ -67,9 +67,11 @@ export interface TankMoveAnimation {
     currentCol: number;
     tankUuid: string; // Which tank is moving
     phase: "row" | "col"; // Current movement phase (row first, then column)
-    progress: number; // 0-1 progress for current phase
     active: boolean;
-    speed: number; // cells per second
+    // Kinematics
+    velocity: number; // cells/s along current axis
+    acceleration: number; // cells/s^2
+    maxVelocity: number; // cells/s cap
 }
 
 // Color conversion interfaces
@@ -332,36 +334,6 @@ export function createBullet(
 }
 
 /**
- * Create tank move animation with Manhattan-style movement (row first, then column)
- */
-export function createTankMove(
-    startRow: number,
-    startCol: number,
-    endRow: number,
-    endCol: number,
-    tankUuid: string,
-    speed: number = 2.0, // cells per second
-): TankMoveAnimation {
-    const move: TankMoveAnimation = {
-        startRow,
-        startCol,
-        endRow,
-        endCol,
-        currentRow: startRow,
-        currentCol: startCol,
-        tankUuid,
-        phase: startRow !== endRow ? "row" : "col", // Start with row if row needs changing
-        progress: 0,
-        active: true,
-        speed,
-    };
-
-    // No completion callback for tank move animations; UI state updates immediately
-
-    return move;
-}
-
-/**
  * Update explosion animation
  */
 export function updateExplosion(
@@ -478,60 +450,73 @@ export function updateTankMove(
 ): TankMoveAnimation {
     if (!move.active) return move;
 
-    const wasComplete = move.progress >= 1 && move.phase === "col" &&
-        move.currentRow === move.endRow;
+    const dt = Math.max(0, deltaTime) / 1000; // seconds
 
-    // Calculate progress increment based on speed (cells per second)
-    const speedMultiplier = move.speed * deltaTime * 0.001; // Convert to cells per millisecond
+    // Helper to step along one axis with acceleration/deceleration
+    const stepAxis = (
+        current: number,
+        _start: number,
+        end: number,
+    ) => {
+        const direction = end >= current ? 1 : -1; // move sign
+        const remaining = Math.abs(end - current); // cells remaining along axis
+
+        // Physics params
+        const a = move.acceleration;
+        const vmax = move.maxVelocity;
+
+        // Ideal velocity to reach end and stop exactly: v = sqrt(2*a*remaining)
+        const vIdeal = Math.min(
+            vmax,
+            Math.sqrt(2 * a * Math.max(0, remaining)),
+        );
+
+        // Adjust velocity toward ideal with some tolerance
+        const epsV = 0.02;
+        if (move.velocity < vIdeal - epsV) {
+            move.velocity = Math.min(vmax, move.velocity + a * dt);
+        } else if (move.velocity > vIdeal + epsV) {
+            move.velocity = Math.max(0, move.velocity - a * dt);
+        } // else keep
+
+        // Advance by v*dt (but don't overshoot)
+        const advance = Math.min(remaining, move.velocity * dt);
+        const next = current + direction * advance;
+
+        // If we landed on target cell (within epsilon), snap
+        const epsilon = 1e-4;
+        const reached = Math.abs(end - next) <= epsilon || advance >= remaining;
+        return { next: reached ? end : next, reached };
+    };
 
     if (move.phase === "row") {
-        // Moving along row first
-        const rowDistance = Math.abs(move.endRow - move.startRow);
-        if (rowDistance === 0) {
-            // No row movement needed, switch to column phase
-            move.phase = "col";
-            move.progress = 0;
-        } else {
-            move.progress += speedMultiplier / rowDistance;
-
-            if (move.progress >= 1) {
-                move.progress = 1;
-                move.currentRow = move.endRow;
-
-                // Check if we need column movement
-                if (move.endCol !== move.startCol) {
-                    move.phase = "col";
-                    move.progress = 0;
-                } else {
-                    // Movement complete
-                    move.active = false;
-                }
+        const { next, reached } = stepAxis(
+            move.currentRow,
+            move.startRow,
+            move.endRow,
+        );
+        move.currentRow = next;
+        if (reached) {
+            // Switch to column if needed; keep velocity (but clamp) to feel continuous
+            if (move.endCol !== move.startCol) {
+                move.phase = "col";
+                // Keep some carry-over velocity but cap to 70% of max to avoid instant jump
+                move.velocity = Math.min(move.velocity, move.maxVelocity * 0.7);
             } else {
-                // Interpolate row position
-                move.currentRow = move.startRow +
-                    (move.endRow - move.startRow) * move.progress;
+                move.active = false;
+                move.velocity = 0;
             }
         }
-    } else if (move.phase === "col") {
-        // Moving along column
-        const colDistance = Math.abs(move.endCol - move.startCol);
-        if (colDistance === 0) {
-            // No column movement needed, complete
+    } else {
+        const { next, reached } = stepAxis(
+            move.currentCol,
+            move.startCol,
+            move.endCol,
+        );
+        move.currentCol = next;
+        if (reached) {
             move.active = false;
-        } else {
-            move.progress += speedMultiplier / colDistance;
-
-            if (move.progress >= 1) {
-                move.progress = 1;
-                move.currentCol = move.endCol;
-                move.active = false;
-
-                // Movement complete
-            } else {
-                // Interpolate column position
-                move.currentCol = move.startCol +
-                    (move.endCol - move.startCol) * move.progress;
-            }
+            move.velocity = 0;
         }
     }
 
@@ -659,23 +644,27 @@ export function addTankMove(
     endRow: number,
     endCol: number,
     tankUuid: string,
-    speed: number = 2.0,
 ): AnimationState {
     // Reset lastUpdate if this is the first animation being added to an empty state
     if (!hasActiveAnimations(state)) {
         state.lastUpdate = performance.now();
     }
 
-    state.tankMoves.push(
-        createTankMove(
-            startRow,
-            startCol,
-            endRow,
-            endCol,
-            tankUuid,
-            speed,
-        ),
-    );
+    const move: TankMoveAnimation = {
+        startRow,
+        startCol,
+        endRow,
+        endCol,
+        currentRow: startRow,
+        currentCol: startCol,
+        tankUuid,
+        phase: startRow !== endRow ? "row" : "col", // Start with row if row needs changing
+        active: true,
+        velocity: 0,
+        acceleration: 3.0, // cells/s^2 (gentle acceleration)
+        maxVelocity: 4.0, // cells/s (capped speed)
+    };
+    state.tankMoves.push(move);
     return state;
 }
 

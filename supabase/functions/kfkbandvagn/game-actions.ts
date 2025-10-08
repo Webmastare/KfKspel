@@ -304,6 +304,7 @@ export async function handleGameAction(body: unknown, userId: string) {
         shotData = updatedTargetData as Player;
         detailsQuery = {
           targetUser: targetUser.playerID,
+          targetUUID: targetUser.uuid,
           targetUserLives: targetUser.lives - 1,
         };
 

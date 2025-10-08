@@ -198,7 +198,7 @@ async function performAction(actionType, targetUUID = null) {
       action.targetUUID = targetUUID
     }
 
-    await emit('action', action)
+    emit('action', action)
   } catch (error) {
     console.error('Error performing action:', error)
   } finally {

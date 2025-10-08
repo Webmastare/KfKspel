@@ -41,8 +41,8 @@ KfKbandvagn:
 
 - Max actions per time period e.g. 10 seconds, enforce on client and edge function, UI to show if action is allowed. Disable buttons.
 
-- Update board and player data can happen from the client instead of calling the edge function.
-- Subscribe to table changes with real-time.
+- Possible to buy multiple lives or range at once
+
 - On table change we do animations, e.g. moving tanks, shooting etc.
 
 - Start on a larger board and then shrink it once a day forcing players closer together
@@ -58,5 +58,7 @@ KfKbandvagn
 - Man får endast 10% av någons tokens när de dör
 - Förflyttas snabbare accelerera och få högre fart om man kör längre?
 - Förflyttas med range
+
+- Touch på telefonen fungerar inte!!!
 
 Skapad av Kasper Storck 2025

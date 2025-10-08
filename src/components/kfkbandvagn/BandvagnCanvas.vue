@@ -111,6 +111,8 @@ const isMultiTouch = ref(false)
 const animationState = ref<AnimationState>(createAnimationState())
 let rafId: number | null = null
 const animFramesRemaining = ref(0)
+// Keep last drawn position per player to avoid one-frame snapping when store updates before animations
+const lastDrawnPositions = ref(new Map<string, { row: number; col: number }>())
 
 // Theme cache to avoid style lookups inside the draw loop
 const themeCache = ref({
@@ -250,6 +252,9 @@ function drawGame() {
   if (!ctx.value) return
   if (boardSize.value.rows <= 0 || boardSize.value.cols <= 0) return
 
+  // Advance animations first so players and range use up-to-date animated positions
+  animationState.value = updateAnimations(animationState.value)
+
   // Clear canvas
   ctx.value.clearRect(0, 0, canvasWidth.value, canvasHeight.value)
 
@@ -270,7 +275,7 @@ function drawGame() {
   }
 
   // Draw current player range
-  if (currentPlayer) {
+  if (currentPlayer.value) {
     drawPlayerRange()
   }
 
@@ -282,13 +287,44 @@ function drawGame() {
 }
 
 function drawPlayers() {
+  const uuidWithAnimation = animationState.value.tankMoves
+    .filter((tank) => tank.active)
+    .map((t) => t.tankUuid)
   for (const player of allPlayers.value!) {
     // Check if this player has an active move animation
-    const animatedPos = getTankAnimatedPosition(animationState.value, player.uuid)
+    const animatedPos = uuidWithAnimation.includes(player.uuid)
+      ? getTankAnimatedPosition(animationState.value, player.uuid)
+      : null
 
-    const position = animatedPos || {
+    // Determine position to draw this frame with a fallback to prevent single-frame snaps
+    const prev = lastDrawnPositions.value.get(player.uuid) ?? {
       row: player.position.row,
       col: player.position.column,
+    }
+
+    let position = animatedPos || {
+      row: player.position.row,
+      col: player.position.column,
+    }
+
+    // If no animation is active but the store cell changed since last frame,
+    // start an animation immediately and draw at the previous position this frame
+    const prevCellRow = Math.round(prev.row)
+    const prevCellCol = Math.round(prev.col)
+    const jumpedCell = prevCellRow !== player.position.row || prevCellCol !== player.position.column
+    if (!animatedPos && jumpedCell) {
+      // Kick off a move animation from prev -> current store position
+      animationState.value = addTankMove(
+        animationState.value,
+        prev.row,
+        prev.col,
+        player.position.row,
+        player.position.column,
+        player.uuid,
+      )
+      ensureLoopActive(6)
+      // Draw using the previous position for this frame to avoid a visible snap
+      position = prev
     }
 
     const x = position.col * cellSize.value
@@ -296,7 +332,8 @@ function drawPlayers() {
 
     // Draw tank marker (closer to original): body + turret
     const isTaken = player.taken_tank
-    const isAlive = player.lives > 0
+    const displayLives = frozenLives.value.get(player.uuid)?.display ?? player.lives
+    const isAlive = displayLives > 0
 
     drawTank(
       ctx.value!,
@@ -324,25 +361,27 @@ function drawPlayers() {
       ctx.value!.stroke()
     }
 
-    // Draw lives indicator
-    if (player.lives > 0) {
-      if (player.lives > 3) {
+    // Draw lives indicator (freeze during hit animation if needed)
+    if (displayLives > 0) {
+      if (displayLives > 3) {
         // Draw life count if more than 3 lives
         ctx.value!.fillStyle = '#e74c3c'
         ctx.value!.font = `${Math.floor(cellSize.value * 0.3)}px Arial`
         ctx.value!.textAlign = 'left'
         ctx.value!.textBaseline = 'top'
-        ctx.value!.fillText(`${player.lives}❤`, x, y + 1)
+        ctx.value!.fillText(`${displayLives}❤`, x, y + 1)
       } else {
         ctx.value!.fillStyle = '#e74c3c'
         const heartSize = cellSize.value / 8
-        for (let i = 0; i < player.lives; i++) {
+        for (let i = 0; i < displayLives; i++) {
           const heartX = x + 5 + i * (heartSize + 2)
           const heartY = y + 5
           ctx.value!.fillRect(heartX, heartY, heartSize, heartSize)
         }
       }
     }
+    // Update last drawn position for continuity
+    lastDrawnPositions.value.set(player.uuid, { row: position.row, col: position.col })
   }
 }
 
@@ -594,9 +633,6 @@ function drawBoard() {
 function drawAnimations() {
   if (!ctx.value) return
 
-  // Update all animations
-  animationState.value = updateAnimations(animationState.value)
-
   // Render all animations
   renderAnimations(
     ctx.value,
@@ -651,10 +687,14 @@ function drawCellHighlight(row: number, col: number) {
 }
 
 function drawPlayerRange() {
-  if (!currentPlayer || !ctx.value) return
+  if (!currentPlayer.value || !ctx.value) return
   const range = currentPlayer.value!.range
-  const centerRow = currentPlayer.value!.position.row
-  const centerCol = currentPlayer.value!.position.column
+  // Follow animated position if moving
+  const animated = currentPlayer.value
+    ? getTankAnimatedPosition(animationState.value, currentPlayer.value.uuid)
+    : null
+  const centerRow = animated ? Math.round(animated.row) : currentPlayer.value!.position.row
+  const centerCol = animated ? Math.round(animated.col) : currentPlayer.value!.position.column
 
   ctx.value.fillStyle = 'rgba(76, 175, 80, 0.15)'
   // Manhattan distance range
@@ -946,8 +986,9 @@ function triggerBullet(
   ensureLoopActive(10)
 }
 
-// Composite function to trigger bullet followed by explosion
-// Composite function to trigger bullet followed by explosion
+/**
+ * Trigger a tank movement animation
+ */
 function triggerTankMove(
   tankUuid: string,
   fromRow: number,
@@ -955,18 +996,11 @@ function triggerTankMove(
   toRow: number,
   toCol: number,
 ) {
-  animationState.value = addTankMove(
-    animationState.value,
-    fromRow,
-    fromCol,
-    toRow,
-    toCol,
-    tankUuid,
-    2.0, // 2 cells per second
-  )
+  animationState.value = addTankMove(animationState.value, fromRow, fromCol, toRow, toCol, tankUuid)
   ensureLoopActive(10)
 }
 
+// Composite function to trigger bullet followed by explosion
 function triggerBulletAndExplosion(
   fromRow: number,
   fromCol: number,
@@ -974,9 +1008,18 @@ function triggerBulletAndExplosion(
   toCol: number,
   onExplosionComplete?: () => void,
 ) {
+  // Capture target at time of firing to unfreeze correctly
+  const targetAtFire = (allPlayers.value || []).find(
+    (p) => p.position.row === toRow && p.position.column === toCol,
+  )
   triggerBullet(fromRow, fromCol, toRow, toCol, () => {
     // When bullet reaches target, trigger explosion
-    triggerExplosion(toRow, toCol, onExplosionComplete)
+    triggerExplosion(toRow, toCol, () => {
+      if (targetAtFire) {
+        unfreezePlayerLives(targetAtFire.uuid)
+      }
+      onExplosionComplete?.()
+    })
   })
 }
 
@@ -990,6 +1033,7 @@ defineExpose({
 })
 function handlePopupAction(action: any) {
   // For move actions, we need to handle them specially to trigger animations
+  // Watcher will dedupe identical moves
   if (action.action === 'move' && currentPlayer.value) {
     const fromRow = currentPlayer.value.position.row
     const fromCol = currentPlayer.value.position.column
@@ -1040,6 +1084,160 @@ watch(
   { deep: true },
 )
 
+// Dedupe state
+const processedLogKeys = ref(new Set<string>())
+const frozenLives = ref(new Map<string, { display: number; pending: number }>()) // uuid -> frozen display and pending explosions
+
+// Helper: build a unique key for logs to avoid double-processing
+function logKey(log: any): string {
+  const t = String(log.timestamp ?? log.created_at ?? '')
+  const a = String(log.action ?? '')
+  const p = String(log.playerID ?? '')
+  const tgt = String(log.details?.targetUUID ?? log.details?.targetUser ?? '')
+  return `${t}|${a}|${p}|${tgt}`
+}
+
+/** Helper: get player by playerID or uuid */
+function findPlayerByIdentifiers(idOrName: string): Player | null {
+  if (!idOrName) return null
+  return (
+    allPlayers.value!.find((p) => p.uuid === idOrName) ||
+    allPlayers.value!.find((p) => p.playerID === idOrName) ||
+    null
+  )
+}
+
+function hasActiveMoveTo(tankUuid: string, toRow: number, toCol: number): boolean {
+  return (
+    animationState.value.tankMoves.find(
+      (m) =>
+        m.tankUuid === tankUuid &&
+        m.active &&
+        Math.round(m.endRow) === toRow &&
+        Math.round(m.endCol) === toCol,
+    ) !== undefined
+  )
+}
+
+function freezePlayerLives(uuid: string, prevLives: number) {
+  const entry = frozenLives.value.get(uuid)
+  if (!entry) {
+    frozenLives.value.set(uuid, { display: prevLives, pending: 1 })
+  } else {
+    entry.pending += 1
+    // Keep the larger of the existing display and new prevLives to ensure we don't drop early
+    entry.display = Math.max(entry.display, prevLives)
+  }
+}
+function unfreezePlayerLives(uuid: string) {
+  const entry = frozenLives.value.get(uuid)
+  if (!entry) return
+  entry.pending -= 1
+  if (entry.pending <= 0) {
+    frozenLives.value.delete(uuid)
+  }
+}
+
+// Process new logs for animations
+/* We watch logs for making the animations since the data from 
+supabase realtime is missing details such as the shooter in shot action 
+*/
+watch(
+  () => gameStore.boardData?.logs,
+  (logs) => {
+    if (!logs || !Array.isArray(logs)) return
+    for (const log of logs) {
+      const key = logKey(log)
+      if (processedLogKeys.value.has(key)) continue
+
+      if (log.action === 'move') {
+        // Expected schema of move log:
+        // details: { from: {row,column}, to: {row,column}, distance, cost }
+        const mover = findPlayerByIdentifiers(String(log.playerID ?? ''))
+        const from = (log.details?.from ?? null) as { row: number; column: number } | null
+        const to = (log.details?.to ?? null) as { row: number; column: number } | null
+        if (
+          mover &&
+          from &&
+          to &&
+          typeof from.row === 'number' &&
+          typeof from.column === 'number' &&
+          typeof to.row === 'number' &&
+          typeof to.column === 'number'
+        ) {
+          // Avoid double-animating if an identical target is already active
+          if (!hasActiveMoveTo(mover.uuid, to.row, to.column)) {
+            triggerTankMove(mover.uuid, from.row, from.column, to.row, to.column)
+            ensureLoopActive(6)
+          }
+        }
+      } else if (log.action === 'shot') {
+        // details: may include from/to or only targetUser/targetUUID and possibly targetUserLives (left after shot)
+        const shooter = findPlayerByIdentifiers(String(log.playerID ?? ''))
+        const target = findPlayerByIdentifiers(
+          String(log.details?.targetUUID ?? log.details?.targetUser ?? ''),
+        )
+
+        // Freeze target lives to previous value until explosion completes
+        if (target) {
+          const livesAfter = Number(log.details?.targetUserLives)
+          if (Number.isFinite(livesAfter)) {
+            freezePlayerLives(target.uuid, livesAfter + 1)
+          } else {
+            // Fallback: assume 1 life was removed
+            freezePlayerLives(target.uuid, target.lives + 1)
+          }
+        }
+
+        // Determine bullet path
+        const fromPos = (log.details?.from ?? null) as { row: number; column: number } | null
+        const toPos = (log.details?.to ?? null) as { row: number; column: number } | null
+
+        // Prefer explicit positions in logs; otherwise use on-screen positions
+        const shooterAnim = shooter
+          ? getTankAnimatedPosition(animationState.value, shooter.uuid)
+          : null
+        const fromRow =
+          fromPos && typeof fromPos.row === 'number'
+            ? fromPos.row
+            : shooterAnim
+              ? Math.round(shooterAnim.row)
+              : shooter?.position.row
+        const fromCol =
+          fromPos && typeof fromPos.column === 'number'
+            ? fromPos.column
+            : shooterAnim
+              ? Math.round(shooterAnim.col)
+              : shooter?.position.column
+        const toRow = toPos && typeof toPos.row === 'number' ? toPos.row : target?.position.row
+        const toCol =
+          toPos && typeof toPos.column === 'number' ? toPos.column : target?.position.column
+
+        if ([fromRow, fromCol, toRow, toCol].every((v) => typeof v === 'number')) {
+          triggerBulletAndExplosion(
+            fromRow as number,
+            fromCol as number,
+            toRow as number,
+            toCol as number,
+            () => {
+              if (target) unfreezePlayerLives(target.uuid)
+            },
+          )
+        } else if (target && typeof toRow === 'number' && typeof toCol === 'number') {
+          // Fallback: explosion-only at the target
+          triggerExplosion(toRow as number, toCol as number, () => {
+            unfreezePlayerLives(target.uuid)
+          })
+        }
+        ensureLoopActive(8)
+      }
+
+      processedLogKeys.value.add(key)
+    }
+  },
+  { deep: false },
+)
+
 // Keep font cache in sync with cell size
 watch(
   () => cellSize.value,
@@ -1066,6 +1264,16 @@ onMounted(() => {
   refreshThemeCache()
   updateLoop()
   ensureLoopActive(1)
+
+  // Initialize processed logs to prevent retroactive animations
+  const logs = gameStore.boardData?.logs || []
+  for (const log of logs) {
+    processedLogKeys.value.add(logKey(log))
+  }
+  // Seed last drawn positions to current player positions on mount
+  for (const p of allPlayers.value || []) {
+    lastDrawnPositions.value.set(p.uuid, { row: p.position.row, col: p.position.column })
+  }
 })
 
 onBeforeUnmount(() => {
