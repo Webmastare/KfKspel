@@ -185,6 +185,11 @@ app.post("/system/shrink", async (c: Context) => {
 
 app.post("/system/distribute", async (c: Context) => {
   const authHeader = c.req.header("Authorization");
+  // Optional body: including token amount to distribute, default 1 if missing/invalid
+  const reqBody = await c.req.json();
+  const tokenAmount = typeof reqBody.amount === "number" && reqBody.amount > 0
+    ? reqBody.amount
+    : 1;
   if (!validateAdminAuthHeader(authHeader)) {
     const response = createErrorResponse(
       ERROR_CODES.INVALID_SESSION,
@@ -192,7 +197,7 @@ app.post("/system/distribute", async (c: Context) => {
     );
     return c.json(response, 403);
   }
-  const response = await handleTokenDistribution();
+  const response = await handleTokenDistribution(tokenAmount);
   return c.json(response, 200);
 });
 

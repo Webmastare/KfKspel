@@ -241,7 +241,7 @@ export async function handleBoardShrink() {
 }
 
 // Handle token distribution to all players (called by cron job)
-export async function handleTokenDistribution() {
+export async function handleTokenDistribution(tokenAmount: number) {
   try {
     const supabase = createServiceClient();
 
@@ -250,8 +250,10 @@ export async function handleTokenDistribution() {
     // Get all active players with their current token counts
     const { data: activePlayers, error: playersError } = await supabase
       .from("KfKbandvagn")
-      .select("uuid, tokens")
-      .eq("taken_tank", true);
+      .select("uuid, tokens");
+
+    // All tanks are given tokens for now, taken or not
+    //.eq("taken_tank", true);
 
     if (playersError) {
       console.error("Error fetching active players:", playersError);
@@ -272,7 +274,7 @@ export async function handleTokenDistribution() {
     // Prepare batch update data - increment each player's tokens by 1
     const updateData = activePlayers.map((player) => ({
       uuid: player.uuid,
-      tokens: player.tokens + 1,
+      tokens: player.tokens + tokenAmount,
     }));
 
     // Use upsert with the uuid array to do a batch update
@@ -300,7 +302,7 @@ export async function handleTokenDistribution() {
       timestamp: new Date().toISOString(),
       details: {
         playersUpdated: playersUpdated,
-        tokensPerPlayer: 1,
+        tokensPerPlayer: tokenAmount,
       },
     };
 

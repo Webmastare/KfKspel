@@ -665,8 +665,8 @@ function getDetailedLogInfo(log) {
       break
 
     case 'token_distribution':
-      if (log.details?.tokensGiven) {
-        actionDescription = `Alla fick ${log.details.tokensGiven} tokens`
+      if (log.details?.tokensPerPlayer) {
+        actionDescription = `Alla fick ${log.details.tokensPerPlayer} tokens`
       } else {
         actionDescription = 'Alla fick tokens'
       }

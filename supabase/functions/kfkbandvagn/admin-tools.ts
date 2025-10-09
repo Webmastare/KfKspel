@@ -28,7 +28,7 @@ export async function handleGameReset() {
       .update({
         size: { rows: 50, columns: 50 },
         has_shrunked: { row: 0, column: 0 },
-        to_shrink: { row: 1, column: 1 },
+        to_shrink: { row: 0, column: 0 },
         next_shrink: nextShrinkTime.toISOString(),
         upgrades: [],
         logs: [],
@@ -74,7 +74,7 @@ export async function handleGameReset() {
     // Create entries with default values
     const entries = Array.from({ length: numUsers }, () => ({
       playerID: "No-player",
-      tokens: 100,
+      tokens: 0,
       color: `#${
         Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")
       }`,
@@ -190,6 +190,9 @@ export async function handleAdminStats() {
     ) || [];
     const alivePlayers = activePlayers.filter((p) => p.lives > 0);
     const deadPlayers = activePlayers.filter((p) => p.lives <= 0);
+    const totalDeadPlayers = (allPlayers as Player[])?.filter((p) =>
+      p.lives <= 0
+    ).length;
 
     const tokenStats = {
       total: activePlayers.reduce((sum, p) => sum + p.tokens, 0),
@@ -245,6 +248,7 @@ export async function handleAdminStats() {
         active: activePlayers.length,
         alive: alivePlayers.length,
         dead: deadPlayers.length,
+        totalDeadPlayers: totalDeadPlayers || 0,
         available: ((allPlayers as Player[])?.length || 0) -
           activePlayers.length,
       },
