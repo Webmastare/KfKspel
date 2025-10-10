@@ -192,10 +192,11 @@ export async function handleBoardShrink() {
     }
 
     // Add log entry about board shrink
+    const logTimestamp = new Date().toISOString();
     const logEntry: GameLog = {
       playerID: "SYSTEM",
       action: "board_shrink",
-      timestamp: new Date().toISOString(),
+      timestamp: logTimestamp,
       details: {
         has_shrunked: nextHasShrunked,
         to_shrink_applied: toShrink,
@@ -204,7 +205,7 @@ export async function handleBoardShrink() {
       },
     };
 
-    // Update logs
+    // Update logs and last_update timestamp
     const currentLogs = boardData.logs || [];
     let updatedLogs = [...currentLogs, logEntry];
     if (updatedLogs.length > 100) {
@@ -213,7 +214,10 @@ export async function handleBoardShrink() {
 
     const { error: logError } = await supabase
       .from("KfKbandvagnBoard")
-      .update({ logs: updatedLogs })
+      .update({
+        logs: updatedLogs,
+        last_update: logTimestamp,
+      })
       .eq("active_board", true);
 
     if (logError) {
@@ -296,17 +300,18 @@ export async function handleTokenDistribution(tokenAmount: number) {
     const playersUpdated = activePlayers.length;
 
     // Add log entry about token distribution
+    const logTimestamp = new Date().toISOString();
     const logEntry: GameLog = {
       playerID: "SYSTEM",
       action: "token_distribution",
-      timestamp: new Date().toISOString(),
+      timestamp: logTimestamp,
       details: {
         playersUpdated: playersUpdated,
         tokensPerPlayer: tokenAmount,
       },
     };
 
-    // Update logs
+    // Update logs and last_update timestamp
     const { data: boardData, error: boardError } = await supabase
       .from("KfKbandvagnBoard")
       .select("logs")
@@ -322,7 +327,10 @@ export async function handleTokenDistribution(tokenAmount: number) {
 
       const { error: logError } = await supabase
         .from("KfKbandvagnBoard")
-        .update({ logs: updatedLogs })
+        .update({
+          logs: updatedLogs,
+          last_update: logTimestamp,
+        })
         .eq("active_board", true);
 
       if (logError) {

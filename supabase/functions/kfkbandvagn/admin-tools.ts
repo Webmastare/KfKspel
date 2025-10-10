@@ -32,6 +32,7 @@ export async function handleGameReset() {
         next_shrink: nextShrinkTime.toISOString(),
         upgrades: [],
         logs: [],
+        last_update: new Date().toISOString(),
       })
       .eq("active_board", true)
       .select()
@@ -111,10 +112,11 @@ export async function handleGameReset() {
     }
 
     // Reset board state and add reset log
+    const resetTimestamp = new Date().toISOString();
     const resetLogEntry: GameLog = {
       playerID: "ADMIN",
       action: "game_reset",
-      timestamp: new Date().toISOString(),
+      timestamp: resetTimestamp,
       details: { resetBy: "admin", createdPlayers: (inserted || []).length },
     };
 
@@ -123,6 +125,7 @@ export async function handleGameReset() {
       .update({
         // Keep has_shrunked/to_shrink/next_shrink set above; just write the reset log
         logs: [resetLogEntry],
+        last_update: resetTimestamp,
       })
       .eq("active_board", true);
 

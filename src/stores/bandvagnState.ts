@@ -10,10 +10,12 @@ import type { GameBoard } from "@/composables/kfkbandvagn/board";
 import type { GameActionType } from "@/composables/kfkbandvagn/gameActions";
 import { supabase } from "@/utils/supabase";
 import {
+  fetchActiveBoard,
+  fetchAllPlayers,
   fetchGameStateClient,
   type RealtimeStatus,
-  subscribeToBandvagn,
-  unsubscribeRealtime,
+  startPolling,
+  stopPolling,
 } from "@/composables/kfkbandvagn/database";
 
 export const useBandvagnStore = defineStore("bandvagn", {
@@ -29,12 +31,7 @@ export const useBandvagnStore = defineStore("bandvagn", {
     error: null as string | null,
     selectedCell: null as { row: number; column: number } | null,
 
-    // Auto-refresh settings
-    autoRefreshEnabled: true,
-    refreshInterval: 3600000, // 1 hour
-    refreshTimeoutId: null as number | null,
-
-    // Realtime
+    // Polling status
     realtimeStatus: "disconnected" as RealtimeStatus,
     lastRealtimeUpdate: null as Date | null,
 
@@ -132,14 +129,8 @@ export const useBandvagnStore = defineStore("bandvagn", {
         await this.fetchGameState();
         this.initialized = true;
 
-        // Start auto-refresh if enabled
-        if (this.autoRefreshEnabled) {
-          this.startAutoRefresh();
-        }
-
-        // Start realtime subscription
+        // Start visibility-aware polling, almost real-time updates
         this.startRealtime();
-
         console.log("Bandvagn store initialized successfully");
       } catch (error) {
         console.error("Failed to initialize bandvagn store:", error);
@@ -198,74 +189,46 @@ export const useBandvagnStore = defineStore("bandvagn", {
       }
     },
 
-    // Start realtime subscriptions
+    // Start visibility-aware polling (replaces realtime)
     startRealtime() {
-      // Avoid duplicate subscriptions
+      // Avoid duplicate polling
       this.stopRealtime();
 
-      const onStatusChange = (status: RealtimeStatus) => {
-        this.realtimeStatus = status;
-      };
-
-      const onPlayerChange = (
-        row: Player,
-        type: "INSERT" | "UPDATE" | "DELETE",
-      ) => {
-        // Ignore if we don't have a board yet
-        if (!row) return;
-
-        if (type === "DELETE") {
-          const idx = this.allPlayers.findIndex((p) => p.uuid === row.uuid);
-          if (idx !== -1) this.allPlayers.splice(idx, 1);
-          if (this.currentPlayer?.uuid === row.uuid) this.currentPlayer = null;
-          return;
-        }
-
-        // Upsert player row
-        const idx = this.allPlayers.findIndex((p) => p.uuid === row.uuid);
-        const updated: Player = {
-          uuid: row.uuid,
-          playerID: row.playerID,
-          position: row.position,
-          lives: row.lives,
-          tokens: row.tokens,
-          range: row.range,
-          taken_tank: !!row.taken_tank,
-          color: row.color,
-        };
-        if (idx === -1) this.allPlayers.push(updated);
-        else this.allPlayers[idx] = updated;
-
-        // Keep currentPlayer reference fresh
-        if (this.currentPlayer?.uuid === row.uuid) {
-          this.currentPlayer = updated;
-        }
-        // Update last realtime update timestamp
-        this.lastRealtimeUpdate = new Date();
-      };
-
-      const onBoardChange = (
-        row: GameBoard,
-        _type: "INSERT" | "UPDATE" | "DELETE",
-      ) => {
-        if (_type === "DELETE") return;
-        // Map to GameBoard shape
-        this.boardData = {
-          rows: row.size?.rows ?? this.boardData?.rows ?? 0,
-          cols: row.size?.columns ?? this.boardData?.cols ?? 0,
-          has_shrunked: (row as any).has_shrunked || { row: 0, column: 0 },
-          to_shrink: (row as any).to_shrink || { row: 0, column: 0 },
-          logs: row.logs || [],
-          upgrades: (row as any).upgrades || [],
-          next_shrink: (row as any).next_shrink || "",
-        } as unknown as GameBoard;
-      };
-      // Start subscription
-      subscribeToBandvagn({ onStatusChange, onPlayerChange, onBoardChange });
+      startPolling({
+        intervalMs: 1000,
+        onStatusChange: (status) => {
+          this.realtimeStatus = status;
+        },
+        onBoardUpdate: (row) => {
+          // Map to GameBoard shape, keep animations smooth by only replacing fields
+          this.boardData = {
+            rows: row.size?.rows ?? this.boardData?.rows ?? 0,
+            cols: row.size?.columns ?? this.boardData?.cols ?? 0,
+            has_shrunked: (row as any).has_shrunked || { row: 0, column: 0 },
+            to_shrink: (row as any).to_shrink || { row: 0, column: 0 },
+            logs: row.logs || [],
+            upgrades: (row as any).upgrades || [],
+            next_shrink: (row as any).next_shrink || "",
+          } as unknown as GameBoard;
+          this.lastRealtimeUpdate = new Date();
+        },
+        onPlayersUpdate: (players) => {
+          // Replace entire list to reflect latest state
+          this.allPlayers = players;
+          // Refresh currentPlayer reference
+          if (this.currentPlayer) {
+            const me = players.find((p) =>
+              p.uuid === this.currentPlayer!.uuid
+            ) || null;
+            this.currentPlayer = me;
+          }
+          this.lastRealtimeUpdate = new Date();
+        },
+      });
     },
 
     stopRealtime() {
-      unsubscribeRealtime();
+      stopPolling();
       this.realtimeStatus = "disconnected";
     },
 
@@ -429,7 +392,10 @@ export const useBandvagnStore = defineStore("bandvagn", {
         }
 
         // Include count for multi-upgrades
-        if ((action.action === "range" || action.action === "life") && action.count) {
+        if (
+          (action.action === "range" || action.action === "life") &&
+          action.count
+        ) {
           actionRequest.count = Math.max(1, Math.floor(action.count));
         }
 
@@ -502,33 +468,6 @@ export const useBandvagnStore = defineStore("bandvagn", {
       } catch (error) {
         console.error("Failed to fetch game stats:", error);
         throw error;
-      }
-    },
-
-    // Auto-refresh functionality
-    startAutoRefresh() {
-      if (this.refreshTimeoutId) {
-        clearTimeout(this.refreshTimeoutId);
-      }
-
-      this.refreshTimeoutId = window.setTimeout(async () => {
-        if (this.autoRefreshEnabled && this.initialized) {
-          try {
-            await this.fetchGameState();
-          } catch (error) {
-            console.error("Auto-refresh failed:", error);
-          }
-
-          // Schedule next refresh
-          this.startAutoRefresh();
-        }
-      }, this.refreshInterval);
-    },
-
-    stopAutoRefresh() {
-      if (this.refreshTimeoutId) {
-        clearTimeout(this.refreshTimeoutId);
-        this.refreshTimeoutId = null;
       }
     },
 
@@ -609,19 +548,8 @@ export const useBandvagnStore = defineStore("bandvagn", {
       this.error = null;
     },
 
-    setAutoRefresh(enabled: boolean) {
-      this.autoRefreshEnabled = enabled;
-
-      if (enabled && this.initialized) {
-        this.startAutoRefresh();
-      } else {
-        this.stopAutoRefresh();
-      }
-    },
-
     // Cleanup when user logs out
     reset() {
-      this.stopAutoRefresh();
       this.stopRealtime();
       this.allPlayers = [];
       this.currentPlayer = null;

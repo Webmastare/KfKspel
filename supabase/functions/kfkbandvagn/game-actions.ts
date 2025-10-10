@@ -56,10 +56,13 @@ async function addBandvagnLog(
       updatedLogs = updatedLogs.slice(-100);
     }
 
-    // Update the database
+    // Update the database with logs and last_update timestamp
     const { error: updateError } = await supabase
       .from("KfKbandvagnBoard")
-      .update({ logs: updatedLogs })
+      .update({
+        logs: updatedLogs,
+        last_update: todaysDate,
+      })
       .eq("active_board", true);
 
     if (updateError) {

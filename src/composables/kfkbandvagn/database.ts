@@ -1,5 +1,4 @@
 import { supabase } from "@/utils/supabase";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { Player } from "@/composables/kfkbandvagn/player";
 import type { GameBoard } from "@/composables/kfkbandvagn/board";
 
@@ -8,143 +7,177 @@ export type GameStateClientResponse = {
     boardData: GameBoard | null;
 };
 
-// Lightweight event de-dupe using commit timestamps per table
-const lastCommit = {
-    players: "" as string, // ISO commit timestamp string
-    board: "" as string,
-};
-
-let playersChannel: RealtimeChannel | null = null;
-let boardChannel: RealtimeChannel | null = null;
-
+// Status used by UI indicator (repurposed from "realtime")
 export type RealtimeStatus =
-    | "disconnected"
-    | "connecting"
-    | "connected"
-    | "error";
+    | "disconnected" // polling stopped or page hidden
+    | "connecting" // starting polling
+    | "connected" // actively polling (last tick ok)
+    | "error"; // last tick failed
 /**
  * Fetch game state from client side
  */
 export async function fetchGameStateClient(): Promise<GameStateClientResponse> {
-    // Fetch players
-    const { data: players, error: playersError } = await supabase
+    const [players, board] = await Promise.all([
+        fetchAllPlayers(),
+        fetchActiveBoard(),
+    ]);
+    return {
+        playerData: players,
+        boardData: board,
+    };
+}
+
+export async function fetchAllPlayers(): Promise<Player[]> {
+    const { data, error } = await supabase
         .from("KfKbandvagn")
         .select(
             "playerID, taken_tank, uuid, tokens, position, lives, range, color",
         );
+    if (error) throw error;
+    return (data || []) as Player[];
+}
 
-    if (playersError) throw playersError;
-
-    // Fetch the active board
-    const { data: board, error: boardError } = await supabase
+export async function fetchActiveBoard(): Promise<GameBoard | null> {
+    const { data, error } = await supabase
         .from("KfKbandvagnBoard")
         .select("*")
         .eq("active_board", true)
         .maybeSingle();
-
-    if (boardError) throw boardError;
-
-    return {
-        playerData: (players || []) as Player[],
-        boardData: (board || null) as GameBoard | null,
-    };
-}
-/**
- * Unsubscribe from real-time updates
- */
-export function unsubscribeRealtime() {
-    if (playersChannel) {
-        playersChannel.unsubscribe();
-        playersChannel = null;
-    }
-    if (boardChannel) {
-        boardChannel.unsubscribe();
-        boardChannel = null;
-    }
+    if (error) throw error;
+    return (data || null) as GameBoard | null;
 }
 
-export function subscribeToBandvagn(options: {
+// Lightweight function to check only the last_update timestamp
+export async function fetchLastUpdate(): Promise<string | null> {
+    const { data, error } = await supabase
+        .from("KfKbandvagnBoard")
+        .select("last_update")
+        .eq("active_board", true)
+        .maybeSingle();
+    if (error) throw error;
+    return data?.last_update || null;
+}
+
+// --- Visibility-aware polling implementation ---
+let pollIntervalId: number | null = null;
+let visibilityHandler: ((this: Document, ev: Event) => any) | null = null;
+let lastUpdateTimestamp: string | null = null;
+
+export function startPolling(options: {
+    intervalMs?: number; // default 1000
     onStatusChange?: (status: RealtimeStatus) => void;
-    onPlayerChange: (
-        row: Player,
-        type: "INSERT" | "UPDATE" | "DELETE",
-    ) => void;
-    onBoardChange: (
-        row: GameBoard,
-        type: "INSERT" | "UPDATE" | "DELETE",
-    ) => void;
+    onBoardUpdate: (board: GameBoard) => void;
+    onPlayersUpdate?: (players: Player[]) => void;
 }) {
-    const { onStatusChange, onPlayerChange, onBoardChange } = options;
+    const {
+        intervalMs = 1000,
+        onStatusChange,
+        onBoardUpdate,
+        onPlayersUpdate,
+    } = options;
 
-    onStatusChange?.("connecting");
+    stopPolling(); // ensure clean start
 
-    // Players table changes
-    playersChannel = supabase
-        .channel("kfkbandvagn-players")
-        .on(
-            "postgres_changes",
-            { event: "*", schema: "public", table: "KfKbandvagn" },
-            (payload: any) => {
-                console.log("Received RT update for players:", payload);
-                // Deduplicate using commit timestamp monotonicity
-                const ts = payload.commit_timestamp as string;
-                if (lastCommit.players && ts <= lastCommit.players) return;
-                lastCommit.players = ts;
+    const isVisible = () =>
+        typeof document !== "undefined" ? !document.hidden : true;
 
-                const type = payload.eventType as
-                    | "INSERT"
-                    | "UPDATE"
-                    | "DELETE";
-                const row =
-                    (type === "DELETE" ? payload.old : payload.new) as Player;
-                if (!row) return;
-                onPlayerChange(row, type);
-            },
-        );
+    const tick = async () => {
+        try {
+            if (!isVisible()) {
+                // Pause while hidden
+                onStatusChange?.("disconnected");
+                return;
+            }
+            onStatusChange?.("connected");
 
-    // Board table changes (only the active board row should change)
-    boardChannel = supabase
-        .channel("kfkbandvagn-board")
-        .on(
-            "postgres_changes",
-            { event: "*", schema: "public", table: "KfKbandvagnBoard" },
-            (payload: any) => {
-                console.log("Received RT update for board:", payload);
-                const ts = payload.commit_timestamp as string;
-                if (lastCommit.board && ts <= lastCommit.board) return;
-                lastCommit.board = ts;
+            // First, check if there are any updates by comparing timestamps
+            const currentLastUpdate = await fetchLastUpdate();
 
-                const type = payload.eventType as
-                    | "INSERT"
-                    | "UPDATE"
-                    | "DELETE";
-                const row =
-                    (type === "DELETE"
-                        ? payload.old
-                        : payload.new) as GameBoard;
-                if (!row) return;
-                // Only forward active board changes
-                if (type !== "DELETE" && row.active_board === false) return;
-                onBoardChange(row, type);
-            },
-        );
+            // If no changes detected and this isn't the first run, skip the expensive fetch
+            if (
+                currentLastUpdate && currentLastUpdate === lastUpdateTimestamp
+            ) {
+                console.log("No data changes detected, skipping full fetch");
+                return;
+            }
 
-    // Subscribe and wire status callbacks
-    playersChannel.subscribe((status) => {
-        if (status === "SUBSCRIBED") onStatusChange?.("connected");
-        else if (status === "CHANNEL_ERROR") onStatusChange?.("error");
-        else if (status === "CLOSED" || status === "TIMED_OUT") {
-            onStatusChange?.("disconnected");
+            console.log(
+                `Data changed: ${lastUpdateTimestamp} -> ${currentLastUpdate}. Fetching full data...`,
+            );
+
+            // Update detected, fetch full data
+            lastUpdateTimestamp = currentLastUpdate;
+
+            const [board, players] = await Promise.all([
+                fetchActiveBoard(),
+                onPlayersUpdate ? fetchAllPlayers() : Promise.resolve(null),
+            ]);
+
+            if (!board) return;
+
+            // Always forward board updates so timers like next_shrink stay fresh
+            onBoardUpdate(board);
+
+            // Update players if callback provided
+            if (onPlayersUpdate && players) {
+                onPlayersUpdate(players);
+            }
+        } catch (err) {
+            console.error("Polling tick failed:", err);
+            onStatusChange?.("error");
         }
-    });
+    };
 
-    boardChannel.subscribe((status) => {
-        if (status === "SUBSCRIBED") onStatusChange?.("connected");
-        else if (status === "CHANNEL_ERROR") onStatusChange?.("error");
-        else if (status === "CLOSED" || status === "TIMED_OUT") {
-            onStatusChange?.("disconnected");
+    const startInterval = () => {
+        if (pollIntervalId) return;
+        onStatusChange?.("connecting");
+        // run immediately to reduce perceived latency
+        void tick();
+        pollIntervalId = window.setInterval(tick, Math.max(250, intervalMs));
+    };
+
+    const stopInterval = () => {
+        if (pollIntervalId) {
+            clearInterval(pollIntervalId);
+            pollIntervalId = null;
         }
-    });
+    };
 
-    return { playersChannel, boardChannel };
+    // Visibility management
+    if (typeof document !== "undefined") {
+        visibilityHandler = () => {
+            if (document.hidden) {
+                console.log("Page hidden, pausing polling");
+                stopInterval();
+                onStatusChange?.("disconnected");
+            } else {
+                console.log("Page visible, resuming polling");
+                startInterval();
+            }
+        };
+        document.addEventListener("visibilitychange", visibilityHandler);
+    }
+
+    // Start now if visible
+    if (isVisible()) startInterval();
+
+    // Return stopper
+    return stopPolling;
+}
+
+export function stopPolling() {
+    if (pollIntervalId) {
+        clearInterval(pollIntervalId);
+        pollIntervalId = null;
+    }
+    if (visibilityHandler) {
+        document.removeEventListener("visibilitychange", visibilityHandler);
+        visibilityHandler = null;
+    }
+    lastUpdateTimestamp = null;
+}
+
+// Force next poll to fetch full data (useful for debugging or manual refresh)
+export function forceFullRefresh() {
+    lastUpdateTimestamp = null;
 }
