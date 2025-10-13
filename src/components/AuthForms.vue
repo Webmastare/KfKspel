@@ -26,7 +26,7 @@
     </div>
 
     <button type="submit" class="submit-button">
-      {{ mode === 'login' ? 'Login' : 'Create Account' }}
+      {{ mode === 'login' ? 'Logga In' : 'Skapa Konto' }}
     </button>
 
     <p v-if="errorMessage" class="error-message">

@@ -199,12 +199,28 @@ function startGame() {
   emit('startGame')
 }
 
-function dontSaveScore() {
-  // User chose not to save score, close the entire modal
-  console.log('User chose not to save score')
-  showSaveScore.value = false
+function openAuthForm(mode) {
+  authMode.value = mode
+  showAuthForm.value = true
 }
 
+function showGuestScoreForm() {
+  showAddPlayerForm.value = true
+  showGuestForm.value = true
+}
+
+function closeAuthForm() {
+  showAuthForm.value = false
+  authMode.value = ''
+}
+
+function handleAuthSuccess() {
+  closeAuthForm()
+}
+
+// ---- SCORE SAVING LOGIC ----
+
+/** Saves score for authenticated users */
 async function saveScore() {
   console.log('Saving score for authenticated user...')
   isSubmitting.value = true
@@ -249,38 +265,17 @@ async function saveScore() {
   }
 }
 
-function cancelGuestForm() {
-  showGuestForm.value = false
-  showAddPlayerForm.value = false
-  emit('close')
-}
-
-function openAuthForm(mode) {
-  authMode.value = mode
-  showAuthForm.value = true
-}
-
-function showGuestScoreForm() {
-  showAddPlayerForm.value = true
-  showGuestForm.value = true
-}
-
-function closeAuthForm() {
-  showAuthForm.value = false
-  authMode.value = ''
-  // Don't close the entire modal, just the auth form
-}
-
-function handleAuthSuccess() {
-  // User successfully authenticated, close auth form and they can now save their score
-  closeAuthForm()
-  // The reactive auth state will automatically update the UI to show the authenticated options
+function dontSaveScore() {
+  // User chose not to save score, close the entire modal
+  console.log('User chose not to save score')
+  showSaveScore.value = false
 }
 
 function calculateKey(otherData) {
   return otherData.score + otherData.block ** 2 + otherData.levelClearedRows * 3 - 7
 }
 
+/** Handles guest player form submission */
 async function submitPlayerDetails(event) {
   if (event) event.preventDefault()
 
@@ -340,6 +335,13 @@ async function submitPlayerDetails(event) {
   } finally {
     isSubmitting.value = false
   }
+}
+
+/** Closes the guest player form */
+function cancelGuestForm() {
+  showGuestForm.value = false
+  showAddPlayerForm.value = false
+  emit('close')
 }
 
 // Watch for game state changes to reset static message
