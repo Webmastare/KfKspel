@@ -55,6 +55,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import GamePopup from './GamePopup.vue'
 import type { Player } from '@/composables/kfkbandvagn/player'
 import { useBandvagnStore } from '@/stores/bandvagnState'
+import { recordUserActivity } from '@/composables/kfkbandvagn/database'
 import {
   createAnimationState,
   updateAnimations,
@@ -803,6 +804,9 @@ function handleCanvasClick(event: MouseEvent) {
   selectedCell.value = { row, col }
   console.log('Cell clicked:', row, col)
 
+  // Record user activity for adaptive polling
+  recordUserActivity()
+
   // If clicked cell has any player, trigger click animation
   const playerAtCell = allPlayers.value!.find(
     (p) => p.position.row === row && p.position.column === col,
@@ -847,6 +851,9 @@ function handleMouseMove(event: MouseEvent) {
   pan.value.y += deltaY / zoom.value
   lastPointerPos.value = { x: event.clientX, y: event.clientY }
   ensureLoopActive(10)
+
+  // Record user activity for adaptive polling
+  recordUserActivity()
 }
 
 function handleMouseUp() {
@@ -871,6 +878,9 @@ function handleWheel(event: WheelEvent) {
   // Apply new zoom and adjust pan so the same world point stays under cursor
   pan.value.x = mouseX / newZoom - worldX
   pan.value.y = mouseY / newZoom - worldY
+
+  // Record user activity for adaptive polling
+  recordUserActivity()
 
   zoom.value = newZoom
   ensureLoopActive(10)

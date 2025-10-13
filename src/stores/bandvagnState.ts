@@ -13,9 +13,11 @@ import {
   fetchActiveBoard,
   fetchAllPlayers,
   fetchGameStateClient,
+  getPollingInfo,
   type RealtimeStatus,
   startPolling,
   stopPolling,
+  triggerImmediatePoll,
 } from "@/composables/kfkbandvagn/database";
 
 export const useBandvagnStore = defineStore("bandvagn", {
@@ -34,6 +36,7 @@ export const useBandvagnStore = defineStore("bandvagn", {
     // Polling status
     realtimeStatus: "disconnected" as RealtimeStatus,
     lastRealtimeUpdate: null as Date | null,
+    currentPollingInterval: 1000 as number,
 
     // Client-side action cooldown (UI-only)
     actionCooldownUntil: null as Date | null,
@@ -195,9 +198,10 @@ export const useBandvagnStore = defineStore("bandvagn", {
       this.stopRealtime();
 
       startPolling({
-        intervalMs: 1000,
-        onStatusChange: (status) => {
+        onStatusChange: (status, interval) => {
           this.realtimeStatus = status;
+          // Store the current interval for debugging/display
+          this.currentPollingInterval = interval;
         },
         onBoardUpdate: (row) => {
           // Map to GameBoard shape, keep animations smooth by only replacing fields
@@ -446,6 +450,8 @@ export const useBandvagnStore = defineStore("bandvagn", {
         console.log("Game state refreshed successfully.");
         // Start client-side cooldown on successful action
         this.startActionCooldown();
+        // Trigger immediate poll to get associated log
+        triggerImmediatePoll();
         return result;
       } catch (error) {
         console.error("Action failed:", error);

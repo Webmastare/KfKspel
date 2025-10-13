@@ -114,7 +114,7 @@
             ⏱ Nästa handling: {{ actionCountdownText }}
           </div>
           <div class="sidebar-btn-with-indicator">
-            <span class="rt-indicator" :class="rtClass" title="Realtime status"></span>
+            <span class="rt-indicator" :class="rtClass" :title="pollingStatusTitle"></span>
             <span>{{ timeSinceRefreshed }}</span>
           </div>
           <button @click="refreshGameState" class="sidebar-btn" :disabled="isLoading">
@@ -393,6 +393,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useBandvagnStore } from '@/stores/bandvagnState'
 import PlayerCreation from '@/components/kfkbandvagn/PlayerCreation.vue'
 import BandvagnCanvas from '@/components/kfkbandvagn/BandvagnCanvas.vue'
+import { recordUserActivity } from '@/composables/kfkbandvagn/database'
 
 // Canvas reference
 const canvasRef = ref(null)
@@ -417,13 +418,42 @@ const boardData = computed(() => gameStore.boardData)
 const isLoading = computed(() => gameStore.isLoading)
 const rtClass = computed(() => {
   const s = gameStore.realtimeStatus
-  return s === 'connected'
-    ? 'connected'
-    : s === 'connecting'
-      ? 'connecting'
-      : s === 'error'
-        ? 'error'
-        : 'disconnected'
+  return s === 'fast'
+    ? 'fast'
+    : s === 'medium'
+      ? 'medium'
+      : s === 'slow'
+        ? 'slow'
+        : s === 'connecting'
+          ? 'connecting'
+          : s === 'error'
+            ? 'error'
+            : s === 'inactive'
+              ? 'inactive'
+              : 'disconnected'
+})
+
+const pollingStatusTitle = computed(() => {
+  const s = gameStore.realtimeStatus
+  const interval = gameStore.currentPollingInterval
+
+  switch (s) {
+    case 'fast':
+      return `Active polling: ${interval}ms (green)`
+    case 'medium':
+      return `Normal polling: ${interval}ms (yellow)`
+    case 'slow':
+      return `Slow polling: ${interval}ms (orange)`
+    case 'connecting':
+      return 'Connecting...'
+    case 'error':
+      return 'Polling error (red)'
+    case 'inactive':
+      return 'Page inactive - polling paused (red)'
+    case 'disconnected':
+    default:
+      return 'Disconnected (red)'
+  }
 })
 
 // Upgrade modal helpers (dynamic cost and affordability)
@@ -527,11 +557,13 @@ function toggleInfo() {
 }
 
 function toggleStats() {
+  recordUserActivity() // Record user activity for adaptive polling
   showStats.value = !showStats.value
 }
 
 // Game Actions
 async function refreshGameState() {
+  recordUserActivity() // Record user activity for adaptive polling
   try {
     await gameStore.fetchGameState()
   } catch (error) {
@@ -572,6 +604,7 @@ function updateMultipleUpgrades() {
 }
 
 function showUpgradeModal(type) {
+  recordUserActivity() // Record user activity for adaptive polling
   upgradeType.value = type
   showUpgradeDialog.value = true
 }
@@ -700,6 +733,23 @@ function getDetailedLogInfo(log) {
 // Mobile detection
 function checkMobile() {
   isMobile.value = window.innerWidth <= 768
+}
+
+// Debug function to check polling status (can be called from browser console)
+function getPollingDebugInfo() {
+  const { getPollingInfo } = require('@/composables/kfkbandvagn/database')
+  const pollingInfo = getPollingInfo()
+  console.log('Polling Debug Info:', {
+    ...pollingInfo,
+    realtimeStatus: gameStore.realtimeStatus,
+    currentPollingInterval: gameStore.currentPollingInterval,
+  })
+  return pollingInfo
+}
+
+// Make debug function available globally in development
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  window.getPollingDebugInfo = getPollingDebugInfo
 }
 
 // Auth state watcher - handles game state initialization and updates
@@ -859,16 +909,24 @@ h1 {
   border-radius: 50%;
   border: 1px solid var(--theme-border-light);
   background: gray;
+  cursor: help;
 }
-.rt-indicator.connected {
-  background: #28a745;
+.rt-indicator.fast {
+  background: #28a745; /* Green - 1000ms */
+}
+.rt-indicator.medium {
+  background: #ffc107; /* Yellow - 3000ms */
+}
+.rt-indicator.slow {
+  background: #ff8c00; /* Orange - 10000ms */
 }
 .rt-indicator.connecting {
-  background: #ffc107;
+  background: #17a2b8; /* Light blue */
 }
 .rt-indicator.error,
+.rt-indicator.inactive,
 .rt-indicator.disconnected {
-  background: #dc3545;
+  background: #dc3545; /* Red */
 }
 
 .shrink-status {
