@@ -44,6 +44,10 @@ function drawSinglePieceWithInset(ctx, piece, x, y, blockSize, insetBlock) {
 
     // Draw inset shadow for 3D effect
     ctx.fillStyle = 'rgba(30,30,30,0.8)'
+    // Different inset for L-piece to better show
+    if (piece.type === 5) {
+      ctx.fillStyle = 'rgba(69, 69, 69, 0.8)'
+    }
     ctx.fillRect(
       actualX + insetBlock,
       actualY + insetBlock,
@@ -130,7 +134,7 @@ export function drawGhostPiece(currentPiece, ctx, blockSize, intersectsFunc) {
   const insetBlock = blockSize / 5.5
 
   // Create a transparent version of the piece color
-  const ghostColor = currentPiece.color.replace('rgb', 'rgba').replace(')', ', 0.3)')
+  const ghostColor = currentPiece.color.replace('rgb', 'rgba').replace(')', ', 0.8)')
   ctx.fillStyle = ghostColor
 
   currentPiece.getPositions().forEach((pos) => {

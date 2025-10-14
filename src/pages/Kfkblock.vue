@@ -115,7 +115,9 @@
           :gameData="gameDataForSubmission"
           :gameOver="gameOver"
           :gameStarted="gameStarted"
+          :timeElapsed="timeElapsed"
           @startGame="startGame"
+          @updateLeaderboard="getTopPlayers"
         />
         <div class="canvas-and-next-container">
           <div class="canvas-container">

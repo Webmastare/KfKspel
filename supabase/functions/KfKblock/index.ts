@@ -67,6 +67,7 @@ app.post("/kfkblock-scores", async (c: Context) => {
         {
           playerID: playerID, // playerID: string
           RealName: RealName, // RealName: string
+          Date: new Date().toISOString(), // Date: ISO string
           Score: Score,
           Others: Other,
         }, // Score: integer

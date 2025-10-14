@@ -145,6 +145,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  timeElapsed: {
+    type: Number,
+    default: 0,
+  },
 })
 
 const playerID = ref('')
@@ -220,21 +224,37 @@ function handleAuthSuccess() {
 
 // ---- SCORE SAVING LOGIC ----
 
-/** Saves score for authenticated users */
+/** Function to save the score */
 async function saveScore() {
-  console.log('Saving score for authenticated user...')
+  console.log(`Saving score for ${authStore.isAuthed ? 'authenticated' : 'guest'} user...`)
+  if (isSubmitting.value) return
+
   isSubmitting.value = true
   userMessage.value = ''
   errorMessage.value = ''
+
+  let displayName
+  let fullName
+  // Check if user is authenticated
+  if (!authStore.isAuthed) {
+    if (!playerID.value.trim()) {
+      errorMessage.value = 'Visningsnamn är obligatoriskt'
+      isSubmitting.value = false
+      return
+    }
+    displayName = playerID.value.trim()
+    fullName = realName.value.trim() || null
+  } else {
+    displayName = authStore.profile?.username || authStore.user?.email || 'Authenticated User'
+    fullName = authStore.profile?.full_name || null
+  }
 
   const otherData = {
     block: props.gameData.blocksUsed - 1,
     level: props.level,
     levelClearedRows: props.gameData.levelClearedRows,
+    time: props.timeElapsed || 'N/A',
   }
-
-  const displayName = authStore.profile?.username || authStore.user?.email || 'Authenticated User'
-  const fullName = authStore.profile?.full_name || null
 
   const dataToSend = {
     playerID: displayName,
@@ -256,85 +276,28 @@ async function saveScore() {
       emit('updateLeaderboard', data) // Notify parent to refresh leaderboard
       showSaveScore.value = false // Close the modal after saving
       userMessage.value = 'Sparad!'
+
+      // Success! Close the form (if open) and reset states
+      showGuestForm.value = false
+      showAddPlayerForm.value = false
+      emit('close')
     } else {
       console.error('Failed to save score:', data)
-      // Could show an error message here
+      errorMessage.value = 'Poängen kunde inte sparas'
+      isSubmitting.value = false
     }
   } catch (error) {
     console.error('Error saving score:', error)
+    errorMessage.value = 'Ett fel inträffade vid sparandet av poängen'
+    isSubmitting.value = false
   }
 }
 
+/** Closes the save score modal */
 function dontSaveScore() {
   // User chose not to save score, close the entire modal
   console.log('User chose not to save score')
   showSaveScore.value = false
-}
-
-function calculateKey(otherData) {
-  return otherData.score + otherData.block ** 2 + otherData.levelClearedRows * 3 - 7
-}
-
-/** Handles guest player form submission */
-async function submitPlayerDetails(event) {
-  if (event) event.preventDefault()
-
-  if (isSubmitting.value) return
-
-  console.log('Submitting player details...')
-  isSubmitting.value = true
-  errorMessage.value = ''
-
-  try {
-    const otherData = {
-      block: props.gameData.blocksUsed - 1, // Total blocks placed (subtract 1 as in original)
-      level: props.gameData.level, // Level reached
-      levelClearedRows: props.gameData.levelClearedRows, // Rows cleared at current level
-    }
-
-    // Use guest form data
-    if (!playerID.value.trim()) {
-      errorMessage.value = 'Visningsnamn är obligatoriskt'
-      isSubmitting.value = false
-      return
-    }
-
-    const displayName = playerID.value.trim()
-    const fullName = realName.value.trim() || null
-
-    const dataToSend = {
-      playerID: displayName,
-      RealName: fullName,
-      Score: props.score,
-      Other: otherData,
-      Key: calculateKey({ ...otherData, score: props.score }),
-    }
-
-    console.log('Sending data to API:', dataToSend)
-
-    const data = await submitScore(dataToSend)
-
-    if (data.cheat) {
-      errorMessage.value = data.message || 'Poängen kunde inte verifieras'
-    }
-    if (data) {
-      console.log('Score saved successfully:', data)
-      emit('updateLeaderboard', data) // Notify parent to refresh leaderboard
-    } else {
-      console.error('Failed to save score:', data)
-      // Could show an error message here
-    }
-
-    // Success! Close the form
-    showGuestForm.value = false
-    showAddPlayerForm.value = false
-    emit('close')
-  } catch (error) {
-    console.error('Error submitting player details:', error)
-    errorMessage.value = 'Nätverksfel - försök igen senare'
-  } finally {
-    isSubmitting.value = false
-  }
 }
 
 /** Closes the guest player form */
@@ -342,6 +305,10 @@ function cancelGuestForm() {
   showGuestForm.value = false
   showAddPlayerForm.value = false
   emit('close')
+}
+
+function calculateKey(otherData) {
+  return otherData.score + otherData.block ** 2 + otherData.levelClearedRows * 3 - 7
 }
 
 // Watch for game state changes to reset static message
