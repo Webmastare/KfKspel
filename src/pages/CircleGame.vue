@@ -1,7 +1,18 @@
 <template>
   <div id="app-container">
     <h1 class="game-header">Kan du måla en perfekt cirkel?</h1>
-    <h3 class="subtitle"></h3>
+    <div class="score-display">
+      <div class="current-score">
+        <span class="score-label">Nuvarande:</span>
+        <span class="score-value"
+          >{{ roundnessScore !== null ? roundnessScore.toFixed(2) : '--.--' }}%</span
+        >
+      </div>
+      <div class="best-score">
+        <span class="score-label">Bästa:</span>
+        <span class="score-value">{{ bestScore.toFixed(2) }}%</span>
+      </div>
+    </div>
     <div class="info-panel">
       <div class="draw-mode-toggle">
         <label for="drawModeCheckbox">
@@ -27,8 +38,8 @@
         @touchmove.prevent="onMove"
         @touchend.prevent="stopDrawing"
       ></canvas>
-      <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
-      <span>{{ roundnessScore !== null ? roundnessScore.toFixed(2) : '--.--' }}%</span>
+      <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+      <div v-if="newBestScore" class="new-best-message">Nytt rekord!</div>
     </div>
   </div>
 </template>
@@ -55,11 +66,40 @@ const radius = ref<number | null>(null)
 const errorMessage = ref<string | null>(null)
 const drawingDirection = ref<'clockwise' | 'counterclockwise' | null>(null)
 const directionViolations = ref(0)
+const bestScore = ref<number>(0)
+const newBestScore = ref(false)
+const directionError = ref(false)
+
+/** Load best score from localStorage */
+function loadBestScore() {
+  const saved = localStorage.getItem('circleGameBestScore')
+  if (saved) {
+    bestScore.value = parseFloat(saved)
+  }
+}
+
+/** Save best score to localStorage */
+function saveBestScore(score: number) {
+  localStorage.setItem('circleGameBestScore', score.toString())
+  bestScore.value = score
+}
+
+/** Check if current score is a new best */
+function checkNewBest(score: number) {
+  if (score > bestScore.value) {
+    saveBestScore(score)
+    newBestScore.value = true
+    setTimeout(() => {
+      newBestScore.value = false
+    }, 3000) // Hide message after 3 seconds
+  }
+}
 
 /** Toggle between free and center draw modes */
 function toggleDrawMode() {
   drawMode.value = drawMode.value === 'free' ? 'center' : 'free'
   errorMessage.value = null
+  directionError.value = false
 }
 
 /** Calculate angular momentum to determine drawing direction */
@@ -141,6 +181,7 @@ function validateDrawingDirection(): boolean {
 
       // Allow 2 direction violations before stopping
       if (directionViolations.value >= 2) {
+        directionError.value = true
         return false
       }
     } else {
@@ -180,7 +221,7 @@ function calculatePointQualities(centerPoint: Point | null): number[] {
   })
 }
 
-/** Check if the circle is approximately closed (80% or more) */
+/** Check if the circle is closed */
 function checkCircleClosure(): boolean {
   if (circleDots.value.length < 10) return false
 
@@ -212,9 +253,9 @@ function checkCircleClosure(): boolean {
       return sum + Math.hypot(point.x - centerPoint.x, point.y - centerPoint.y)
     }, 0) / circleDots.value.length
 
-  // Circle is considered closed if the closure distance is less than 20% of the radius
+  // Circle is considered closed if the closure distance is less than 50% of the radius
   // or less than 5 times the average segment distance
-  const closureThreshold = Math.min(avgRadius * 0.2, avgSegmentDistance * 5)
+  const closureThreshold = Math.min(avgRadius * 0.5, avgSegmentDistance * 5)
 
   return closureDistance <= closureThreshold
 }
@@ -241,6 +282,8 @@ function startDrawing(event: MouseEvent | TouchEvent) {
   drawingDirection.value = null
   directionViolations.value = 0
   errorMessage.value = null
+  directionError.value = false
+  newBestScore.value = false
   const coords = getCoordinates(event)
   if (coords) {
     circleDots.value.push(coords)
@@ -251,7 +294,14 @@ function stopDrawing() {
   if (!ctx.value) return
   isDrawing.value = false
 
-  // Check if the circle is almost closed (80% or more)
+  // If there was a direction error, don't overwrite the error message
+  if (directionError.value) {
+    errorMessage.value = 'Fel riktning! Rita i samma riktning hela tiden.'
+    roundnessScore.value = null
+    return
+  }
+
+  // Check if the circle is almost closed
   if (circleDots.value.length < 10) {
     errorMessage.value = 'Rita mer för att skapa en cirkel'
     return
@@ -270,6 +320,11 @@ function stopDrawing() {
     calculateCentroidRoundness()
   } else {
     calculateCenterRoundness()
+  }
+
+  // Check for new best score
+  if (roundnessScore.value !== null) {
+    checkNewBest(roundnessScore.value)
   }
 }
 
@@ -291,7 +346,6 @@ function draw(event: MouseEvent | TouchEvent) {
 
       // Validate drawing direction
       if (!validateDrawingDirection()) {
-        errorMessage.value = 'Fel riktning! Rita i samma riktning hela tiden.'
         stopDrawing()
         return
       }
@@ -309,27 +363,67 @@ function draw(event: MouseEvent | TouchEvent) {
     pointQualities = calculatePointQualities(center.value)
   }
 
-  // Draw lines with color coding based on point quality
-  ctx.value.lineWidth = 2
-  circleDots.value.forEach((dot, index) => {
-    if (index === 0) {
-      ctx.value?.moveTo(dot.x, dot.y)
-    } else {
-      const prevDot = circleDots.value[index - 1]
-      if (prevDot) {
-        ctx.value?.beginPath()
-        ctx.value?.moveTo(prevDot.x, prevDot.y)
-        ctx.value?.lineTo(dot.x, dot.y)
+  // Draw smooth curves with color coding based on point quality
+  ctx.value.lineWidth = 4
+  ctx.value.lineCap = 'round'
+  ctx.value.lineJoin = 'round'
+
+  if (circleDots.value.length > 2) {
+    for (let i = 1; i < circleDots.value.length - 1; i++) {
+      const prevDot = circleDots.value[i - 1]
+      const currDot = circleDots.value[i]
+      const nextDot = circleDots.value[i + 1]
+
+      if (prevDot && currDot && nextDot) {
+        ctx.value.beginPath()
 
         // Color based on point quality (green = good, red = bad deviation)
-        const quality = pointQualities[index] || 0.5
+        const quality = pointQualities[i] || 0.5
         const red = Math.round(255 * (1 - quality))
         const green = Math.round(255 * quality)
-        ctx.value!.strokeStyle = `rgb(${red}, ${green}, 0)`
-        ctx.value?.stroke()
+        ctx.value.strokeStyle = `rgb(${red}, ${green}, 0)`
+
+        // Create smooth curve using quadratic curves
+        const cp1x = prevDot.x + (currDot.x - prevDot.x) * 0.5
+        const cp1y = prevDot.y + (currDot.y - prevDot.y) * 0.5
+        const cp2x = currDot.x + (nextDot.x - currDot.x) * 0.5
+        const cp2y = currDot.y + (nextDot.y - currDot.y) * 0.5
+
+        ctx.value.moveTo(cp1x, cp1y)
+        ctx.value.quadraticCurveTo(currDot.x, currDot.y, cp2x, cp2y)
+        ctx.value.stroke()
       }
     }
-  })
+
+    // Draw first and last segments as simple lines
+    if (circleDots.value.length >= 2) {
+      const first = circleDots.value[0]
+      const second = circleDots.value[1]
+      if (first && second) {
+        ctx.value.beginPath()
+        const quality = pointQualities[1] || 0.5
+        const red = Math.round(255 * (1 - quality))
+        const green = Math.round(255 * quality)
+        ctx.value.strokeStyle = `rgb(${red}, ${green}, 0)`
+        ctx.value.moveTo(first.x, first.y)
+        ctx.value.lineTo(second.x, second.y)
+        ctx.value.stroke()
+      }
+
+      const secondLast = circleDots.value[circleDots.value.length - 2]
+      const last = circleDots.value[circleDots.value.length - 1]
+      if (secondLast && last) {
+        ctx.value.beginPath()
+        const quality = pointQualities[circleDots.value.length - 1] || 0.5
+        const red = Math.round(255 * (1 - quality))
+        const green = Math.round(255 * quality)
+        ctx.value.strokeStyle = `rgb(${red}, ${green}, 0)`
+        ctx.value.moveTo(secondLast.x, secondLast.y)
+        ctx.value.lineTo(last.x, last.y)
+        ctx.value.stroke()
+      }
+    }
+  }
 
   // Draw center point if available
   if (drawMode.value === 'free') {
@@ -355,18 +449,65 @@ function calculateCenterRoundness() {
     radius.value = null
     return
   }
-  // Perfect circle = all points equidistant from center and no variation
+
   const distances = circleDots.value.map((dot) => {
     if (!center.value) return 0
     return Math.hypot(dot.x - center.value.x, dot.y - center.value.y)
   })
+
   const avgDistance = distances.reduce((a, b) => a + b, 0) / distances.length
+  radius.value = Math.round(avgDistance * 100) / 100
+
+  // Calculate coefficient of variation
   const variance =
     distances.reduce((sum, dist) => sum + (dist - avgDistance) ** 2, 0) / distances.length
   const stddev = Math.sqrt(variance)
-  const score = Math.max(0, 100 - (stddev / avgDistance) * 100)
+  const coefficientOfVariation = stddev / avgDistance
+
+  // Perfect circle CV = 0
+  let score = Math.max(0, 100 * Math.exp(-coefficientOfVariation))
+
+  // Additional penalty for angular irregularities
+  const angularPenalty = calculateAngularPenalty()
+  score *= 1 - angularPenalty
+
   roundnessScore.value = Math.round(score * 100) / 100
-  radius.value = Math.round(avgDistance * 100) / 100
+}
+
+/** Calculate penalty for angular irregularities */
+function calculateAngularPenalty(): number {
+  if (circleDots.value.length < 6) return 0
+
+  const centerPoint = drawMode.value === 'center' ? center.value : centroid.value
+  if (!centerPoint) return 0
+
+  // Calculate angles from center to each point
+  const angles = circleDots.value.map((point) =>
+    Math.atan2(point.y - centerPoint.y, point.x - centerPoint.x),
+  )
+
+  // Calculate expected angular spacing for uniform distribution
+  const expectedSpacing = (2 * Math.PI) / angles.length
+
+  // Calculate actual angular differences
+  let totalAngularDeviation = 0
+  for (let i = 1; i < angles.length; i++) {
+    const currentAngle = angles[i]
+    const prevAngle = angles[i - 1]
+    if (currentAngle !== undefined && prevAngle !== undefined) {
+      let diff = currentAngle - prevAngle
+      // Normalize angle difference to [-π, π]
+      while (diff > Math.PI) diff -= 2 * Math.PI
+      while (diff < -Math.PI) diff += 2 * Math.PI
+
+      const deviation = Math.abs(Math.abs(diff) - expectedSpacing)
+      totalAngularDeviation += deviation
+    }
+  }
+
+  // Normalize penalty (0 = perfect, 1 = very bad)
+  const averageDeviation = totalAngularDeviation / (angles.length - 1)
+  return Math.min(1, averageDeviation / expectedSpacing)
 }
 
 function calculateCentroidRoundness() {
@@ -376,7 +517,7 @@ function calculateCentroidRoundness() {
     radius.value = null
     return
   }
-  // Perfect circle = all points equidistant from center and no variation
+
   // Get centroid of the drawn points
   centroid.value = circleDots.value.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), {
     x: 0,
@@ -395,14 +536,19 @@ function calculateCentroidRoundness() {
   // Calculate avg radius
   radius.value = radii.reduce((sum, r) => sum + r, 0) / radii.length
 
-  // Standard deviation of the radii. A smaller deviation => points are more uniformly distant from the center.
-  const deviation = Math.sqrt(
-    radii.map((r) => (r - radius.value!) ** 2).reduce((sum, r) => sum + r, 0) / radii.length,
-  )
+  // Calculate coefficient of variation (CV) - more sensitive to deviations
+  const variance = radii.reduce((sum, r) => sum + (r - radius.value!) ** 2, 0) / radii.length
+  const stddev = Math.sqrt(variance)
+  const coefficientOfVariation = stddev / radius.value!
 
-  // 100% if deviation is 0, and decreases as the ratio of deviation to average radius increases.
-  const newScore = Math.max(0, 100 * (1 - deviation / radius.value))
-  roundnessScore.value = Math.round(newScore * 100) / 100 // Round to 2 decimals
+  // Perfect circle CV = 0
+  let score = Math.max(0, 100 * Math.exp(-coefficientOfVariation))
+
+  // Additional penalty for angular irregularities
+  const angularPenalty = calculateAngularPenalty()
+  score *= 1 - angularPenalty
+
+  roundnessScore.value = Math.round(score * 100) / 100
 }
 
 function resizeCanvas() {
@@ -432,6 +578,7 @@ onMounted(() => {
       window.addEventListener('resize', resizeCanvas)
     }
   }
+  loadBestScore()
 })
 </script>
 
@@ -447,36 +594,76 @@ onMounted(() => {
 
 .game-header {
   @extend .game-header;
-  margin-bottom: 0rem;
-}
-.subtitle {
-  text-align: center;
   margin-bottom: 1rem;
-  font-weight: 400;
-  font-size: 1.2rem;
-  color: var(--theme-text-secondary);
+}
+
+.score-display {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-bottom: 1rem;
+
+  .current-score,
+  .best-score {
+    text-align: center;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    background: var(--theme-bg-secondary);
+    border: 1px solid var(--theme-border);
+
+    .score-label {
+      display: block;
+      font-size: 0.9rem;
+      color: var(--theme-text-secondary);
+      margin-bottom: 0.25rem;
+    }
+
+    .score-value {
+      display: block;
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--theme-text-primary);
+    }
+  }
+
+  .best-score {
+    .score-value {
+      color: #ffd700;
+    }
+  }
 }
 
 .info-panel {
   text-align: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 
   .draw-mode-toggle {
     margin: 0.5rem 0;
 
     label {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 0.5rem;
+      gap: 0.75rem;
       font-size: 1rem;
       cursor: pointer;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      background: var(--theme-bg-secondary);
+      border: 1px solid var(--theme-border);
+      transition: all 0.2s ease;
+
+      &:hover {
+        background: var(--theme-bg-tertiary);
+        border-color: var(--theme-border-hover, var(--theme-border));
+      }
     }
 
     input[type='checkbox'] {
       width: 1.2rem;
       height: 1.2rem;
       cursor: pointer;
+      accent-color: var(--theme-accent, #007acc);
     }
   }
 }
@@ -495,30 +682,52 @@ onMounted(() => {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   overflow: hidden;
 
-  span {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -100%);
-    font-size: 1.2rem;
-    font-weight: 600;
-    pointer-events: none;
-    user-select: none;
-    z-index: 10;
-  }
-
   .error-message {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%);
+    transform: translate(-50%, -50%);
     color: #ff4444;
     font-weight: 600;
     margin: 0.5rem 0;
-    padding: 0.5rem;
-    background: rgba(255, 68, 68, 0.1);
-    border-radius: 4px;
-    border: 1px solid rgba(255, 68, 68, 0.3);
+    padding: 0.75rem 1.5rem;
+    background: rgba(255, 68, 68, 0.15);
+    border-radius: 8px;
+    border: 2px solid rgba(255, 68, 68, 0.4);
+    font-size: 1.1rem;
+    box-shadow: 0 4px 12px rgba(255, 68, 68, 0.2);
+    z-index: 10;
+  }
+
+  .new-best-message {
+    position: absolute;
+    top: 30%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ffd700;
+    font-weight: 700;
+    font-size: 1.5rem;
+    padding: 1rem 2rem;
+    background: rgba(255, 215, 0, 0.15);
+    border-radius: 12px;
+    border: 2px solid rgba(255, 215, 0, 0.5);
+    box-shadow: 0 6px 16px rgba(255, 215, 0, 0.3);
+    z-index: 10;
+    animation: celebration 0.6s ease-in-out;
+  }
+
+  @keyframes celebration {
+    0% {
+      transform: translate(-50%, -50%) scale(0.8);
+      opacity: 0;
+    }
+    50% {
+      transform: translate(-50%, -50%) scale(1.1);
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+    }
   }
 
   .game-canvas {
