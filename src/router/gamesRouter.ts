@@ -29,4 +29,9 @@ export default [
         name: "LightsOut",
         component: () => import("@/pages/LightsOut.vue"),
     },
+    {
+        path: "/circle-game",
+        name: "CircleGame",
+        component: () => import("@/pages/CircleGame.vue"),
+    },
 ];
