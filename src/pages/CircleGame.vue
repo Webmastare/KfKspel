@@ -377,11 +377,11 @@ function draw(event: MouseEvent | TouchEvent) {
       if (prevDot && currDot && nextDot) {
         ctx.value.beginPath()
 
-        // Color based on point quality (green = good, red = bad deviation)
+        // Color based on point quality (green = good, black = bad deviation)
         const quality = pointQualities[i] || 0.5
-        const red = Math.round(255 * (1 - quality))
+        // const red = Math.round(255 * (1 - quality))
         const green = Math.round(255 * quality)
-        ctx.value.strokeStyle = `rgb(${red}, ${green}, 0)`
+        ctx.value.strokeStyle = `rgb(0, ${green}, 0)`
 
         // Create smooth curve using quadratic curves
         const cp1x = prevDot.x + (currDot.x - prevDot.x) * 0.5
@@ -402,9 +402,9 @@ function draw(event: MouseEvent | TouchEvent) {
       if (first && second) {
         ctx.value.beginPath()
         const quality = pointQualities[1] || 0.5
-        const red = Math.round(255 * (1 - quality))
+        // const red = Math.round(255 * (1 - quality))
         const green = Math.round(255 * quality)
-        ctx.value.strokeStyle = `rgb(${red}, ${green}, 0)`
+        ctx.value.strokeStyle = `rgb(0, ${green}, 0)`
         ctx.value.moveTo(first.x, first.y)
         ctx.value.lineTo(second.x, second.y)
         ctx.value.stroke()
@@ -415,9 +415,9 @@ function draw(event: MouseEvent | TouchEvent) {
       if (secondLast && last) {
         ctx.value.beginPath()
         const quality = pointQualities[circleDots.value.length - 1] || 0.5
-        const red = Math.round(255 * (1 - quality))
+        // const red = Math.round(255 * (1 - quality))
         const green = Math.round(255 * quality)
-        ctx.value.strokeStyle = `rgb(${red}, ${green}, 0)`
+        ctx.value.strokeStyle = `rgb(0, ${green}, 0)`
         ctx.value.moveTo(secondLast.x, secondLast.y)
         ctx.value.lineTo(last.x, last.y)
         ctx.value.stroke()
