@@ -34,4 +34,9 @@ export default [
         name: "CircleGame",
         component: () => import("@/pages/CircleGame.vue"),
     },
+    {
+        path: "/simulator",
+        name: "KfkSimulator",
+        component: () => import("@/pages/Simulator.vue"),
+    },
 ];

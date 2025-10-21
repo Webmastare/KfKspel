@@ -56,7 +56,7 @@ body {
 
 #app {
   width: 100%;
-  height: 100vh;
+  height: calc(100vh - 1.5rem);
   padding-top: 1.5rem; /* Push content down by navbar height */
 }
 </style>
