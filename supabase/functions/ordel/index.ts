@@ -1,3 +1,9 @@
+/* Ordlista hämtad från
+response = await fetch("https://wordly.org/files/wordle/sv/dictionary.json")
+data = response.json()
+Filtrera efter 5-bokstavsord
+*/
+
 const WORD_LIST = [
   "Aveny",
   "Jonas",
@@ -4329,7 +4335,7 @@ app.post("/generate-word", async (c: Context) => {
   // Fetch used words from the database
   const { data: usedWordsData, error: usedWordsError } = await supabase
     .from("ordel")
-    .select("word");
+    .select("*");
   if (usedWordsError) {
     console.error("Error fetching used words:", usedWordsError);
     return c.json(
@@ -4342,15 +4348,43 @@ app.post("/generate-word", async (c: Context) => {
   const availableWords = WORD_LIST.filter(
     (word) => !usedWords.includes(word),
   );
+  // Generate words for 7 days ahead, check which dates are missing
+  const today = new Date();
+  const datesToGenerate = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    const dateString = date.toISOString().split("T")[0]; // YYYY-MM-DD
+    const isDateUsed = usedWordsData?.some(
+      (row) => row.date === dateString,
+    );
+    if (!isDateUsed) {
+      datesToGenerate.push(dateString);
+    }
+  }
+  if (availableWords.length === 0 || datesToGenerate.length === 0) {
+    return c.json(
+      {
+        error: "No available words or dates to generate",
+        datesToGenerate,
+        availableWordsCount: availableWords.length,
+      },
+      400,
+    );
+  }
   // Select a random word from the available words
-  const randomIndex = Math.floor(Math.random() * availableWords.length);
-  const word = availableWords[randomIndex];
-
+  const generatedWords = [];
+  for (const date of datesToGenerate) {
+    const randomIndex = Math.floor(Math.random() * availableWords.length);
+    const word = availableWords[randomIndex];
+    generatedWords.push({ word, date });
+    // Remove the selected word from available words to avoid duplicates
+    availableWords.splice(randomIndex, 1);
+  }
   // Save the selected word to the database
-  const date = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
   const { error: insertError } = await supabase
     .from("ordel")
-    .insert({ word, date });
+    .insert(generatedWords);
   if (insertError) {
     console.error("Error inserting new word:", insertError);
     return c.json(
@@ -4359,42 +4393,66 @@ app.post("/generate-word", async (c: Context) => {
     );
   }
 
-  return c.json({ word });
+  return c.json({ generatedWords });
 });
 
-app.post("/check-word", async (c: Context) => {
+// Get available dates (only past dates, not future)
+app.get("/available-dates", async (c) => {
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data: dates, error } = await supabase
+    .from("ordel")
+    .select("date")
+    .lte("date", today)
+    .order("date", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching available dates:", error);
+    return c.json({ error: "Failed to fetch available dates" }, 500);
+  }
+
+  return c.json({ dates: dates.map((d) => d.date) });
+});
+
+// Get word for a specific date
+app.post("/check-word/:date", async (c) => {
+  const requestedDate = c.req.param("date");
   const { word } = await c.req.json();
-  const date = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const today = new Date().toISOString().split("T")[0];
+
+  // Prevent accessing future dates
+  if (requestedDate > today) {
+    return c.json({ error: "Cannot access future dates" }, 403);
+  }
 
   if (typeof word !== "string" || word.length !== 5) {
     return c.json({ valid: false, error: "Invalid word format" }, 400);
   }
-  // Get todays word from the database
+
+  // Get the word for the requested date
   const { data: wordData, error: wordError } = await supabase
     .from("ordel")
     .select("word")
-    .eq("date", date)
+    .eq("date", requestedDate)
     .single();
+
   if (wordError) {
-    console.error("Error fetching today's word:", wordError);
-    return c.json(
-      { error: "Failed to fetch today's word" },
-      500,
-    );
+    console.error("Error fetching word for date:", wordError);
+    return c.json({ error: "Failed to fetch word for date" }, 500);
   }
-  // Compare the provided word with today's word
-  // Return which letters are exist and if in correct position
-  const todaysWord = wordData.word;
+
+  const targetWord = wordData.word;
   const result = [];
   for (let i = 0; i < word.length; i++) {
-    if (word[i] === todaysWord[i]) {
+    if (word[i] === targetWord[i]) {
       result.push({ letter: word[i], correct: true, exist: true });
-    } else if (todaysWord.includes(word[i])) {
+    } else if (targetWord.includes(word[i])) {
       result.push({ letter: word[i], correct: false, exist: true });
     } else {
       result.push({ letter: word[i], correct: false, exist: false });
     }
   }
+
   return c.json({ result });
 });
 

@@ -1,3 +1,5 @@
+import path from "path";
+
 export default [
     {
         path: "/2048",
@@ -38,5 +40,10 @@ export default [
         path: "/simulator",
         name: "KfkSimulator",
         component: () => import("@/pages/Simulator.vue"),
+    },
+    {
+        path: "/ordel",
+        name: "Ordel",
+        component: () => import("@/pages/Ordel.vue"),
     },
 ];
