@@ -48,20 +48,34 @@
       </div>
     </div>
 
-    <div v-if="availableDates.length > 0" class="date-selector">
-      <div class="date-header">
-        <h3>Välj datum</h3>
-        <button
-          v-if="isDateCompleted(selectedDate) && !gameWon && !gameLost"
-          class="retry-button"
-          @click="retryDate"
-        >
-          Försök igen
-        </button>
-      </div>
-      <div ref="dateScrollRef" class="date-scroll">
+    <div v-if="monthGroups.length > 0" class="date-selector">
+      <h3>Välj datum</h3>
+
+      <!-- Month selector -->
+      <div class="month-selector">
         <div
-          v-for="date in availableDates"
+          v-for="group in monthGroups"
+          :key="group.key"
+          class="month-item"
+          :class="{
+            selected: selectedMonth === group.key,
+          }"
+          @click="selectedMonth = group.key"
+        >
+          {{ group.month }}
+        </div>
+      </div>
+
+      <!-- Date selector for selected month -->
+      <div
+        v-if="selectedMonth"
+        ref="dateScrollRef"
+        class="date-scroll"
+        v-for="group in monthGroups.filter((g) => selectedMonth === g.key)"
+        :key="group.key"
+      >
+        <div
+          v-for="date in group.dates"
           :key="date"
           :ref="
             (el) => {
@@ -72,11 +86,25 @@
           :class="{
             selected: date === selectedDate,
             completed: isDateCompleted(date),
+            won: isDateWon(date),
+            lost: isDateLost(date),
+            started: isDateStarted(date),
           }"
           @click="selectDate(date)"
         >
           <div class="date-label">{{ formatDate(date) }}</div>
-          <div v-if="isDateCompleted(date)" class="completion-indicator">✓</div>
+          <div v-if="isDateCompleted(date)" class="completion-indicator">
+            <span v-if="isDateWon(date)">✓</span>
+            <span v-else>✗</span>
+          </div>
+          <button
+            v-if="isDateCompleted(date)"
+            class="retry-mini-button"
+            @click.stop="retryDate(date)"
+            title="Försök igen"
+          >
+            ↻
+          </button>
         </div>
       </div>
     </div>
@@ -87,6 +115,7 @@
 import { onMounted, ref, watch, nextTick } from 'vue'
 import FiveLetter from '@/components/ordel/FiveLetter.vue'
 import { supabase } from '@/utils/supabase'
+import { useAllowedWords, isAllowed } from '@/composables/ordel/useAllowedWords'
 
 interface LetterResult {
   letter: string
@@ -107,6 +136,13 @@ interface DateGuesses {
   }
 }
 
+interface MonthGroup {
+  month: string
+  year: number
+  dates: string[]
+  key: string
+}
+
 const gameGrid = ref<InstanceType<typeof FiveLetter> | null>(null)
 const currentWord = ref('')
 const currentRow = ref(0)
@@ -114,16 +150,52 @@ const currentCol = ref(0)
 const submittedRows = ref<SubmittedRow[]>([])
 const availableDates = ref<string[]>([])
 const selectedDate = ref('')
-const completedDates = ref<Set<string>>(new Set())
 const keyStates = ref<Map<string, 'correct' | 'present' | 'absent'>>(new Map())
 const gameWon = ref(false)
 const gameLost = ref(false)
 const dateScrollRef = ref<HTMLElement | null>(null)
 const selectedDateRef = ref<HTMLElement | null>(null)
+const monthGroups = ref<MonthGroup[]>([])
+const selectedMonth = ref<string>('')
+const allGuesses = ref<DateGuesses>({})
 
-const VALID_KEYS = 'QWERTYUIOPÅASDFGHJKLÖÄZXCVBNM'
-const STORAGE_KEY_DATES = 'ordel-completed-dates'
+const VALID_KEYS = 'qwertyuiopåasdfghjklöäzxcvbnm'
 const STORAGE_KEY_GUESSES = 'ordel-date-guesses'
+
+// Helpers
+function parseDateStr(date: string) {
+  return new Date(date + 'T00:00:00')
+}
+
+function monthKeyFromDate(date: string) {
+  const d = parseDateStr(date)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function scrollToSelectedDate() {
+  if (selectedDateRef.value) {
+    selectedDateRef.value.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'center',
+    })
+  }
+}
+
+function updateKeyStatesFromResult(result: LetterResult[]) {
+  result.forEach((letterResult: LetterResult) => {
+    const letter = letterResult.letter.toUpperCase()
+    const currentState = keyStates.value.get(letter)
+
+    if (letterResult.correct) {
+      keyStates.value.set(letter, 'correct')
+    } else if (letterResult.exist && currentState !== 'correct') {
+      keyStates.value.set(letter, 'present')
+    } else if (!letterResult.exist && !currentState) {
+      keyStates.value.set(letter, 'absent')
+    }
+  })
+}
 
 /** Get all available dates from the edge function */
 async function fetchAvailableDates() {
@@ -136,13 +208,16 @@ async function fetchAvailableDates() {
       throw error
     }
 
-    availableDates.value = data.dates
+    // Ensure dates are sorted ascending for consistent behavior
+    availableDates.value = [...data.dates].sort()
+    groupDatesByMonth()
 
     // Select today's date by default (last date in the array)
     if (availableDates.value.length > 0) {
       const lastDate = availableDates.value[availableDates.value.length - 1]
       if (lastDate) {
         selectedDate.value = lastDate
+        selectedMonth.value = monthKeyFromDate(lastDate)
       }
     }
   } catch (error) {
@@ -151,37 +226,51 @@ async function fetchAvailableDates() {
   }
 }
 
-/** Load completed dates and guesses from localStorage */
-function loadCompletedDates() {
-  const storedDates = localStorage.getItem(STORAGE_KEY_DATES)
-  if (storedDates) {
-    try {
-      const dates = JSON.parse(storedDates)
-      completedDates.value = new Set(dates)
-    } catch (error) {
-      console.error('Error loading completed dates:', error)
+/** Group dates by month for better organization */
+function groupDatesByMonth() {
+  const groups = new Map<string, MonthGroup>()
+
+  availableDates.value.forEach((date) => {
+    const d = parseDateStr(date)
+    const monthKey = monthKeyFromDate(date)
+    const monthName = d.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' })
+
+    if (!groups.has(monthKey)) {
+      groups.set(monthKey, {
+        month: monthName,
+        year: d.getFullYear(),
+        dates: [],
+        key: monthKey,
+      })
     }
+
+    groups.get(monthKey)?.dates.push(date)
+  })
+
+  // Sort groups chronologically and dates within groups
+  monthGroups.value = Array.from(groups.values()).sort((a, b) => a.key.localeCompare(b.key))
+  monthGroups.value.forEach((g) => g.dates.sort())
+}
+
+/** Load completed dates and guesses from localStorage */
+function loadAllGuesses() {
+  const stored = localStorage.getItem(STORAGE_KEY_GUESSES)
+  if (stored) {
+    try {
+      allGuesses.value = JSON.parse(stored)
+    } catch (error) {
+      console.error('Error loading guesses:', error)
+      allGuesses.value = {}
+    }
+  } else {
+    allGuesses.value = {}
   }
 }
 
 /** Save completed dates to localStorage */
-function saveCompletedDates() {
-  localStorage.setItem(STORAGE_KEY_DATES, JSON.stringify([...completedDates.value]))
-}
-
 /** Load guesses for a specific date */
 function loadGuessesForDate(date: string): DateGuesses[string] | null {
-  const stored = localStorage.getItem(STORAGE_KEY_GUESSES)
-  if (stored) {
-    try {
-      const allGuesses: DateGuesses = JSON.parse(stored)
-      return allGuesses[date] || null
-    } catch (error) {
-      console.error('Error loading guesses:', error)
-      return null
-    }
-  }
-  return null
+  return allGuesses.value[date] || null
 }
 
 /** Save guesses for a specific date */
@@ -192,16 +281,13 @@ function saveGuessesForDate(
   won: boolean,
 ) {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY_GUESSES)
-    const allGuesses: DateGuesses = stored ? JSON.parse(stored) : {}
-
-    allGuesses[date] = {
+    allGuesses.value[date] = {
       guesses,
       completed,
       won,
     }
 
-    localStorage.setItem(STORAGE_KEY_GUESSES, JSON.stringify(allGuesses))
+    localStorage.setItem(STORAGE_KEY_GUESSES, JSON.stringify(allGuesses.value))
   } catch (error) {
     console.error('Error saving guesses:', error)
   }
@@ -210,12 +296,8 @@ function saveGuessesForDate(
 /** Remove guesses for a specific date (for retry) */
 function removeGuessesForDate(date: string) {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY_GUESSES)
-    if (stored) {
-      const allGuesses: DateGuesses = JSON.parse(stored)
-      delete allGuesses[date]
-      localStorage.setItem(STORAGE_KEY_GUESSES, JSON.stringify(allGuesses))
-    }
+    delete allGuesses.value[date]
+    localStorage.setItem(STORAGE_KEY_GUESSES, JSON.stringify(allGuesses.value))
   } catch (error) {
     console.error('Error removing guesses:', error)
   }
@@ -223,35 +305,47 @@ function removeGuessesForDate(date: string) {
 
 /** Check if a date has been completed */
 function isDateCompleted(date: string): boolean {
-  return completedDates.value.has(date)
+  const savedGame = loadGuessesForDate(date)
+  return savedGame?.completed === true
+}
+
+/** Check if a date was won */
+function isDateWon(date: string): boolean {
+  const savedGame = loadGuessesForDate(date)
+  return savedGame?.won === true
+}
+
+/** Check if a date was lost */
+function isDateLost(date: string): boolean {
+  const savedGame = loadGuessesForDate(date)
+  return savedGame?.completed === true && savedGame?.won === false
+}
+
+function isDateStarted(date: string): boolean {
+  const savedGame = loadGuessesForDate(date)
+  return savedGame !== null && savedGame.guesses.length > 0
 }
 
 /** Format date for display */
 function formatDate(date: string): string {
-  const d = new Date(date + 'T00:00:00')
+  const d = parseDateStr(date)
   return `${d.getDate()}/${d.getMonth() + 1}`
 }
 
 /** Select a date */
 function selectDate(date: string) {
+  // Save current game state if in progress
   if (currentRow.value > 0 && !gameWon.value && !gameLost.value) {
-    if (!confirm('Du har ett pågående spel. Vill du verkligen byta datum?')) {
-      return
-    }
+    saveGuessesForDate(selectedDate.value, submittedRows.value, false, false)
   }
 
   selectedDate.value = date
+  selectedMonth.value = monthKeyFromDate(date)
   loadGameForDate(date)
 
   // Scroll to selected date
   nextTick(() => {
-    if (selectedDateRef.value) {
-      selectedDateRef.value.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-        inline: 'center',
-      })
-    }
+    scrollToSelectedDate()
   })
 }
 
@@ -260,28 +354,14 @@ function loadGameForDate(date: string) {
   resetGame()
 
   const savedGame = loadGuessesForDate(date)
-  if (savedGame && savedGame.completed) {
+  if (savedGame) {
     // Load previous guesses
     submittedRows.value = savedGame.guesses
     currentRow.value = savedGame.guesses.length
     gameWon.value = savedGame.won
-    gameLost.value = !savedGame.won
 
     // Restore keyboard states
-    savedGame.guesses.forEach((row) => {
-      row.result.forEach((letterResult) => {
-        const letter = letterResult.letter.toUpperCase()
-        const currentState = keyStates.value.get(letter)
-
-        if (letterResult.correct) {
-          keyStates.value.set(letter, 'correct')
-        } else if (letterResult.exist && currentState !== 'correct') {
-          keyStates.value.set(letter, 'present')
-        } else if (!letterResult.exist && !currentState) {
-          keyStates.value.set(letter, 'absent')
-        }
-      })
-    })
+    savedGame.guesses.forEach((row) => updateKeyStatesFromResult(row.result))
   }
 }
 
@@ -297,7 +377,9 @@ function resetGame() {
 }
 
 /** Retry a completed date */
-function retryDate() {
+function retryDate(date?: string) {
+  const targetDate = date || selectedDate.value
+
   if (
     !confirm(
       'Är du säker på att du vill försöka igen? Detta kommer radera dina tidigare gissningar.',
@@ -306,14 +388,17 @@ function retryDate() {
     return
   }
 
-  // Remove from completed dates and guesses
-  completedDates.value.delete(selectedDate.value)
-  saveCompletedDates()
-  removeGuessesForDate(selectedDate.value)
+  // Remove previous guesses only
+  removeGuessesForDate(targetDate)
 
-  // Reset the game
-  resetGame()
-  gameGrid.value?.showMessage('Försöker igen!', 'info')
+  // If retrying the currently selected date, reset the game
+  if (targetDate === selectedDate.value) {
+    resetGame()
+    gameGrid.value?.showMessage('', 'info')
+  } else {
+    // Otherwise, just switch to that date
+    selectDate(targetDate)
+  }
 }
 
 /** Handle key press from keyboard or on-screen keyboard */
@@ -322,7 +407,7 @@ function handleKeyPress(key: string) {
 
   const upperKey = key.toUpperCase()
 
-  if (VALID_KEYS.includes(upperKey) && currentCol.value < 5) {
+  if (currentCol.value < 5) {
     currentWord.value += upperKey
     currentCol.value++
   }
@@ -347,6 +432,18 @@ async function handleEnter() {
     return
   }
 
+  // Client-side allowed word check (authoritative check should also happen on the server)
+  try {
+    const allowed = await isAllowed(currentWord.value)
+    if (!allowed) {
+      gameGrid.value?.showMessage('Inte ett giltigt ord', 'error')
+      return
+    }
+  } catch (e) {
+    // If the list failed to load, don't block the guess; server will still validate format
+    console.warn('[ordel] Allowed-words check skipped due to load error', e)
+  }
+
   try {
     const { data, error } = await supabase.functions.invoke(
       `ordel/check-word/${selectedDate.value}`,
@@ -367,34 +464,19 @@ async function handleEnter() {
     })
 
     // Update keyboard states
-    data.result.forEach((letterResult: LetterResult) => {
-      const letter = letterResult.letter.toUpperCase()
-      const currentState = keyStates.value.get(letter)
-
-      if (letterResult.correct) {
-        keyStates.value.set(letter, 'correct')
-      } else if (letterResult.exist && currentState !== 'correct') {
-        keyStates.value.set(letter, 'present')
-      } else if (!letterResult.exist && !currentState) {
-        keyStates.value.set(letter, 'absent')
-      }
-    })
+    updateKeyStatesFromResult(data.result)
 
     // Check if won
     const won = data.result.every((r: LetterResult) => r.correct)
 
     if (won) {
       gameWon.value = true
-      completedDates.value.add(selectedDate.value)
-      saveCompletedDates()
       saveGuessesForDate(selectedDate.value, submittedRows.value, true, true)
       setTimeout(() => {
         gameGrid.value?.showMessage('Great Success!', 'success')
       }, 500)
     } else if (currentRow.value >= 5) {
       gameLost.value = true
-      completedDates.value.add(selectedDate.value)
-      saveCompletedDates()
       saveGuessesForDate(selectedDate.value, submittedRows.value, true, false)
       setTimeout(() => {
         gameGrid.value?.showMessage('Typiskt det var fel :(', 'error')
@@ -418,13 +500,13 @@ async function handleEnter() {
 function handleKeydown(event: KeyboardEvent) {
   if (gameWon.value || gameLost.value) return
 
-  const key = event.key.toUpperCase()
+  const key = event.key
 
   if (VALID_KEYS.includes(key)) {
     handleKeyPress(key)
-  } else if (key === 'BACKSPACE') {
+  } else if (key === 'Backspace') {
     handleBackspace()
-  } else if (key === 'ENTER') {
+  } else if (key === 'Enter') {
     handleEnter()
   }
 }
@@ -440,19 +522,15 @@ function getKeyClass(key: string) {
 }
 
 onMounted(async () => {
-  loadCompletedDates()
+  loadAllGuesses()
   await fetchAvailableDates()
   window.addEventListener('keydown', handleKeydown)
+  // Warm up the allowed words list
+  useAllowedWords()
 
   // Scroll to today's date after mounting
   nextTick(() => {
-    if (selectedDateRef.value && dateScrollRef.value) {
-      selectedDateRef.value.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-        inline: 'center',
-      })
-    }
+    if (dateScrollRef.value) scrollToSelectedDate()
   })
 })
 
@@ -566,48 +644,81 @@ watch(selectedDate, (newDate) => {
   width: 90%;
   max-width: 800px;
 
-  .date-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-    padding: 0 10px;
+  h3 {
+    margin: 0 0 15px 0;
+    font-size: 1.2rem;
+    color: var(--theme-text-primary);
+    text-align: center;
+  }
 
-    h3 {
-      margin: 0;
-      font-size: 1.2rem;
-      color: var(--theme-text-primary);
+  .month-selector {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 10px;
+    background: var(--theme-bg-secondary);
+    border-radius: 8px 8px 0 0;
+    scroll-behavior: smooth;
+    margin-bottom: 2px;
+
+    &::-webkit-scrollbar {
+      height: 6px;
     }
 
-    .retry-button {
-      padding: 8px 16px;
-      background: #dc3545;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-size: 0.9rem;
+    &::-webkit-scrollbar-track {
+      background: var(--theme-bg-primary);
+      border-radius: 3px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--theme-button-primary-border);
+      border-radius: 3px;
 
       &:hover {
-        background: #c82333;
-        transform: translateY(-1px);
+        background: var(--theme-button-primary-bg);
+      }
+    }
+
+    .month-item {
+      min-width: 120px;
+      padding: 12px 20px;
+      background: var(--theme-bg-tertiary);
+      border: 2px solid var(--theme-button-primary-border);
+      border-radius: 5px;
+      text-align: center;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+      white-space: nowrap;
+
+      &:hover {
+        background: var(--theme-button-secondary-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
       }
 
-      &:active {
-        transform: translateY(0);
+      &.selected {
+        border-color: #ebd126;
+        border-width: 3px;
+        background: var(--theme-button-primary-bg);
+        color: white;
+        transform: scale(1.05);
+
+        &:hover {
+          transform: scale(1.08) translateY(-2px);
+        }
       }
     }
   }
 
   .date-scroll {
     display: flex;
+    flex-direction: row;
     gap: 8px;
     overflow-x: auto;
     padding: 10px;
     background: var(--theme-bg-secondary);
-    border-radius: 8px;
+    border-radius: 0 0 8px 8px;
     scroll-behavior: smooth;
 
     &::-webkit-scrollbar {
@@ -650,8 +761,37 @@ watch(selectedDate, (newDate) => {
       }
 
       .completion-indicator {
-        font-size: 0.8rem;
+        font-size: 0.9rem;
         color: inherit;
+      }
+
+      .retry-mini-button {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        background: rgba(0, 0, 0, 0.3);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        font-size: 0.9rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: all 0.2s;
+
+        &:hover {
+          background: rgba(0, 0, 0, 0.6);
+          transform: scale(1.1);
+        }
+      }
+
+      &:hover .retry-mini-button {
+        opacity: 1;
       }
 
       &:hover {
@@ -670,9 +810,13 @@ watch(selectedDate, (newDate) => {
         &:hover {
           transform: scale(1.08) translateY(-2px);
         }
+
+        .retry-mini-button {
+          opacity: 1;
+        }
       }
 
-      &.completed {
+      &.won {
         background: #538d4e;
         border-color: #538d4e;
         color: white;
@@ -685,6 +829,40 @@ watch(selectedDate, (newDate) => {
           background: #457a42;
           border-color: #ebd126;
         }
+      }
+
+      &.lost {
+        background: #b54e4e;
+        border-color: #b54e4e;
+        color: white;
+
+        &:hover {
+          background: #c96262;
+        }
+
+        &.selected {
+          background: #9a4242;
+          border-color: #ebd126;
+        }
+      }
+
+      &.completed:not(.won):not(.lost) {
+        background: #538d4e;
+        border-color: #538d4e;
+        color: white;
+
+        &:hover {
+          background: #6aad5d;
+        }
+
+        &.selected {
+          background: #457a42;
+          border-color: #ebd126;
+        }
+      }
+
+      &.started:not(.completed) {
+        background: linear-gradient(135deg, #b59f3b, #538d4e);
       }
     }
   }
@@ -709,19 +887,14 @@ watch(selectedDate, (newDate) => {
   .date-selector {
     width: 95%;
 
-    .date-header {
-      flex-direction: column;
-      gap: 10px;
-      align-items: flex-start;
+    h3 {
+      font-size: 1rem;
+    }
 
-      h3 {
-        font-size: 1rem;
-      }
-
-      .retry-button {
-        font-size: 0.8rem;
-        padding: 6px 12px;
-      }
+    .month-selector .month-item {
+      min-width: 100px;
+      padding: 10px 15px;
+      font-size: 0.9rem;
     }
 
     .date-scroll .date-item {
@@ -733,7 +906,13 @@ watch(selectedDate, (newDate) => {
       }
 
       .completion-indicator {
-        font-size: 0.7rem;
+        font-size: 0.8rem;
+      }
+
+      .retry-mini-button {
+        width: 18px;
+        height: 18px;
+        font-size: 0.8rem;
       }
     }
   }

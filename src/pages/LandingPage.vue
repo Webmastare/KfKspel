@@ -59,6 +59,10 @@
             <h3>Rita en Cirkel</h3>
             <router-link to="/circle-game" class="play-btn">Spela</router-link>
           </div>
+          <div class="game-card">
+            <h3>Ordel</h3>
+            <router-link to="/ordel" class="play-btn">Spela</router-link>
+          </div>
         </div>
 
         <div v-if="showSnakeDetails" class="snake-info">
