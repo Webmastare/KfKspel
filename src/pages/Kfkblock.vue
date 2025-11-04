@@ -513,54 +513,33 @@ function adjustCanvasSize() {
   // Check if we're on mobile
   isMobile.value = window.innerWidth <= 768
 
-  const appContainer = document.getElementById('app-container')
-  const hardDropBtn = document.querySelector('.hard-drop-btn')
-  const leaderboard = document.querySelector('.leaderboard-container')
-  const mobileControls = document.querySelector('.mobile-controls-bar')
-  const mobileStatsMini = document.querySelector('.mobile-stats-mini')
-
-  const hardDropBtnHeight = hardDropBtn ? hardDropBtn.offsetHeight + 10 : 50
-  const leaderboardHeight = leaderboard ? leaderboard.offsetHeight : 0
-  const mobileControlsHeight = mobileControls ? mobileControls.offsetHeight + 10 : 0
-  const mobileStatsHeight = mobileStatsMini ? mobileStatsMini.offsetHeight + 10 : 0
-  const appContainerVPadding = 10 * 2
-  const appContainerHPadding = 10 * 2
-  const verticalGapsAroundGame = 15 * 3
+  // Use fixed viewport dimensions to avoid issues with scrolling
+  // These use the visual viewport which remains constant during scrolling
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
 
   let availableHeightForGame, availableWidthForCanvas
 
   if (isMobile.value) {
-    // Mobile layout calculations
-    availableHeightForGame =
-      window.innerHeight -
-      hardDropBtnHeight -
-      leaderboardHeight -
-      mobileControlsHeight -
-      mobileStatsHeight -
-      appContainerVPadding -
-      verticalGapsAroundGame
+    // Mobile layout calculations using fixed values to avoid resize during scroll
+    const mobileUIReservedHeight = 200 // Reserved space for mobile UI elements
+    const mobileHorizontalPadding = 40 // Fixed horizontal padding
+
+    availableHeightForGame = Math.max(300, viewportHeight - mobileUIReservedHeight)
 
     // On mobile, canvas takes most of the width, leaving space for next piece
-    const appContainerContentWidth =
-      (appContainer?.offsetWidth || window.innerWidth) - appContainerHPadding
-    const nextPieceWidth = 4 * 25 + 20 // Smaller next piece + gap
-    availableWidthForCanvas = appContainerContentWidth - nextPieceWidth
+    const nextPieceWidth = 120 // Fixed next piece area width
+    availableWidthForCanvas = Math.max(
+      200,
+      viewportWidth - mobileHorizontalPadding - nextPieceWidth,
+    )
   } else {
-    // Desktop layout calculations (existing logic)
-    const sidebar = document.querySelector('.sidebar')
-    const sidebarWidth = sidebar ? sidebar.offsetWidth : 180
-    const gameLayoutGap = 20
+    // Desktop layout calculations using fixed values
+    const desktopUIReservedHeight = 150 // Reserved space for desktop UI elements
+    const desktopHorizontalReserved = 400 // Reserved space for sidebars
 
-    availableHeightForGame =
-      window.innerHeight -
-      hardDropBtnHeight -
-      leaderboardHeight -
-      appContainerVPadding -
-      verticalGapsAroundGame
-
-    const appContainerContentWidth =
-      (appContainer?.offsetWidth || window.innerWidth) - appContainerHPadding
-    availableWidthForCanvas = appContainerContentWidth - sidebarWidth * 2 - gameLayoutGap * 2
+    availableHeightForGame = Math.max(400, viewportHeight - desktopUIReservedHeight)
+    availableWidthForCanvas = Math.max(300, viewportWidth - desktopHorizontalReserved)
   }
 
   let newBlockSizeByHeight = Math.floor(availableHeightForGame / ROWS)
@@ -627,9 +606,55 @@ function initializeCanvases() {
 
   adjustCanvasSize() // Call after contexts are set
   if (!resizeHandler) {
-    resizeHandler = debounce(adjustCanvasSize, 100)
+    // Use longer debounce and only resize on actual orientation/window size changes
+    resizeHandler = debounce(() => {
+      // Only resize if the viewport dimensions actually changed significantly
+      const currentWidth = window.innerWidth
+      const currentHeight = window.innerHeight
+      const threshold = 100 // Increased threshold to prevent minor scroll changes
+
+      // On mobile, check if this might be just a scroll event (address bar hide/show)
+      if (isMobile.value) {
+        // If only height changed and it's a small change, likely just mobile browser UI
+        const widthChanged = Math.abs(currentWidth - (window.lastResizeWidth || 0)) > 10
+        const heightChanged = Math.abs(currentHeight - (window.lastResizeHeight || 0)) > threshold
+
+        // Only resize on orientation change (width change) or significant height change
+        if (widthChanged || heightChanged) {
+          window.lastResizeWidth = currentWidth
+          window.lastResizeHeight = currentHeight
+          adjustCanvasSize()
+        }
+      } else {
+        // Desktop - use original logic
+        if (
+          Math.abs(currentWidth - (window.lastResizeWidth || 0)) > threshold ||
+          Math.abs(currentHeight - (window.lastResizeHeight || 0)) > threshold
+        ) {
+          window.lastResizeWidth = currentWidth
+          window.lastResizeHeight = currentHeight
+          adjustCanvasSize()
+        }
+      }
+    }, 500) // Increased debounce time
   }
   window.addEventListener('resize', resizeHandler)
+
+  // Store initial dimensions
+  window.lastResizeWidth = window.innerWidth
+  window.lastResizeHeight = window.innerHeight
+
+  // Use Visual Viewport API if available (prevents scroll-based resizing)
+  if (window.visualViewport && isMobile.value) {
+    const visualViewportHandler = debounce(() => {
+      // Visual viewport changes are usually zoom or virtual keyboard
+      // Only resize if there's a significant scale change (zoom)
+      if (Math.abs(window.visualViewport.scale - 1) > 0.1) {
+        adjustCanvasSize()
+      }
+    }, 300)
+    window.visualViewport.addEventListener('resize', visualViewportHandler)
+  }
 }
 
 // --- Block Class ---
