@@ -1,0 +1,39 @@
+#hej{
+
+    color: red;
+    
+}
+
+#duken{
+    border: 0px solid;
+}
+
+
+#beet{
+    display: inline-block;
+    transform-origin: 50% 59%;
+    animation: roteraX 2s forwards;
+    animation-delay: 2s;
+}
+
+@keyframes roteraX{
+    from{
+        transform: rotateX(0);
+    }
+
+    to{
+        transform: rotateX(180deg);
+        
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
