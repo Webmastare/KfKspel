@@ -470,7 +470,7 @@ function retryDate(date?: string) {
 
 /** Handle key press from keyboard or on-screen keyboard */
 function handleKeyPress(key: string) {
-  if (gameWon.value || gameLost.value) return
+  if (gameWon.value || gameLost.value || showWordRequestForm.value) return
 
   const upperKey = key.toUpperCase()
 
