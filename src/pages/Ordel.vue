@@ -2,6 +2,26 @@
   <div id="app-container">
     <h1 class="game-header">Ordel</h1>
 
+    <button @click="showWordRequestForm = !showWordRequestForm" class="open-request-word-btn">
+      Saknar du ord i listan?
+    </button>
+    <div v-if="showWordRequestForm" class="request-word-container">
+      <label for="request-word-input">Önska ett ord:</label>
+      <input
+        id="request-word-input"
+        type="text"
+        maxlength="5"
+        placeholder="Skriv ditt ord här"
+        v-model="requestedWord"
+      />
+      <p>{{ requestMessage }}</p>
+      <button @click="submitWordRequest">Skicka förslag</button>
+      <p>
+        Disclaimer: Det kan ta ett tag innan det läggs till och eventuellt kommer med som
+        "dagens-ord"
+      </p>
+    </div>
+
     <FiveLetter
       ref="gameGrid"
       :current-word="currentWord"
@@ -161,6 +181,53 @@ const allGuesses = ref<DateGuesses>({})
 
 const VALID_KEYS = 'qwertyuiopåasdfghjklöäzxcvbnm'
 const STORAGE_KEY_GUESSES = 'ordel-date-guesses'
+
+// Word request feature
+const showWordRequestForm = ref(false)
+const requestedWord = ref('')
+const isSubmittingRequest = ref(false)
+const requestMessage = ref('')
+
+async function submitWordRequest() {
+  if (requestedWord.value) {
+    // Handle the word request submission
+    console.log('Requested word:', requestedWord.value)
+    // Handle by sending a feedback form to the database
+    isSubmittingRequest.value = true
+    requestMessage.value = ''
+
+    try {
+      // Insert feedback record
+      const feedbackRecord = {
+        type: 'word_request',
+        title: `Word request: ${requestedWord.value}`,
+        email: null,
+        severity: 'low',
+        description: `Lägg till ordet ${requestedWord.value} i ordlistan`,
+        browser_info: null,
+        media_urls: null,
+        status: 'open',
+      }
+
+      const { error } = await supabase.from('feedback').insert([feedbackRecord])
+
+      if (error) {
+        throw new Error('Failed to submit feedback')
+      }
+      requestMessage.value = 'Ditt förslag har skickats in!'
+      // Hide message after 5 seconds
+      setTimeout(() => {
+        requestMessage.value = ''
+      }, 5000)
+    } catch (error) {
+      console.error('Submission error:', error)
+      requestMessage.value =
+        error instanceof Error ? error.message : 'Ett fel uppstod vid skickning av feedback'
+    } finally {
+      requestMessage.value = 'Tack för ditt förslag!'
+    }
+  }
+}
 
 // Helpers
 function parseDateStr(date: string) {
@@ -549,6 +616,7 @@ watch(selectedDate, (newDate) => {
 </script>
 
 <style scoped lang="scss">
+@use '@/styles/generalGames.scss';
 #app-container {
   position: relative;
   display: flex;
@@ -560,6 +628,61 @@ watch(selectedDate, (newDate) => {
   min-height: 100%;
   padding: 20px;
   overflow: hidden;
+}
+
+.game-header {
+  margin-bottom: 0px;
+}
+
+.open-request-word-btn {
+  @extend .button-base;
+  padding: 5px 10px;
+  border-radius: 5px;
+}
+
+.request-word-container {
+  margin: 15px 0;
+  padding: 15px;
+  border: 2px solid var(--theme-button-primary-border);
+  border-radius: 8px;
+  background: var(--theme-bg-secondary);
+  width: 90%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+
+  label {
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+
+  input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--theme-button-primary-border);
+    border-radius: 4px;
+    font-size: 1rem;
+    background: var(--theme-bg-primary);
+    color: var(--theme-text-primary);
+
+    &::placeholder {
+      color: var(--theme-text-secondary);
+    }
+  }
+
+  button {
+    @extend .button-base;
+    margin-top: 10px;
+    box-shadow: 0 4px 15px rgba(27, 94, 32, 0.3);
+  }
+
+  p {
+    font-size: 0.9rem;
+    text-align: center;
+    color: var(--theme-text-secondary);
+  }
 }
 
 .keyboard-container {
