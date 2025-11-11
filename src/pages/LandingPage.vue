@@ -27,7 +27,7 @@
       <div class="welcome-card" v-if="showWelcomeCard">
         <h1 class="title">Välkommen till KfKSpel</h1>
         <div class="autotype">
-          <p class="subtitle">{{ typedText }}</p>
+          <p class="subtitle typing-cursor" id="typed-text">{{ typedText }}</p>
         </div>
 
         <div class="game-grid">
@@ -158,6 +158,11 @@ async function runTypewriter() {
       await new Promise((r) => setTimeout(r, linePauseMs))
     }
   }
+  // Once finished, turn off the blinking cursor
+  const typedTextElement = document.getElementById('typed-text')
+  if (typedTextElement) {
+    typedTextElement.classList.remove('typing-cursor')
+  }
 }
 
 // Use global theme store
@@ -256,8 +261,9 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
     position: relative;
     overflow: visible;
     font-size: 1.2rem;
-
-    // blinking caret
+  }
+  .typing-cursor {
+    // blinking cursor
     &::after {
       content: '';
       display: inline-block;
