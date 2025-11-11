@@ -12,7 +12,7 @@
           </button>
         </div>
 
-        <div class="admin-stats" v-if="feedbackList.length > 0">
+        <div class="admin-stats">
           <div class="stat-card">
             <span class="stat-number">{{ feedbackList.length }}</span>
             <span class="stat-label">Total</span>
@@ -32,28 +32,63 @@
       <div class="filters">
         <div class="filter-group">
           <label>Status:</label>
-          <select v-model="statusFilter" @change="fetchFeedback">
-            <option value="">Alla</option>
-            <option value="open">Öppna</option>
-            <option value="in_progress">Pågående</option>
-            <option value="closed">Stängda</option>
-          </select>
+          <div class="multi-select" :class="{ open: isStatusOpen }" ref="statusSelectRef">
+            <button
+              type="button"
+              class="multi-select-trigger"
+              @click="isStatusOpen = !isStatusOpen"
+            >
+              <span class="summary-text">{{ statusSummary }}</span>
+              <span class="chevron" aria-hidden="true"></span>
+            </button>
+            <div v-if="isStatusOpen" class="multi-select-menu">
+              <button type="button" class="menu-item all" @click="selectAllStatuses">
+                <input type="checkbox" :checked="isAllStatusesSelected" readonly />
+                <span>Alla</span>
+              </button>
+              <button
+                v-for="opt in statusOptions"
+                :key="opt.value"
+                type="button"
+                class="menu-item"
+                @click="toggleStatus(opt.value)"
+              >
+                <input type="checkbox" :checked="statusFilter.includes(opt.value)" readonly />
+                <span>{{ opt.label }}</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="filter-group">
           <label>Typ:</label>
-          <select v-model="typeFilter" @change="fetchFeedback">
-            <option value="">Alla</option>
-            <option value="bug">Buggar</option>
-            <option value="feature">Spelidéer</option>
-            <option value="improvement">Förbättringar</option>
-            <option value="other">Övrigt</option>
-          </select>
+          <div class="multi-select" :class="{ open: isTypeOpen }" ref="typeSelectRef">
+            <button type="button" class="multi-select-trigger" @click="isTypeOpen = !isTypeOpen">
+              <span class="summary-text">{{ typeSummary }}</span>
+              <span class="chevron" aria-hidden="true"></span>
+            </button>
+            <div v-if="isTypeOpen" class="multi-select-menu">
+              <button type="button" class="menu-item all" @click="selectAllTypes">
+                <input type="checkbox" :checked="isAllTypesSelected" readonly />
+                <span>Alla</span>
+              </button>
+              <button
+                v-for="opt in typeOptions"
+                :key="opt.value"
+                type="button"
+                class="menu-item"
+                @click="toggleType(opt.value)"
+              >
+                <input type="checkbox" :checked="typeFilter.includes(opt.value)" readonly />
+                <span>{{ opt.label }}</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="filter-group">
           <label>Sortera:</label>
-          <select v-model="sortBy" @change="fetchFeedback">
+          <select v-model="sortBy" @change="applyFiltersAndSort">
             <option value="created_at-desc">Senaste först</option>
             <option value="created_at-asc">Äldsta först</option>
             <option value="severity">Allvarlighetsgrad</option>
@@ -197,7 +232,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/utils/supabase'
 import { useAuthStore } from '@/stores/auth'
@@ -226,9 +261,132 @@ const expandedId = ref<string | null>(null)
 const hasTriedFetching = ref(false)
 
 // Filters
-const statusFilter = ref('')
-const typeFilter = ref('')
+const statusFilter = ref<string[]>([])
+const typeFilter = ref<string[]>([])
 const sortBy = ref('created_at-desc')
+// Store of all fetched data (unfiltered)
+const allFeedback = ref<Feedback[]>([])
+// Multi-select options
+const statusOptions = [
+  { value: 'open', label: 'Öppna' },
+  { value: 'in_progress', label: 'Pågående' },
+  { value: 'closed', label: 'Stängda' },
+]
+
+const typeOptions = [
+  { value: 'bug', label: 'Buggar' },
+  { value: 'feature', label: 'Spelidéer' },
+  { value: 'improvement', label: 'Förbättringar' },
+  { value: 'word_request', label: 'Önskade ord' },
+  { value: 'other', label: 'Övrigt' },
+]
+
+// Dropdown open state and refs for outside click handling
+const isStatusOpen = ref(false)
+const isTypeOpen = ref(false)
+const statusSelectRef = ref<HTMLElement | null>(null)
+const typeSelectRef = ref<HTMLElement | null>(null)
+
+// Helpers: all selected booleans
+const isAllStatusesSelected = computed(
+  () => statusFilter.value.length === statusOptions.length || statusFilter.value.length === 0,
+)
+const isAllTypesSelected = computed(
+  () => typeFilter.value.length === typeOptions.length || typeFilter.value.length === 0,
+)
+
+// Summaries for trigger text
+const statusSummary = computed(() => {
+  if (statusFilter.value.length === 0 || statusFilter.value.length === statusOptions.length) {
+    return 'Alla'
+  }
+  if (statusFilter.value.length <= 2) {
+    return statusOptions
+      .filter((o) => statusFilter.value.includes(o.value))
+      .map((o) => o.label)
+      .join(', ')
+  }
+  return `${statusFilter.value.length} valda`
+})
+
+const typeSummary = computed(() => {
+  if (typeFilter.value.length === 0 || typeFilter.value.length === typeOptions.length) {
+    return 'Alla'
+  }
+  if (typeFilter.value.length <= 2) {
+    return typeOptions
+      .filter((o) => typeFilter.value.includes(o.value))
+      .map((o) => o.label)
+      .join(', ')
+  }
+  return `${typeFilter.value.length} valda`
+})
+
+function selectAllStatuses() {
+  // Selecting "Alla" means everything is selected; user can then unselect specific ones
+  statusFilter.value = statusOptions.map((o) => o.value)
+  applyFiltersAndSort()
+}
+
+function selectAllTypes() {
+  typeFilter.value = typeOptions.map((o) => o.value)
+  applyFiltersAndSort()
+}
+
+function toggleStatus(value: string) {
+  const idx = statusFilter.value.indexOf(value)
+  if (idx >= 0) {
+    statusFilter.value.splice(idx, 1)
+  } else {
+    statusFilter.value.push(value)
+  }
+  // If everything was deselected, treat as ALL (no filter)
+  if (statusFilter.value.length === 0) {
+    // keep empty to mean no filter (Alla)
+  }
+  applyFiltersAndSort()
+}
+
+function toggleType(value: string) {
+  const idx = typeFilter.value.indexOf(value)
+  if (idx >= 0) {
+    typeFilter.value.splice(idx, 1)
+  } else {
+    typeFilter.value.push(value)
+  }
+  if (typeFilter.value.length === 0) {
+    // empty => no filter (Alla)
+  }
+  applyFiltersAndSort()
+}
+
+// Close dropdowns when clicking outside
+function onGlobalClick(e: MouseEvent) {
+  const target = e.target as Node
+  if (isStatusOpen.value && statusSelectRef.value && !statusSelectRef.value.contains(target)) {
+    isStatusOpen.value = false
+  }
+  if (isTypeOpen.value && typeSelectRef.value && !typeSelectRef.value.contains(target)) {
+    isTypeOpen.value = false
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('click', onGlobalClick)
+}
+
+onMounted(() => {
+  // Initial fetch
+  fetchFeedback()
+  selectAllStatuses()
+  selectAllTypes()
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('click', onGlobalClick)
+  }
+})
 
 // Media modal
 const showMediaModal = ref(false)
@@ -245,30 +403,7 @@ async function fetchFeedback() {
   hasTriedFetching.value = true
 
   try {
-    let query = supabase.from('feedback').select('*')
-
-    // Apply filters
-    if (statusFilter.value) {
-      query = query.eq('status', statusFilter.value)
-    }
-    if (typeFilter.value) {
-      query = query.eq('type', typeFilter.value)
-    }
-
-    // Apply sorting
-    const [column, direction] = sortBy.value.split('-')
-    const ascending = direction === 'asc'
-
-    // Special handling for severity sorting
-    if (column === 'severity') {
-      query = query
-        .order('severity', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-    } else if (column) {
-      query = query.order(column, { ascending })
-    }
-
-    const { data, error: fetchError } = await query
+    const { data, error: fetchError } = await supabase.from('feedback').select('*')
 
     if (fetchError) {
       console.error('Fetch error:', fetchError)
@@ -276,13 +411,60 @@ async function fetchFeedback() {
       return
     }
 
-    feedbackList.value = data || []
+    allFeedback.value = data || []
+    applyFiltersAndSort()
   } catch (err) {
     console.error('Fetch error:', err)
     error.value = 'Ett fel uppstod vid laddning av feedback.'
   } finally {
     loading.value = false
   }
+}
+
+function getSeverityWeight(s?: string | null): number {
+  if (!s) return 0
+  const map: Record<string, number> = { high: 3, medium: 2, low: 1 }
+  return map[s] ?? 0
+}
+
+function applyFiltersAndSort() {
+  // Start with all fetched data
+  let list = allFeedback.value
+
+  // Apply status filter if partially selected
+  if (statusFilter.value.length > 0 && statusFilter.value.length < statusOptions.length) {
+    const set = new Set(statusFilter.value)
+    list = list.filter((f) => set.has(f.status))
+  }
+
+  // Apply type filter if partially selected
+  if (typeFilter.value.length > 0 && typeFilter.value.length < typeOptions.length) {
+    const set = new Set(typeFilter.value)
+    list = list.filter((f) => set.has(f.type))
+  }
+
+  // Sort
+  const [column, direction] = (sortBy.value || 'created_at-desc').split('-')
+  const asc = direction === 'asc'
+
+  const sorted = [...list].sort((a, b) => {
+    if (column === 'severity') {
+      const aw = getSeverityWeight(a.severity)
+      const bw = getSeverityWeight(b.severity)
+      if (aw !== bw) return bw - aw // high -> low
+      // tie-break on created_at desc (newest first)
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    }
+
+    if (column === 'created_at') {
+      const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      return asc ? diff : -diff
+    }
+
+    return 0
+  })
+
+  feedbackList.value = sorted
 }
 
 function toggleExpand(id: string) {
@@ -498,6 +680,91 @@ function closeMediaModal() {
       @extend .form-input;
       padding: 8px 12px;
     }
+
+    .multi-select {
+      position: relative;
+      min-width: 220px;
+
+      .multi-select-trigger {
+        @extend .form-input;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        padding: 8px 12px;
+        cursor: pointer;
+        background: var(--theme-bg-primary);
+        border: 1px solid var(--theme-border);
+        border-radius: 8px;
+        transition: box-shadow 0.2s ease;
+
+        &:hover {
+          box-shadow: var(--theme-shadow-lg);
+        }
+
+        .summary-text {
+          color: var(--theme-text-primary);
+          font-size: 0.95rem;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .chevron {
+          width: 10px;
+          height: 10px;
+          border-right: 2px solid var(--theme-text-secondary);
+          border-bottom: 2px solid var(--theme-text-secondary);
+          transform: rotate(45deg);
+          transition: transform 0.2s ease;
+        }
+      }
+
+      &.open .chevron {
+        transform: rotate(-135deg);
+      }
+
+      .multi-select-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        background: var(--theme-sidebar-bg);
+        border: 1px solid var(--theme-border);
+        border-radius: 10px;
+        box-shadow: var(--theme-shadow-xl);
+        padding: 6px;
+        z-index: 10;
+
+        .menu-item {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 10px;
+          border: none;
+          background: transparent;
+          color: var(--theme-text-primary);
+          border-radius: 6px;
+          cursor: pointer;
+
+          &:hover {
+            background: var(--theme-bg-secondary);
+          }
+
+          input[type='checkbox'] {
+            accent-color: var(--theme-button-primary-bg);
+            pointer-events: none;
+          }
+
+          &.all {
+            font-weight: 600;
+            color: var(--theme-modal-header);
+          }
+        }
+      }
+    }
   }
 }
 
@@ -595,8 +862,8 @@ function closeMediaModal() {
     font-weight: 500;
 
     &.open {
-      background: #e3f2fd;
-      color: #1976d2;
+      background: #dbf6d3;
+      color: #388e3c;
     }
 
     &.in_progress {
@@ -605,8 +872,8 @@ function closeMediaModal() {
     }
 
     &.closed {
-      background: #e8f5e8;
-      color: #388e3c;
+      background: #f4dad3;
+      color: #922e2e;
     }
   }
 

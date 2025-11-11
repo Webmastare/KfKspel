@@ -16,10 +16,7 @@
       />
       <p>{{ requestMessage }}</p>
       <button @click="submitWordRequest">Skicka förslag</button>
-      <p>
-        Disclaimer: Det kan ta ett tag innan det läggs till och eventuellt kommer med som
-        "dagens-ord"
-      </p>
+      <p>Det kan ta ett tag innan det läggs till och eventuellt kommer med som "dagens-ord"</p>
     </div>
 
     <FiveLetter
