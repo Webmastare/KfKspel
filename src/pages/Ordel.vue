@@ -27,6 +27,12 @@
       :submitted-rows="submittedRows"
     />
 
+    <!-- Checking word spinner -->
+    <div v-if="checkingWord" class="checking-spinner">
+      <div class="spinner"></div>
+      <span class="checking-text">Kontrollerar ord...</span>
+    </div>
+
     <div class="keyboard-container">
       <div class="keyboard-row">
         <div
@@ -61,7 +67,9 @@
         >
           {{ key }}
         </div>
-        <div class="key special-key" @click="handleEnter">Enter</div>
+        <div class="key special-key" :class="{ 'key-disabled': checkingWord }" @click="handleEnter">
+          {{ checkingWord ? 'Kontrollerar...' : 'Enter' }}
+        </div>
       </div>
     </div>
 
@@ -175,6 +183,7 @@ const selectedDateRef = ref<HTMLElement | null>(null)
 const monthGroups = ref<MonthGroup[]>([])
 const selectedMonth = ref<string>('')
 const allGuesses = ref<DateGuesses>({})
+const checkingWord = ref(false)
 
 const VALID_KEYS = 'qwertyuiopåasdfghjklöäzxcvbnm'
 const STORAGE_KEY_GUESSES = 'ordel-date-guesses'
@@ -438,6 +447,7 @@ function resetGame() {
   keyStates.value.clear()
   gameWon.value = false
   gameLost.value = false
+  checkingWord.value = false
 }
 
 /** Retry a completed date */
@@ -467,7 +477,7 @@ function retryDate(date?: string) {
 
 /** Handle key press from keyboard or on-screen keyboard */
 function handleKeyPress(key: string) {
-  if (gameWon.value || gameLost.value || showWordRequestForm.value) return
+  if (gameWon.value || gameLost.value || showWordRequestForm.value || checkingWord.value) return
 
   const upperKey = key.toUpperCase()
 
@@ -479,7 +489,7 @@ function handleKeyPress(key: string) {
 
 /** Handle backspace */
 function handleBackspace() {
-  if (gameWon.value || gameLost.value) return
+  if (gameWon.value || gameLost.value || checkingWord.value) return
 
   if (currentCol.value > 0) {
     currentWord.value = currentWord.value.slice(0, -1)
@@ -489,7 +499,7 @@ function handleBackspace() {
 
 /** Handle enter - submit the word */
 async function handleEnter() {
-  if (gameWon.value || gameLost.value) return
+  if (gameWon.value || gameLost.value || checkingWord.value) return
 
   if (currentCol.value !== 5) {
     gameGrid.value?.showMessage('Ordet måste vara 5 bokstäver', 'error')
@@ -507,6 +517,9 @@ async function handleEnter() {
     // If the list failed to load, don't block the guess; server will still validate format
     console.warn('[ordel] Allowed-words check skipped due to load error', e)
   }
+
+  // Set checking state to prevent multiple submissions
+  checkingWord.value = true
 
   try {
     const { data, error } = await supabase.functions.invoke(
@@ -557,12 +570,15 @@ async function handleEnter() {
   } catch (error) {
     console.error('Error submitting word:', error)
     gameGrid.value?.showMessage('Kunde inte kontrollera ordet', 'error')
+  } finally {
+    // Always reset checking state when the request completes
+    checkingWord.value = false
   }
 }
 
 /** Handle physical keyboard input */
 function handleKeydown(event: KeyboardEvent) {
-  if (gameWon.value || gameLost.value) return
+  if (gameWon.value || gameLost.value || checkingWord.value) return
 
   const key = event.key
 
@@ -682,6 +698,40 @@ watch(selectedDate, (newDate) => {
   }
 }
 
+.checking-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 15px 0;
+  color: var(--theme-text-secondary);
+  font-size: 0.9rem;
+
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--theme-bg-tertiary);
+    border-top: 3px solid var(--theme-button-primary-bg);
+    border-bottom: 3px solid var(--theme-button-primary-bg);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  .checking-text {
+    font-weight: 500;
+    opacity: 0.8;
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 .keyboard-container {
   width: 90%;
   max-width: 600px;
@@ -753,6 +803,19 @@ watch(selectedDate, (newDate) => {
 
         &:hover {
           background: #4a4a4c;
+        }
+      }
+
+      &.key-disabled {
+        background: #6a6a6c;
+        border-color: #6a6a6c;
+        color: #999;
+        cursor: not-allowed;
+        opacity: 0.7;
+
+        &:hover {
+          background: #6a6a6c;
+          transform: none;
         }
       }
     }
@@ -989,6 +1052,17 @@ watch(selectedDate, (newDate) => {
 }
 
 @media (max-width: 768px) {
+  .checking-spinner {
+    margin: 10px 0;
+    font-size: 0.8rem;
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border-width: 2px;
+    }
+  }
+
   .keyboard-container {
     width: 95%;
 
