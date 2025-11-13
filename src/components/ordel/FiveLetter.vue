@@ -11,6 +11,7 @@
           present: cell.present,
           absent: cell.absent,
           active: rowIndex === currentRow && cellIndex === currentCol,
+          flipping: cell.flipping,
         }"
       >
         {{ cell.letter }}
@@ -24,13 +25,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 
 interface Cell {
   letter: string
   correct: boolean
   present: boolean
   absent: boolean
+  flipping: boolean
 }
 
 const props = defineProps<{
@@ -41,37 +43,44 @@ const props = defineProps<{
     word: string
     result: Array<{ letter: string; correct: boolean; exist: boolean }>
   }>
+  animatingCells?: Array<Array<boolean>>
+  animatingRowData?: Array<
+    Array<{
+      letter: string
+      correct: boolean
+      present: boolean
+      absent: boolean
+    } | null>
+  >
 }>()
 
-const emit = defineEmits<{
-  wordComplete: [word: string]
-}>()
-
-const grid = ref<Cell[][]>(
-  Array(6)
+// Initialize grid
+const initializeGrid = (): Cell[][] => {
+  return Array(6)
     .fill(null)
     .map(() =>
       Array(5)
         .fill(null)
-        .map(() => ({ letter: '', correct: false, present: false, absent: false })),
-    ),
-)
+        .map(() => ({
+          letter: '',
+          correct: false,
+          present: false,
+          absent: false,
+          flipping: false,
+        })),
+    )
+}
 
+const grid = ref<Cell[][]>(initializeGrid())
 const message = ref('')
 const messageType = ref<'success' | 'error' | 'info'>('info')
 
-// Watch for current word changes to update the active row
+// Update grid based on props
 const updateGrid = () => {
-  // Reset all cells first
-  grid.value = Array(6)
-    .fill(null)
-    .map(() =>
-      Array(5)
-        .fill(null)
-        .map(() => ({ letter: '', correct: false, present: false, absent: false })),
-    )
+  // Reset grid
+  grid.value = initializeGrid()
 
-  // Update current row with current word
+  // Update current row with typing
   const currentRowData = grid.value[props.currentRow]
   if (currentRowData) {
     for (let i = 0; i < 5; i++) {
@@ -80,20 +89,42 @@ const updateGrid = () => {
         correct: false,
         present: false,
         absent: false,
+        flipping: props.animatingCells?.[props.currentRow]?.[i] || false,
       }
     }
   }
 
-  // Update submitted rows with their results
+  // Update submitted rows
   props.submittedRows.forEach((submission, rowIndex) => {
     const row = grid.value[rowIndex]
     if (row) {
       submission.result.forEach((letterResult, colIndex) => {
-        row[colIndex] = {
-          letter: letterResult.letter.toUpperCase(),
-          correct: letterResult.correct,
-          present: letterResult.exist && !letterResult.correct,
-          absent: !letterResult.exist,
+        if (row[colIndex]) {
+          row[colIndex] = {
+            letter: letterResult.letter.toUpperCase(),
+            correct: letterResult.correct,
+            present: letterResult.exist && !letterResult.correct,
+            absent: !letterResult.exist,
+            flipping: props.animatingCells?.[rowIndex]?.[colIndex] || false,
+          }
+        }
+      })
+    }
+  })
+
+  // Update animating rows (overrides submitted rows for cells currently animating)
+  props.animatingRowData?.forEach((animatingRow, rowIndex) => {
+    const row = grid.value[rowIndex]
+    if (row && animatingRow) {
+      animatingRow.forEach((animatingCell, colIndex) => {
+        if (animatingCell && row[colIndex]) {
+          row[colIndex] = {
+            letter: animatingCell.letter,
+            correct: animatingCell.correct,
+            present: animatingCell.present,
+            absent: animatingCell.absent,
+            flipping: props.animatingCells?.[rowIndex]?.[colIndex] || false,
+          }
         }
       })
     }
@@ -101,10 +132,22 @@ const updateGrid = () => {
 }
 
 // Watch for prop changes
-watch(() => [props.currentWord, props.currentRow, props.submittedRows], updateGrid, { deep: true })
+watch(
+  () => [
+    props.currentWord,
+    props.currentRow,
+    props.submittedRows,
+    props.animatingCells,
+    props.animatingRowData,
+  ],
+  updateGrid,
+  { deep: true },
+)
+
+// Initialize on mount
+updateGrid()
 
 defineExpose({
-  updateGrid,
   showMessage: (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
     message.value = msg
     messageType.value = type
@@ -170,6 +213,22 @@ defineExpose({
     background: #3a3a3c;
     border-color: #3a3a3c;
     color: white;
+  }
+
+  &.flipping {
+    animation: flip 0.4s cubic-bezier(0.75, 0, 0.25, 1);
+  }
+}
+
+@keyframes flip {
+  0% {
+    transform: rotateY(0);
+  }
+  50% {
+    transform: rotateY(90deg);
+  }
+  100% {
+    transform: rotateY(0);
   }
 }
 

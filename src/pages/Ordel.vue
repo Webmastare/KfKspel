@@ -25,6 +25,8 @@
       :current-row="currentRow"
       :current-col="currentCol"
       :submitted-rows="submittedRows"
+      :animating-cells="animatingCells"
+      :animating-row-data="animatingRowData"
     />
 
     <!-- Checking word spinner -->
@@ -184,9 +186,33 @@ const monthGroups = ref<MonthGroup[]>([])
 const selectedMonth = ref<string>('')
 const allGuesses = ref<DateGuesses>({})
 const checkingWord = ref(false)
+const animatingCells = ref<Array<Array<boolean>>>(
+  Array(6)
+    .fill(null)
+    .map(() => Array(5).fill(false)),
+)
+const animatingRowData = ref<
+  Array<
+    Array<{
+      letter: string
+      correct: boolean
+      present: boolean
+      absent: boolean
+    } | null>
+  >
+>(
+  Array(6)
+    .fill(null)
+    .map(() => Array(5).fill(null)),
+)
 
 const VALID_KEYS = 'qwertyuiopåasdfghjklöäzxcvbnm'
 const STORAGE_KEY_GUESSES = 'ordel-date-guesses'
+
+// Animation constants
+const FLIP_DURATION = 400 // Total flip animation duration in ms
+const FLIP_DELAY = 20 // Delay between each letter flip
+const FLIP_MIDPOINT = FLIP_DURATION / 2 // When to change the letter state
 
 // Word request feature
 const showWordRequestForm = ref(false)
@@ -448,6 +474,81 @@ function resetGame() {
   gameWon.value = false
   gameLost.value = false
   checkingWord.value = false
+  // Reset animation state
+  animatingCells.value = Array(6)
+    .fill(null)
+    .map(() => Array(5).fill(false))
+  animatingRowData.value = Array(6)
+    .fill(null)
+    .map(() => Array(5).fill(null))
+}
+
+/** Animate row reveal with letter flipping */
+async function animateRowReveal(
+  rowIndex: number,
+  results: Array<{ letter: string; correct: boolean; exist: boolean }>,
+): Promise<void> {
+  // Initialize the animating row data with just letters, no colors
+  const animatingRow = animatingRowData.value[rowIndex]
+  if (animatingRow) {
+    results.forEach((letterResult, colIndex) => {
+      animatingRow[colIndex] = {
+        letter: letterResult.letter.toUpperCase(),
+        correct: false,
+        present: false,
+        absent: false,
+      }
+    })
+  }
+
+  // Animate each letter one by one
+  for (let i = 0; i < results.length; i++) {
+    const letterResult = results[i]
+
+    if (!letterResult) continue
+
+    // Start flip animation for this cell
+    const cellRow = animatingCells.value[rowIndex]
+    if (cellRow) {
+      cellRow[i] = true
+    }
+
+    // Wait for half the animation (when the letter is "face down")
+    setTimeout(() => {
+      // Update the letter state at the midpoint of the flip
+      if (animatingRow && animatingRow[i]) {
+        animatingRow[i]!.correct = letterResult.correct
+        animatingRow[i]!.present = letterResult.exist && !letterResult.correct
+        animatingRow[i]!.absent = !letterResult.exist
+      }
+    }, FLIP_MIDPOINT)
+
+    // Wait for the entire animation to complete
+    await new Promise((resolve) => setTimeout(resolve, FLIP_DURATION))
+
+    // Stop flipping animation for this cell
+    if (cellRow) {
+      cellRow[i] = false
+    }
+
+    // Wait before starting next letter animation
+    if (i < results.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, FLIP_DELAY))
+    }
+  }
+
+  // After all animations complete, add to submitted rows
+  submittedRows.value.push({
+    word: currentWord.value,
+    result: results,
+  })
+
+  // Clear the animating row data
+  if (animatingRow) {
+    for (let i = 0; i < 5; i++) {
+      animatingRow[i] = null
+    }
+  }
 }
 
 /** Retry a completed date */
@@ -534,13 +635,10 @@ async function handleEnter() {
       throw error
     }
 
-    // Add to submitted rows
-    submittedRows.value.push({
-      word: currentWord.value,
-      result: data.result,
-    })
+    // Animate the row reveal with letter flipping
+    await animateRowReveal(currentRow.value, data.result)
 
-    // Update keyboard states
+    // Update keyboard states after animation
     updateKeyStatesFromResult(data.result)
 
     // Check if won
@@ -551,13 +649,13 @@ async function handleEnter() {
       saveGuessesForDate(selectedDate.value, submittedRows.value, true, true)
       setTimeout(() => {
         gameGrid.value?.showMessage('Great Success!', 'success')
-      }, 500)
+      }, 300)
     } else if (currentRow.value >= 5) {
       gameLost.value = true
       saveGuessesForDate(selectedDate.value, submittedRows.value, true, false)
       setTimeout(() => {
         gameGrid.value?.showMessage('Typiskt det var fel :(', 'error')
-      }, 500)
+      }, 300)
     } else {
       // Save progress even if not complete
       saveGuessesForDate(selectedDate.value, submittedRows.value, false, false)
@@ -712,7 +810,6 @@ watch(selectedDate, (newDate) => {
     height: 20px;
     border: 3px solid var(--theme-bg-tertiary);
     border-top: 3px solid var(--theme-button-primary-bg);
-    border-bottom: 3px solid var(--theme-button-primary-bg);
     border-radius: 50%;
     animation: spin 1s linear infinite;
   }
