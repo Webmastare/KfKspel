@@ -8,10 +8,10 @@ import { createApp } from "../_shared/app.ts";
 import { Context } from "jsr:@hono/hono";
 
 // Import word lists for different lengths
-import fourLetterWords from "./four-letter.json" with { type: "json" };
-import fiveLetterWords from "./five-letter.json" with { type: "json" };
-import sixLetterWords from "./six-letter.json" with { type: "json" };
-import sevenLetterWords from "./seven-letter.json" with { type: "json" };
+import fourLetterWords from "./4-letters.json" with { type: "json" };
+import fiveLetterWords from "./5-letters.json" with { type: "json" };
+import sixLetterWords from "./6-letters.json" with { type: "json" };
+import sevenLetterWords from "./7-letters.json" with { type: "json" };
 
 const WORD_LISTS = {
   4: fourLetterWords.words,
