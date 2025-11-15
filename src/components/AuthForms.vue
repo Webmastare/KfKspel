@@ -8,6 +8,12 @@
       <i class="bx bxs-envelope"></i>
     </div>
 
+    <!-- Email info for signup -->
+    <p v-if="mode === 'signup'" class="email-info">
+      E-posten används endast för inloggning och kan vara påhittad, men krävs för att kunna logga
+      in.
+    </p>
+
     <div class="input-box">
       <input type="password" v-model="password" placeholder="Lösenord" required />
       <i class="bx bx-lock"></i>
@@ -241,6 +247,17 @@ button {
 
 .error-message {
   @extend .error-message;
+}
+
+.email-info {
+  font-size: 0.85rem;
+  color: var(--theme-text-secondary);
+  text-align: center;
+  margin: -1rem 0 1.5rem 0;
+  line-height: 1.4;
+  font-weight: 400;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  padding: 0 1rem;
 }
 
 @media (max-width: 480px) {
