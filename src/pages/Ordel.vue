@@ -2,16 +2,29 @@
   <div id="app-container">
     <h1 class="game-header">Ordel</h1>
 
+    <!-- Mode switcher -->
+    <div class="mode-switcher">
+      <button
+        v-for="mode in modes"
+        :key="mode.value"
+        :class="['mode-btn', { active: selectedMode === mode.value }]"
+        @click="selectMode(mode.value)"
+      >
+        {{ mode.label }}
+      </button>
+    </div>
+
     <button @click="showWordRequestForm = !showWordRequestForm" class="open-request-word-btn">
       Saknar du ord i listan?
     </button>
     <div v-if="showWordRequestForm" class="request-word-container">
+      <p>Tänk på att endast grundformen (lemma) används.</p>
       <label for="request-word-input">Önska ett ord:</label>
       <input
         id="request-word-input"
         type="text"
-        maxlength="5"
-        placeholder="Skriv ditt ord här"
+        :maxlength="selectedMode"
+        :placeholder="`Skriv ditt ${selectedMode}-bokstavsord här`"
         v-model="requestedWord"
       />
       <p>{{ requestMessage }}</p>
@@ -19,7 +32,8 @@
       <p>Det kan ta ett tag innan det läggs till och eventuellt kommer med som "dagens-ord"</p>
     </div>
 
-    <FiveLetter
+    <component
+      :is="currentGameComponent"
       ref="gameGrid"
       :current-word="currentWord"
       :current-row="currentRow"
@@ -139,8 +153,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch, nextTick } from 'vue'
+import { onMounted, ref, watch, nextTick, computed } from 'vue'
 import FiveLetter from '@/components/ordel/FiveLetter.vue'
+import FourLetter from '@/components/ordel/FourLetter.vue'
+import SixLetter from '@/components/ordel/SixLetter.vue'
+import SevenLetter from '@/components/ordel/SevenLetter.vue'
 import { supabase } from '@/utils/supabase'
 import { useAllowedWords, isAllowed } from '@/composables/ordel/useAllowedWords'
 
@@ -170,6 +187,31 @@ interface MonthGroup {
   key: string
 }
 
+// Mode management
+type GameMode = 4 | 5 | 6 | 7
+const selectedMode = ref<GameMode>(5)
+const modes = [
+  { value: 4 as GameMode, label: '4 bokstäver' },
+  { value: 5 as GameMode, label: '5 bokstäver' },
+  { value: 6 as GameMode, label: '6 bokstäver' },
+  { value: 7 as GameMode, label: '7 bokstäver' },
+]
+
+const currentGameComponent = computed(() => {
+  switch (selectedMode.value) {
+    case 4:
+      return FourLetter
+    case 5:
+      return FiveLetter
+    case 6:
+      return SixLetter
+    case 7:
+      return SevenLetter
+    default:
+      return FiveLetter
+  }
+})
+
 const gameGrid = ref<InstanceType<typeof FiveLetter> | null>(null)
 const currentWord = ref('')
 const currentRow = ref(0)
@@ -189,7 +231,7 @@ const checkingWord = ref(false)
 const animatingCells = ref<Array<Array<boolean>>>(
   Array(6)
     .fill(null)
-    .map(() => Array(5).fill(false)),
+    .map(() => Array(selectedMode.value).fill(false)),
 )
 const animatingRowData = ref<
   Array<
@@ -203,11 +245,11 @@ const animatingRowData = ref<
 >(
   Array(6)
     .fill(null)
-    .map(() => Array(5).fill(null)),
+    .map(() => Array(selectedMode.value).fill(null)),
 )
 
 const VALID_KEYS = 'qwertyuiopåasdfghjklöäzxcvbnm'
-const STORAGE_KEY_GUESSES = 'ordel-date-guesses'
+const getStorageKey = () => `ordel-date-guesses-${selectedMode.value}letter`
 
 // Animation constants
 const FLIP_DURATION = 400 // Total flip animation duration in ms
@@ -262,6 +304,37 @@ async function submitWordRequest() {
 }
 
 // Helpers
+async function selectMode(mode: GameMode) {
+  // Save current game state if in progress
+  if (currentRow.value > 0 && !gameWon.value && !gameLost.value) {
+    saveGuessesForDate(selectedDate.value, submittedRows.value, false, false)
+  }
+
+  selectedMode.value = mode
+
+  // Reset animation arrays with new word length
+  animatingCells.value = Array(6)
+    .fill(null)
+    .map(() => Array(mode).fill(false))
+  animatingRowData.value = Array(6)
+    .fill(null)
+    .map(() => Array(mode).fill(null))
+
+  // Reset game state
+  resetGame()
+
+  // Refetch available dates for the new mode
+  await fetchAvailableDates()
+
+  // Load guesses for new mode
+  loadAllGuesses()
+
+  // Load game for selected date if available
+  if (selectedDate.value) {
+    loadGameForDate(selectedDate.value)
+  }
+}
+
 function parseDateStr(date: string) {
   return new Date(date + 'T00:00:00')
 }
@@ -304,20 +377,31 @@ async function fetchAvailableDates() {
     })
 
     if (error) {
-      throw error
+      throw new Error(`Error fetching available dates: ${error.message}`)
     }
 
-    // Ensure dates are sorted ascending for consistent behavior
-    availableDates.value = [...data.dates].sort()
+    if (!data || !data.dates) {
+      throw new Error('Invalid response format')
+    }
+
+    // Filter dates that have words for the current mode
+    const filteredDates = data.dates
+      .filter((dateInfo: any) => dateInfo.available[selectedMode.value])
+      .map((dateInfo: any) => dateInfo.date)
+
+    availableDates.value = filteredDates
     groupDatesByMonth()
 
-    // Select today's date by default (last date in the array)
-    if (availableDates.value.length > 0) {
-      const lastDate = availableDates.value[availableDates.value.length - 1]
-      if (lastDate) {
-        selectedDate.value = lastDate
-        selectedMonth.value = monthKeyFromDate(lastDate)
-      }
+    // Select today's date by default if available
+    const today = new Date().toISOString().split('T')[0]
+    if (today && filteredDates.includes(today)) {
+      selectedDate.value = today
+      selectedMonth.value = monthKeyFromDate(today)
+    } else if (filteredDates.length > 0) {
+      // Select most recent date if today isn't available
+      const lastDate = filteredDates[filteredDates.length - 1]
+      selectedDate.value = lastDate
+      selectedMonth.value = monthKeyFromDate(lastDate)
     }
   } catch (error) {
     console.error('Error fetching available dates:', error)
@@ -353,7 +437,7 @@ function groupDatesByMonth() {
 
 /** Load completed dates and guesses from localStorage */
 function loadAllGuesses() {
-  const stored = localStorage.getItem(STORAGE_KEY_GUESSES)
+  const stored = localStorage.getItem(getStorageKey())
   if (stored) {
     try {
       allGuesses.value = JSON.parse(stored)
@@ -386,7 +470,7 @@ function saveGuessesForDate(
       won,
     }
 
-    localStorage.setItem(STORAGE_KEY_GUESSES, JSON.stringify(allGuesses.value))
+    localStorage.setItem(getStorageKey(), JSON.stringify(allGuesses.value))
   } catch (error) {
     console.error('Error saving guesses:', error)
   }
@@ -396,7 +480,7 @@ function saveGuessesForDate(
 function removeGuessesForDate(date: string) {
   try {
     delete allGuesses.value[date]
-    localStorage.setItem(STORAGE_KEY_GUESSES, JSON.stringify(allGuesses.value))
+    localStorage.setItem(getStorageKey(), JSON.stringify(allGuesses.value))
   } catch (error) {
     console.error('Error removing guesses:', error)
   }
@@ -477,10 +561,10 @@ function resetGame() {
   // Reset animation state
   animatingCells.value = Array(6)
     .fill(null)
-    .map(() => Array(5).fill(false))
+    .map(() => Array(selectedMode.value).fill(false))
   animatingRowData.value = Array(6)
     .fill(null)
-    .map(() => Array(5).fill(null))
+    .map(() => Array(selectedMode.value).fill(null))
 }
 
 /** Animate row reveal with letter flipping */
@@ -582,7 +666,7 @@ function handleKeyPress(key: string) {
 
   const upperKey = key.toUpperCase()
 
-  if (currentCol.value < 5) {
+  if (currentCol.value < selectedMode.value) {
     currentWord.value += upperKey
     currentCol.value++
   }
@@ -602,8 +686,8 @@ function handleBackspace() {
 async function handleEnter() {
   if (gameWon.value || gameLost.value || checkingWord.value) return
 
-  if (currentCol.value !== 5) {
-    gameGrid.value?.showMessage('Ordet måste vara 5 bokstäver', 'error')
+  if (currentCol.value !== selectedMode.value) {
+    gameGrid.value?.showMessage(`Ordet måste vara ${selectedMode.value} bokstäver`, 'error')
     return
   }
 
@@ -623,16 +707,23 @@ async function handleEnter() {
   checkingWord.value = true
 
   try {
+    // Make API call to check word with date and length
     const { data, error } = await supabase.functions.invoke(
-      `ordel/check-word/${selectedDate.value}`,
+      `ordel/check-word/${selectedDate.value}/${selectedMode.value}`,
       {
         method: 'POST',
-        body: { word: currentWord.value.toLowerCase() },
+        body: {
+          word: currentWord.value.toLowerCase(),
+        },
       },
     )
 
     if (error) {
-      throw error
+      throw new Error(`Error checking word: ${error.message}`)
+    }
+
+    if (!data || !data.result) {
+      throw new Error('Invalid response format')
     }
 
     // Animate the row reveal with letter flipping
@@ -742,13 +833,56 @@ watch(selectedDate, (newDate) => {
 }
 
 .game-header {
-  margin-bottom: 0px;
+  margin-bottom: 10px;
+}
+
+.mode-switcher {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 8px;
+  background: var(--theme-bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--theme-button-primary-border);
+
+  .mode-btn {
+    @extend .button-base;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+    }
+
+    &.active {
+      background: var(--theme-button-primary-bg);
+      color: var(--theme-button-primary-text);
+      border-color: var(--theme-button-primary-bg);
+      font-weight: 600;
+    }
+  }
 }
 
 .open-request-word-btn {
   @extend .button-base;
   padding: 5px 10px;
   border-radius: 5px;
+}
+
+.debug-info {
+  margin: 10px 0;
+  padding: 8px 12px;
+  background: var(--theme-bg-tertiary);
+  border-radius: 4px;
+  opacity: 0.7;
+
+  small {
+    color: var(--theme-text-secondary);
+    font-size: 0.75rem;
+  }
 }
 
 .request-word-container {
@@ -1149,6 +1283,16 @@ watch(selectedDate, (newDate) => {
 }
 
 @media (max-width: 768px) {
+  .mode-switcher {
+    gap: 4px;
+    padding: 6px;
+
+    .mode-btn {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+    }
+  }
+
   .checking-spinner {
     margin: 10px 0;
     font-size: 0.8rem;
