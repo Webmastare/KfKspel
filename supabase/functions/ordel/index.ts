@@ -108,7 +108,10 @@ app.post("/generate-word", async (c: Context) => {
 
 // Get available dates (only past dates, not future) with word length availability
 app.get("/available-dates", async (c) => {
-  const today = new Date().toISOString().split("T")[0];
+  // Get today's date in Swedish timezone (Europe/Stockholm)
+  const today = new Date(
+    new Date().toLocaleString("sv-SE", { timeZone: "Europe/Stockholm" }),
+  ).toISOString().split("T")[0];
 
   const { data: dates, error } = await supabase
     .from("ordel")
@@ -140,7 +143,8 @@ app.post("/check-word/:date/:length", async (c) => {
   const requestedDate = c.req.param("date");
   const lengthParam = c.req.param("length");
   const { word } = await c.req.json();
-  const today = new Date().toISOString().split("T")[0];
+  const today =
+    new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
   // Prevent accessing future dates
   if (requestedDate > today) {

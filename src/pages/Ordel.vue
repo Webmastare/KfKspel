@@ -7,7 +7,13 @@
       <button
         v-for="mode in modes"
         :key="mode.value"
-        :class="['mode-btn', { active: selectedMode === mode.value }]"
+        :class="[
+          'mode-btn',
+          {
+            active: selectedMode === mode.value,
+            disabled: isAnimating || checkingWord,
+          },
+        ]"
         @click="selectMode(mode.value)"
       >
         {{ mode.label }}
@@ -218,6 +224,7 @@ const currentRow = ref(0)
 const currentCol = ref(0)
 const submittedRows = ref<SubmittedRow[]>([])
 const availableDates = ref<string[]>([])
+const availableDateInfo = ref<any>(null)
 const selectedDate = ref('')
 const keyStates = ref<Map<string, 'correct' | 'present' | 'absent'>>(new Map())
 const gameWon = ref(false)
@@ -228,6 +235,8 @@ const monthGroups = ref<MonthGroup[]>([])
 const selectedMonth = ref<string>('')
 const allGuesses = ref<DateGuesses>({})
 const checkingWord = ref(false)
+const isAnimating = ref(false)
+const currentSubmissionMode = ref<GameMode | null>(null)
 const animatingCells = ref<Array<Array<boolean>>>(
   Array(6)
     .fill(null)
@@ -249,7 +258,10 @@ const animatingRowData = ref<
 )
 
 const VALID_KEYS = 'qwertyuiopåasdfghjklöäzxcvbnm'
-const getStorageKey = () => `ordel-date-guesses-${selectedMode.value}letter`
+const getStorageKey = (mode?: GameMode) => `ordel-date-guesses-${mode || selectedMode.value}letter`
+
+// For compatability with old version check the old key ordel-date-guesses
+const oldStorageKey = 'ordel-date-guesses'
 
 // Animation constants
 const FLIP_DURATION = 400 // Total flip animation duration in ms
@@ -305,9 +317,20 @@ async function submitWordRequest() {
 
 // Helpers
 async function selectMode(mode: GameMode) {
-  // Save current game state if in progress
+  // Prevent mode switching during animations or word checking
+  if (isAnimating.value || checkingWord.value) {
+    return
+  }
+
+  // Abort any ongoing animations when switching modes
+  if (isAnimating.value) {
+    isAnimating.value = false
+    currentSubmissionMode.value = null
+  }
+
+  // Save current game state if in progress (use current mode before switching)
   if (currentRow.value > 0 && !gameWon.value && !gameLost.value) {
-    saveGuessesForDate(selectedDate.value, submittedRows.value, false, false)
+    saveGuessesForDate(selectedDate.value, submittedRows.value, false, false, selectedMode.value)
   }
 
   selectedMode.value = mode
@@ -371,35 +394,38 @@ function updateKeyStatesFromResult(result: LetterResult[]) {
 
 /** Get all available dates from the edge function */
 async function fetchAvailableDates() {
+  const today = new Date().toISOString().split('T')[0]
   try {
-    const { data, error } = await supabase.functions.invoke('ordel/available-dates', {
-      method: 'GET',
-    })
+    // Only fetch dates if not already fetched or today is not in the list
+    if (!availableDates.value.includes(today!)) {
+      const { data, error } = await supabase.functions.invoke('ordel/available-dates', {
+        method: 'GET',
+      })
 
-    if (error) {
-      throw new Error(`Error fetching available dates: ${error.message}`)
+      if (error) {
+        throw new Error(`Error fetching available dates: ${error.message}`)
+      }
+
+      if (!data || !data.dates) {
+        throw new Error('Invalid response format')
+      }
+      availableDateInfo.value = data
     }
-
-    if (!data || !data.dates) {
-      throw new Error('Invalid response format')
-    }
-
     // Filter dates that have words for the current mode
-    const filteredDates = data.dates
+    const filteredDates = availableDateInfo.value.dates
       .filter((dateInfo: any) => dateInfo.available[selectedMode.value])
       .map((dateInfo: any) => dateInfo.date)
 
     availableDates.value = filteredDates
-    groupDatesByMonth()
 
+    groupDatesByMonth()
     // Select today's date by default if available
-    const today = new Date().toISOString().split('T')[0]
-    if (today && filteredDates.includes(today)) {
+    if (today && availableDates.value.includes(today)) {
       selectedDate.value = today
       selectedMonth.value = monthKeyFromDate(today)
-    } else if (filteredDates.length > 0) {
+    } else if (availableDates.value.length > 0) {
       // Select most recent date if today isn't available
-      const lastDate = filteredDates[filteredDates.length - 1]
+      const lastDate = availableDates.value[availableDates.value.length - 1] || ''
       selectedDate.value = lastDate
       selectedMonth.value = monthKeyFromDate(lastDate)
     }
@@ -436,8 +462,8 @@ function groupDatesByMonth() {
 }
 
 /** Load completed dates and guesses from localStorage */
-function loadAllGuesses() {
-  const stored = localStorage.getItem(getStorageKey())
+function loadAllGuesses(mode?: GameMode) {
+  const stored = localStorage.getItem(getStorageKey(mode))
   if (stored) {
     try {
       allGuesses.value = JSON.parse(stored)
@@ -447,6 +473,31 @@ function loadAllGuesses() {
     }
   } else {
     allGuesses.value = {}
+  }
+
+  // Check for old storage key for backwards compatibility and merge with 5-letter data
+  if (selectedMode.value === 5) {
+    const oldStored = localStorage.getItem(oldStorageKey)
+    if (oldStored) {
+      try {
+        const oldGuesses = JSON.parse(oldStored)
+        // Merge old guesses into the new format
+        for (const [date, data] of Object.entries(oldGuesses)) {
+          const guessData = data as { guesses: SubmittedRow[]; completed: boolean; won: boolean }
+          allGuesses.value[date] = {
+            guesses: guessData.guesses,
+            completed: guessData.completed,
+            won: guessData.won,
+          }
+        }
+      } catch (error) {
+        console.error('Error loading old guesses:', error)
+      }
+      // Store merged data back to new key and remove old key
+      localStorage.setItem(getStorageKey(5), JSON.stringify(allGuesses.value))
+      localStorage.removeItem(oldStorageKey)
+      console.log('Successfully merged old guesses into new storage format')
+    }
   }
 }
 
@@ -462,6 +513,7 @@ function saveGuessesForDate(
   guesses: SubmittedRow[],
   completed: boolean,
   won: boolean,
+  mode?: GameMode,
 ) {
   try {
     allGuesses.value[date] = {
@@ -470,17 +522,17 @@ function saveGuessesForDate(
       won,
     }
 
-    localStorage.setItem(getStorageKey(), JSON.stringify(allGuesses.value))
+    localStorage.setItem(getStorageKey(mode), JSON.stringify(allGuesses.value))
   } catch (error) {
     console.error('Error saving guesses:', error)
   }
 }
 
 /** Remove guesses for a specific date (for retry) */
-function removeGuessesForDate(date: string) {
+function removeGuessesForDate(date: string, mode?: GameMode) {
   try {
     delete allGuesses.value[date]
-    localStorage.setItem(getStorageKey(), JSON.stringify(allGuesses.value))
+    localStorage.setItem(getStorageKey(mode), JSON.stringify(allGuesses.value))
   } catch (error) {
     console.error('Error removing guesses:', error)
   }
@@ -519,7 +571,13 @@ function formatDate(date: string): string {
 function selectDate(date: string) {
   // Save current game state if in progress
   if (currentRow.value > 0 && !gameWon.value && !gameLost.value) {
-    saveGuessesForDate(selectedDate.value, submittedRows.value, false, false)
+    saveGuessesForDate(
+      selectedDate.value,
+      submittedRows.value,
+      false,
+      false,
+      currentSubmissionMode.value || selectedMode.value,
+    )
   }
 
   selectedDate.value = date
@@ -558,6 +616,8 @@ function resetGame() {
   gameWon.value = false
   gameLost.value = false
   checkingWord.value = false
+  isAnimating.value = false
+  currentSubmissionMode.value = null
   // Reset animation state
   animatingCells.value = Array(6)
     .fill(null)
@@ -571,7 +631,16 @@ function resetGame() {
 async function animateRowReveal(
   rowIndex: number,
   results: Array<{ letter: string; correct: boolean; exist: boolean }>,
+  submissionMode: GameMode,
 ): Promise<void> {
+  isAnimating.value = true
+
+  // Check if we should abort animation (mode changed)
+  if (currentSubmissionMode.value !== submissionMode) {
+    isAnimating.value = false
+    return
+  }
+
   // Initialize the animating row data with just letters, no colors
   const animatingRow = animatingRowData.value[rowIndex]
   if (animatingRow) {
@@ -587,6 +656,12 @@ async function animateRowReveal(
 
   // Animate each letter one by one
   for (let i = 0; i < results.length; i++) {
+    // Check if animation should be aborted
+    if (!isAnimating.value || currentSubmissionMode.value !== submissionMode) {
+      isAnimating.value = false
+      return
+    }
+
     const letterResult = results[i]
 
     if (!letterResult) continue
@@ -600,7 +675,7 @@ async function animateRowReveal(
     // Wait for half the animation (when the letter is "face down")
     setTimeout(() => {
       // Update the letter state at the midpoint of the flip
-      if (animatingRow && animatingRow[i]) {
+      if (animatingRow && animatingRow[i] && isAnimating.value) {
         animatingRow[i]!.correct = letterResult.correct
         animatingRow[i]!.present = letterResult.exist && !letterResult.correct
         animatingRow[i]!.absent = !letterResult.exist
@@ -609,6 +684,12 @@ async function animateRowReveal(
 
     // Wait for the entire animation to complete
     await new Promise((resolve) => setTimeout(resolve, FLIP_DURATION))
+
+    // Check again if animation should continue
+    if (!isAnimating.value || currentSubmissionMode.value !== submissionMode) {
+      isAnimating.value = false
+      return
+    }
 
     // Stop flipping animation for this cell
     if (cellRow) {
@@ -629,10 +710,12 @@ async function animateRowReveal(
 
   // Clear the animating row data
   if (animatingRow) {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < submissionMode; i++) {
       animatingRow[i] = null
     }
   }
+
+  isAnimating.value = false
 }
 
 /** Retry a completed date */
@@ -648,7 +731,7 @@ function retryDate(date?: string) {
   }
 
   // Remove previous guesses only
-  removeGuessesForDate(targetDate)
+  removeGuessesForDate(targetDate, selectedMode.value)
 
   // If retrying the currently selected date, reset the game
   if (targetDate === selectedDate.value) {
@@ -662,7 +745,14 @@ function retryDate(date?: string) {
 
 /** Handle key press from keyboard or on-screen keyboard */
 function handleKeyPress(key: string) {
-  if (gameWon.value || gameLost.value || showWordRequestForm.value || checkingWord.value) return
+  if (
+    gameWon.value ||
+    gameLost.value ||
+    showWordRequestForm.value ||
+    checkingWord.value ||
+    isAnimating.value
+  )
+    return
 
   const upperKey = key.toUpperCase()
 
@@ -674,7 +764,7 @@ function handleKeyPress(key: string) {
 
 /** Handle backspace */
 function handleBackspace() {
-  if (gameWon.value || gameLost.value || checkingWord.value) return
+  if (gameWon.value || gameLost.value || checkingWord.value || isAnimating.value) return
 
   if (currentCol.value > 0) {
     currentWord.value = currentWord.value.slice(0, -1)
@@ -684,7 +774,7 @@ function handleBackspace() {
 
 /** Handle enter - submit the word */
 async function handleEnter() {
-  if (gameWon.value || gameLost.value || checkingWord.value) return
+  if (gameWon.value || gameLost.value || checkingWord.value || isAnimating.value) return
 
   if (currentCol.value !== selectedMode.value) {
     gameGrid.value?.showMessage(`Ordet måste vara ${selectedMode.value} bokstäver`, 'error')
@@ -702,6 +792,10 @@ async function handleEnter() {
     // If the list failed to load, don't block the guess; server will still validate format
     console.warn('[ordel] Allowed-words check skipped due to load error', e)
   }
+
+  // Capture the current mode at submission time
+  const submissionMode = selectedMode.value
+  currentSubmissionMode.value = submissionMode
 
   // Set checking state to prevent multiple submissions
   checkingWord.value = true
@@ -725,9 +819,9 @@ async function handleEnter() {
     if (!data || !data.result) {
       throw new Error('Invalid response format')
     }
-
+    checkingWord.value = false
     // Animate the row reveal with letter flipping
-    await animateRowReveal(currentRow.value, data.result)
+    await animateRowReveal(currentRow.value, data.result, submissionMode)
 
     // Update keyboard states after animation
     updateKeyStatesFromResult(data.result)
@@ -737,19 +831,19 @@ async function handleEnter() {
 
     if (won) {
       gameWon.value = true
-      saveGuessesForDate(selectedDate.value, submittedRows.value, true, true)
+      saveGuessesForDate(selectedDate.value, submittedRows.value, true, true, submissionMode)
       setTimeout(() => {
         gameGrid.value?.showMessage('Great Success!', 'success')
       }, 300)
     } else if (currentRow.value >= 5) {
       gameLost.value = true
-      saveGuessesForDate(selectedDate.value, submittedRows.value, true, false)
+      saveGuessesForDate(selectedDate.value, submittedRows.value, true, false, submissionMode)
       setTimeout(() => {
         gameGrid.value?.showMessage('Typiskt det var fel :(', 'error')
       }, 300)
     } else {
       // Save progress even if not complete
-      saveGuessesForDate(selectedDate.value, submittedRows.value, false, false)
+      saveGuessesForDate(selectedDate.value, submittedRows.value, false, false, submissionMode)
     }
 
     // Move to next row
@@ -762,21 +856,34 @@ async function handleEnter() {
   } finally {
     // Always reset checking state when the request completes
     checkingWord.value = false
+    // Clear submission mode after everything is done
+    currentSubmissionMode.value = null
   }
+}
+
+function handleSpace() {
+  // Clear row
+  currentWord.value = ''
+  currentCol.value = 0
 }
 
 /** Handle physical keyboard input */
 function handleKeydown(event: KeyboardEvent) {
-  if (gameWon.value || gameLost.value || checkingWord.value) return
+  if (gameWon.value || gameLost.value || checkingWord.value || isAnimating.value) return
 
   const key = event.key
-
   if (VALID_KEYS.includes(key)) {
     handleKeyPress(key)
   } else if (key === 'Backspace') {
     handleBackspace()
   } else if (key === 'Enter') {
     handleEnter()
+  } else if (event.code === 'Space') {
+    // Prevent scrolling when space is pressed
+    event.preventDefault()
+    handleSpace()
+  } else if (key === 'Escape' && showWordRequestForm.value) {
+    showWordRequestForm.value = false
   }
 }
 
@@ -862,6 +969,12 @@ watch(selectedDate, (newDate) => {
       color: var(--theme-button-primary-text);
       border-color: var(--theme-button-primary-bg);
       font-weight: 600;
+    }
+
+    &.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      pointer-events: none;
     }
   }
 }

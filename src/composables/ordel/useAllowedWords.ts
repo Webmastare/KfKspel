@@ -1,6 +1,3 @@
-// Lightweight client-side loader and checker for allowed words
-// Expects a UTF-8 text file with one lowercase word per line at `/ordel/allowed-words.txt` in public/
-
 let wordsSet: Set<string> | null = null;
 let loadPromise: Promise<void> | null = null;
 
@@ -25,12 +22,12 @@ async function loadWords(): Promise<void> {
 
                 // Support both newline-delimited and loosely formatted CSV with quotes/commas
                 const candidates = text.words;
-                console.log("Candidates:", candidates);
+                //console.log("Candidates:", candidates);
 
                 const set = new Set<string>();
                 for (const raw of candidates) {
                     const w = normalize(raw);
-                    if (w.length === 5) set.add(w);
+                    set.add(w);
                 }
                 wordsSet = set;
                 console.log("Loaded", wordsSet, "allowed words");
@@ -51,7 +48,6 @@ export async function isAllowed(word: string): Promise<boolean> {
     if (!wordsSet) return true;
     const normalized = normalize(word);
     console.log("Checking word:", normalized);
-    console.log("Words set:", wordsSet);
     return wordsSet.has(normalized);
 }
 
