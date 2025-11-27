@@ -388,7 +388,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useBandvagnStore } from '@/stores/bandvagnState'
 import PlayerCreation from '@/components/kfkbandvagn/PlayerCreation.vue'
@@ -774,6 +774,11 @@ watch(
         } catch (error) {
           console.error('Failed to initialize game store after auth change:', error)
         }
+      } else {
+        // User is authenticated and store is initialized, but ensure polling is active
+        // This handles cases where user navigates back to the page
+        console.log('User authenticated, ensuring polling is active')
+        gameStore.startRealtime()
       }
     } else {
       console.log('User logged out, resetting game store')
@@ -795,15 +800,23 @@ onMounted(async () => {
     console.log('User authenticated, initializing game store')
     try {
       await gameStore.initialize()
+      gameStore.startRealtime()
     } catch (error) {
       console.error('Failed to initialize game store on mount:', error)
     }
+  } else {
+    // If not authenticated, make sure polling is stopped
+    gameStore.stopRealtime()
   }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', checkMobile)
   if (timeTickerId) clearInterval(timeTickerId)
+
+  // Stop polling/realtime updates when leaving the page
+  gameStore.stopRealtime()
+  console.log('Stopped bandvagn polling - component unmounted')
 })
 </script>
 
