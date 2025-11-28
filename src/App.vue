@@ -1,7 +1,7 @@
 <template>
   <Navbar class="navbar" @updateAuthMode="authMode = $event" />
   <Auth class="auth-form" v-show="authMode !== ''" :mode="authMode" @close="authMode = ''" />
-  <div id="app">
+  <div id="inner-app">
     <RouterView />
   </div>
 </template>
@@ -54,9 +54,9 @@ body {
   background-color: black;
 }
 
-#app {
+#inner-app {
   width: 100%;
-  height: calc(100vh - 1.5rem);
-  padding-top: 1.5rem; /* Push content down by navbar height */
+  height: calc(100vh - 3rem);
+  padding-top: 3rem; /* Push content down by navbar height */
 }
 </style>

@@ -46,4 +46,14 @@ export default [
         name: "Ordel",
         component: () => import("@/pages/Ordel.vue"),
     },
+    {
+        path: "/plinko",
+        name: "Plinko",
+        component: () => import("@/pages/minigames/Plinko.vue"),
+    },
+    {
+        path: "/tower-drop",
+        name: "TowerDrop",
+        component: () => import("@/pages/minigames/TowerDrop.vue"),
+    },
 ];
