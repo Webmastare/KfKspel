@@ -46,4 +46,9 @@ export default [
         name: "Ordel",
         component: () => import("@/pages/Ordel.vue"),
     },
+    {
+        path: "/ordel-embed",
+        name: "OrdelEmbed",
+        component: () => import("@/pages/OrdelEmbed.vue"),
+    },
 ];
