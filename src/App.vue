@@ -1,5 +1,9 @@
 <template>
-  <Navbar class="navbar" @updateAuthMode="authMode = $event" />
+  <Navbar
+    v-if="!hideNavbarRoutes.includes($route.name)"
+    class="navbar"
+    @updateAuthMode="authMode = $event"
+  />
   <Auth class="auth-form" v-show="authMode !== ''" :mode="authMode" @close="authMode = ''" />
   <div id="inner-app">
     <RouterView />
@@ -14,6 +18,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 
 const authMode = ref('') // 'login', 'signup', or ''
+
+// Define routes where the navbar should be hidden
+const hideNavbarRoutes = ['OrdelEmbed']
 
 // Initialize stores
 const authStore = useAuthStore()
@@ -58,5 +65,10 @@ body {
   width: 100%;
   height: calc(100vh - 3rem);
   padding-top: 3rem; /* Push content down by navbar height */
+}
+
+#inner-app.no-navbar {
+  height: 100vh;
+  padding-top: 0; /* Remove navbar padding when navbar is hidden */
 }
 </style>

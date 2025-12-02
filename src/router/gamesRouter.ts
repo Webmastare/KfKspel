@@ -56,4 +56,9 @@ export default [
         name: "TowerDrop",
         component: () => import("@/pages/minigames/TowerDrop.vue"),
     },
+    {
+        path: "/ordel-embed",
+        name: "OrdelEmbed",
+        component: () => import("@/pages/OrdelEmbed.vue"),
+    },
 ];
