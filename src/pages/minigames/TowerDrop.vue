@@ -205,10 +205,13 @@ const draw = () => {
 
     context.beginPath()
     const vertices = body.vertices
-    if (vertices && vertices.length > 0) {
+    if (vertices && vertices.length > 0 && vertices[0]) {
       context.moveTo(vertices[0].x, vertices[0].y)
       for (let j = 1; j < vertices.length; j += 1) {
-        context.lineTo(vertices[j].x, vertices[j].y)
+        const vertex = vertices[j]
+        if (vertex) {
+          context.lineTo(vertex.x, vertex.y)
+        }
       }
       context.closePath()
       context.fill()
