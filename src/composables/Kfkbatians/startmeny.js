@@ -7,8 +7,8 @@ const rect = duken.getBoundingClientRect();
 const bredd = duken.width;
 const höjd = duken.height;
 
-import { bakgrund, StartaSpelet, SetDifficulty, spawnare, card, behållare, winanimation, Clearing, IngenWinAnimation } from "./newtry.js";
-import { knappar } from "./funktionerna/andrabrum.js";
+import { bakgrund, StartaSpelet, SetDifficulty, spawnare, card, behållare, winanimation, Clearing, IngenWinAnimation } from "./main.js";
+import { knappar } from "./andrabrum.js";
 import { Vector, fysik, Random } from "./brumbrum.js";
 
 export class startmeny

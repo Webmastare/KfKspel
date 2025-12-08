@@ -9,9 +9,9 @@
 
 //provar att lägga till en extra variabel till metoden
 
-import { GameObject, krrrr, Vector } from "../brumbrum.js";
+import { GameObject, krrrr, Vector } from "./brumbrum.js";
 
-import { spawnare, behållare, spawn, card, difficulty } from "../newtry.js";
+import { spawnare, behållare, spawn, card, difficulty } from "./main.js";
 import { cardAction, längdfix } from "./action.js";
 
 

@@ -42,6 +42,11 @@ export default [
         component: () => import("@/pages/Simulator.vue"),
     },
     {
+        path: "/kfkbatians",
+        name: "KfkBatians",
+        component: () => import("@/pages/KfkBatians.vue"),
+    },
+    {
         path: "/ordel",
         name: "Ordel",
         component: () => import("@/pages/Ordel.vue"),

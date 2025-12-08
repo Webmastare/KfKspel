@@ -1,5 +1,5 @@
-import { ctx, duken, playing } from "../newtry.js";
-import { mouse } from "../brumbrum.js";
+import { ctx, duken, playing } from "./main.js";
+import { mouse } from "./brumbrum.js";
 
 export class knappar
 {

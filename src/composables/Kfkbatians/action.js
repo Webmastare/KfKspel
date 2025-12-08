@@ -1,6 +1,6 @@
 
-import { krrrr, Vector, GameObject } from "../brumbrum.js";
-import { behållare, spawnare, spawn, card } from "../newtry.js";
+import { krrrr, Vector, GameObject } from "./brumbrum.js";
+import { behållare, spawnare, spawn, card } from "./main.js";
 import { knappar } from "./andrabrum.js";
 import { ånger } from "./regret.js";
 
