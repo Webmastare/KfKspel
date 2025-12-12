@@ -905,9 +905,10 @@ onMounted(async () => {
   useAllowedWords()
 
   // Scroll to today's date after mounting
+  /*
   nextTick(() => {
     if (dateScrollRef.value) scrollToSelectedDate()
-  })
+  })*/
 })
 
 // Clean up event listener
@@ -1420,6 +1421,9 @@ watch(selectedDate, (newDate) => {
     width: calc(100% - 10px);
     margin-left: 5px;
     margin-right: 5px;
+    .keyboard-row {
+      gap: 5px;
+    }
 
     .keyboard-row .key {
       min-width: 30px;
