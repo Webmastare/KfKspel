@@ -141,8 +141,8 @@
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent, reactive, computed, onMounted, onBeforeUnmount, ref } from 'vue'
+<script setup lang="ts">
+import { reactive, computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 
 // --- Type Definitions ---
@@ -198,371 +198,348 @@ const SLOW_TIME_DURATION = 4000 // ms
 const MAX_ARENA_SHRINK = 0.3
 const SHRINK_RATE_PER_SECOND = 0.004
 
-export default defineComponent({
-  name: 'DodgeGame',
-  setup() {
-    const gameContainer = ref<HTMLElement | null>(null)
-    const theme = useThemeStore()
+// --- Setup ---
+const gameContainer = ref<HTMLElement | null>(null)
+const theme = useThemeStore()
 
-    let boxIdCounter = 0
-    let powerUpIdCounter = 0
-    let lastBoxSpawnTime = 0
-    let arenaShrinkFactor = 0
+let boxIdCounter = 0
+let powerUpIdCounter = 0
+let lastBoxSpawnTime = 0
+let arenaShrinkFactor = 0
 
-    const game = reactive<GameState>({
-      running: false,
-      paused: false,
-      score: 0,
-      lastTime: 0,
-      frameId: null,
-      slowTimeActive: false,
-      slowTimeEnd: 0,
-      shieldActive: false,
-      shieldEnd: 0,
-      boxesDodged: 0,
-      powerUpsCollected: 0,
-    })
+const game = reactive<GameState>({
+  running: false,
+  paused: false,
+  score: 0,
+  lastTime: 0,
+  frameId: null,
+  slowTimeActive: false,
+  slowTimeEnd: 0,
+  shieldActive: false,
+  shieldEnd: 0,
+  boxesDodged: 0,
+  powerUpsCollected: 0,
+})
 
-    const player = reactive<Player>({
-      id: 0,
-      x: GAME_WIDTH / 2 - PLAYER_SIZE / 2,
-      y: GAME_HEIGHT - PLAYER_SIZE,
-      width: PLAYER_SIZE,
-      height: PLAYER_SIZE,
-      isShielded: false,
-    })
+const player = reactive<Player>({
+  id: 0,
+  x: GAME_WIDTH / 2 - PLAYER_SIZE / 2,
+  y: GAME_HEIGHT - PLAYER_SIZE,
+  width: PLAYER_SIZE,
+  height: PLAYER_SIZE,
+  isShielded: false,
+})
 
-    const boxes = reactive<Box[]>([])
-    const powerUps = reactive<PowerUp[]>([])
+const boxes = reactive<Box[]>([])
+const powerUps = reactive<PowerUp[]>([])
 
-    // Keyboard controls
-    const keys = reactive({
-      left: false,
-      right: false,
-    })
+// Keyboard controls
+const keys = reactive({
+  left: false,
+  right: false,
+})
 
-    const playerStyle = computed(() => ({
-      left: `${player.x}px`,
-      width: `${player.width}px`,
-      height: `${player.height}px`,
-    }))
+// --- Computed Properties ---
+const playerStyle = computed(() => ({
+  left: `${player.x}px`,
+  width: `${player.width}px`,
+  height: `${player.height}px`,
+}))
 
-    const arenaStyle = computed(() => {
-      const margin = (GAME_WIDTH * arenaShrinkFactor) / 2
-      return {
-        margin: `${margin}px`,
-        width: `${GAME_WIDTH - margin * 2}px`,
-        height: `${GAME_HEIGHT - margin * 2}px`,
-      }
-    })
+const arenaStyle = computed(() => {
+  const margin = (GAME_WIDTH * arenaShrinkFactor) / 2
+  return {
+    margin: `${margin}px`,
+    width: `${GAME_WIDTH - margin * 2}px`,
+    height: `${GAME_HEIGHT - margin * 2}px`,
+  }
+})
 
-    const boxStyle = (box: Box) => ({
-      left: `${box.x}px`,
-      top: `${box.y}px`,
-      width: `${box.width}px`,
-      height: `${box.height}px`,
-      transform: `rotate(${box.angle}deg)`,
-    })
+// --- Functions ---
+const boxStyle = (box: Box) => ({
+  left: `${box.x}px`,
+  top: `${box.y}px`,
+  width: `${box.width}px`,
+  height: `${box.height}px`,
+  transform: `rotate(${box.angle}deg)`,
+})
 
-    const powerUpStyle = (powerUp: PowerUp) => ({
-      left: `${powerUp.x}px`,
-      top: `${powerUp.y}px`,
-    })
+const powerUpStyle = (powerUp: PowerUp) => ({
+  left: `${powerUp.x}px`,
+  top: `${powerUp.y}px`,
+})
 
-    const powerUpIcon = (type: PowerUpType): string => {
-      return type === 'shield' ? '🛡️' : '⏳'
-    }
+const powerUpIcon = (type: PowerUpType): string => {
+  switch (type) {
+    case 'shield':
+      return '🛡️'
+    case 'slowTime':
+      return '⏳'
+  }
+}
 
-    // Timer functions for power-ups
-    const getShieldTimeRemaining = () => {
-      if (!game.shieldActive) return 0
-      return Math.max(0, (game.shieldEnd - performance.now()) / 1000).toFixed(1)
-    }
+// Timer functions for power-ups
+const getShieldTimeRemaining = () => {
+  if (!game.shieldActive) return 0
+  return Math.max(0, (game.shieldEnd - performance.now()) / 1000).toFixed(1)
+}
 
-    const getShieldTimePercent = () => {
-      if (!game.shieldActive) return 0
-      const remaining = game.shieldEnd - performance.now()
-      return Math.max(0, (remaining / SHIELD_DURATION) * 100)
-    }
+const getShieldTimePercent = () => {
+  if (!game.shieldActive) return 0
+  const remaining = game.shieldEnd - performance.now()
+  return Math.max(0, (remaining / SHIELD_DURATION) * 100)
+}
 
-    const getSlowTimeRemaining = () => {
-      if (!game.slowTimeActive) return 0
-      return Math.max(0, (game.slowTimeEnd - performance.now()) / 1000).toFixed(1)
-    }
+const getSlowTimeRemaining = () => {
+  if (!game.slowTimeActive) return 0
+  return Math.max(0, (game.slowTimeEnd - performance.now()) / 1000).toFixed(1)
+}
 
-    const getSlowTimePercent = () => {
-      if (!game.slowTimeActive) return 0
-      const remaining = game.slowTimeEnd - performance.now()
-      return Math.max(0, (remaining / SLOW_TIME_DURATION) * 100)
-    }
+const getSlowTimePercent = () => {
+  if (!game.slowTimeActive) return 0
+  const remaining = game.slowTimeEnd - performance.now()
+  return Math.max(0, (remaining / SLOW_TIME_DURATION) * 100)
+}
 
-    const resetGame = () => {
-      boxes.length = 0
-      powerUps.length = 0
-      player.x = GAME_WIDTH / 2 - PLAYER_SIZE / 2
-      player.isShielded = false
-      game.score = 0
-      game.slowTimeActive = false
-      game.shieldActive = false
-      game.boxesDodged = 0
-      game.powerUpsCollected = 0
-      arenaShrinkFactor = 0
-      lastBoxSpawnTime = 0
-    }
+const resetGame = () => {
+  boxes.length = 0
+  powerUps.length = 0
+  player.x = GAME_WIDTH / 2 - PLAYER_SIZE / 2
+  player.isShielded = false
+  game.score = 0
+  game.slowTimeActive = false
+  game.shieldActive = false
+  game.boxesDodged = 0
+  game.powerUpsCollected = 0
+  arenaShrinkFactor = 0
+  lastBoxSpawnTime = 0
+}
 
-    const spawnBox = () => {
-      const size = BOX_MIN_SIZE + Math.random() * (BOX_MAX_SIZE - BOX_MIN_SIZE)
-      const speed = 1 + Math.random() * 2 + game.score / 50
-      boxes.push({
-        id: boxIdCounter++,
-        x: Math.random() * (GAME_WIDTH - size),
-        y: -size,
-        width: size,
-        height: size,
-        speed: speed,
-        angle: Math.random() * 90 - 45,
-      })
-    }
+const spawnBox = () => {
+  const size = BOX_MIN_SIZE + Math.random() * (BOX_MAX_SIZE - BOX_MIN_SIZE)
+  const speed = 1 + Math.random() * 2 + game.score / 50
+  boxes.push({
+    id: boxIdCounter++,
+    x: Math.random() * (GAME_WIDTH - size),
+    y: -size,
+    width: size,
+    height: size,
+    speed: speed,
+    angle: Math.random() * 90 - 45,
+  })
+}
 
-    const spawnPowerUp = () => {
-      const type: PowerUpType = Math.random() < 0.5 ? 'shield' : 'slowTime'
-      powerUps.push({
-        id: powerUpIdCounter++,
-        x: Math.random() * (GAME_WIDTH - 20),
-        y: -20,
-        width: 20,
-        height: 20,
-        type: type,
-        dy: 1,
-      })
-    }
+const spawnPowerUp = () => {
+  const type: PowerUpType = Math.random() < 0.5 ? 'shield' : 'slowTime'
+  powerUps.push({
+    id: powerUpIdCounter++,
+    x: Math.random() * (GAME_WIDTH - 20),
+    y: -20,
+    width: 20,
+    height: 20,
+    type: type,
+    dy: 1,
+  })
+}
 
-    const applyPowerUp = (powerUp: PowerUp) => {
-      const now = performance.now()
-      game.powerUpsCollected++
-      if (powerUp.type === 'shield') {
-        game.shieldActive = true
-        player.isShielded = true
-        game.shieldEnd = now + SHIELD_DURATION
-      } else {
-        game.slowTimeActive = true
-        game.slowTimeEnd = now + SLOW_TIME_DURATION
-      }
-    }
+const applyPowerUp = (powerUp: PowerUp) => {
+  const now = performance.now()
+  game.powerUpsCollected++
+  if (powerUp.type === 'shield') {
+    game.shieldActive = true
+    player.isShielded = true
+    game.shieldEnd = now + SHIELD_DURATION
+  } else {
+    game.slowTimeActive = true
+    game.slowTimeEnd = now + SLOW_TIME_DURATION
+  }
+}
 
-    const checkCollision = (obj1: GameObject, obj2: GameObject): boolean => {
-      return (
-        obj1.x < obj2.x + obj2.width &&
-        obj1.x + obj1.width > obj2.x &&
-        obj1.y < obj2.y + obj2.height &&
-        obj1.y + obj1.height > obj2.y
-      )
-    }
+const checkCollision = (obj1: GameObject, obj2: GameObject): boolean => {
+  return (
+    obj1.x < obj2.x + obj2.width &&
+    obj1.x + obj1.width > obj2.x &&
+    obj1.y < obj2.y + obj2.height &&
+    obj1.y + obj1.height > obj2.y
+  )
+}
 
-    const endGame = () => {
-      if (game.frameId !== null) {
-        cancelAnimationFrame(game.frameId)
-        game.frameId = null
-      }
-      game.running = false
-    }
+const endGame = () => {
+  if (game.frameId !== null) {
+    cancelAnimationFrame(game.frameId)
+    game.frameId = null
+  }
+  game.running = false
+}
 
-    const update = (time: number) => {
-      if (!game.running) {
-        if (game.frameId) cancelAnimationFrame(game.frameId)
-        game.frameId = null
-        return
-      }
+const update = (time: number) => {
+  if (!game.running) {
+    if (game.frameId) cancelAnimationFrame(game.frameId)
+    game.frameId = null
+    return
+  }
 
-      if (game.paused) {
-        game.lastTime = time
-        game.frameId = requestAnimationFrame(update)
-        return
-      }
+  if (game.paused) {
+    game.lastTime = time
+    game.frameId = requestAnimationFrame(update)
+    return
+  }
 
-      const deltaTime = time - game.lastTime
-      game.lastTime = time
-      const timeFactor = deltaTime / 16.67
+  const deltaTime = time - game.lastTime
+  game.lastTime = time
+  const timeFactor = deltaTime / 16.67
 
-      game.score += deltaTime / 1000
-      if (game.shieldActive && time > game.shieldEnd) {
+  game.score += deltaTime / 1000
+  if (game.shieldActive && time > game.shieldEnd) {
+    game.shieldActive = false
+    player.isShielded = false
+  }
+  if (game.slowTimeActive && time > game.slowTimeEnd) {
+    game.slowTimeActive = false
+  }
+
+  const shrinkDelta = SHRINK_RATE_PER_SECOND * (deltaTime / 1000)
+  arenaShrinkFactor = Math.min(MAX_ARENA_SHRINK, arenaShrinkFactor + shrinkDelta)
+  const currentMargin = (GAME_WIDTH * arenaShrinkFactor) / 2
+
+  const spawnInterval = BOX_SPAWN_INTERVAL / (1 + game.score / 30)
+  if (time - lastBoxSpawnTime > spawnInterval) {
+    spawnBox()
+    lastBoxSpawnTime = time
+  }
+  if (Math.random() < POWERUP_SPAWN_CHANCE) {
+    spawnPowerUp()
+  }
+
+  const speedModifier = game.slowTimeActive ? 0.5 : 1
+  for (let i = boxes.length - 1; i >= 0; i--) {
+    const box = boxes[i]
+    if (!box) continue
+    box.y += box.speed * speedModifier * timeFactor
+    box.angle += box.speed * 0.1 * speedModifier * timeFactor
+
+    if (checkCollision(player, box)) {
+      if (player.isShielded) {
         game.shieldActive = false
         player.isShielded = false
+        boxes.splice(i, 1)
+      } else {
+        endGame()
+        return
       }
-      if (game.slowTimeActive && time > game.slowTimeEnd) {
-        game.slowTimeActive = false
-      }
-
-      const shrinkDelta = SHRINK_RATE_PER_SECOND * (deltaTime / 1000)
-      arenaShrinkFactor = Math.min(MAX_ARENA_SHRINK, arenaShrinkFactor + shrinkDelta)
-      const currentMargin = (GAME_WIDTH * arenaShrinkFactor) / 2
-
-      const spawnInterval = BOX_SPAWN_INTERVAL / (1 + game.score / 30)
-      if (time - lastBoxSpawnTime > spawnInterval) {
-        spawnBox()
-        lastBoxSpawnTime = time
-      }
-      if (Math.random() < POWERUP_SPAWN_CHANCE) {
-        spawnPowerUp()
-      }
-
-      const speedModifier = game.slowTimeActive ? 0.5 : 1
-      for (let i = boxes.length - 1; i >= 0; i--) {
-        const box = boxes[i]
-        if (!box) continue
-        box.y += box.speed * speedModifier * timeFactor
-        box.angle += box.speed * 0.1 * speedModifier * timeFactor
-
-        if (checkCollision(player, box)) {
-          if (player.isShielded) {
-            game.shieldActive = false
-            player.isShielded = false
-            boxes.splice(i, 1)
-          } else {
-            endGame()
-            return
-          }
-        } else if (box.y > GAME_HEIGHT) {
-          boxes.splice(i, 1)
-          game.boxesDodged++
-        }
-      }
-
-      for (let i = powerUps.length - 1; i >= 0; i--) {
-        const powerUp = powerUps[i]
-        if (!powerUp) continue
-        powerUp.y += powerUp.dy * timeFactor
-        if (checkCollision(player, powerUp)) {
-          applyPowerUp(powerUp)
-          powerUps.splice(i, 1)
-        } else if (powerUp.y > GAME_HEIGHT) {
-          powerUps.splice(i, 1)
-        }
-      }
-
-      // Handle keyboard movement
-      const moveSpeed = 5 * timeFactor
-      if (keys.left) {
-        player.x -= moveSpeed
-      }
-      if (keys.right) {
-        player.x += moveSpeed
-      }
-
-      player.x = Math.max(
-        currentMargin,
-        Math.min(GAME_WIDTH - player.width - currentMargin, player.x),
-      )
-
-      game.frameId = requestAnimationFrame(update)
+    } else if (box.y > GAME_HEIGHT) {
+      boxes.splice(i, 1)
+      game.boxesDodged++
     }
+  }
 
-    const startGame = () => {
-      if (game.running) return
-      resetGame()
-      game.running = true
-      game.paused = false
-      game.lastTime = performance.now()
-      if (game.frameId === null) {
-        game.frameId = requestAnimationFrame(update)
+  for (let i = powerUps.length - 1; i >= 0; i--) {
+    const powerUp = powerUps[i]
+    if (!powerUp) continue
+    powerUp.y += powerUp.dy * timeFactor
+    if (checkCollision(player, powerUp)) {
+      applyPowerUp(powerUp)
+      powerUps.splice(i, 1)
+    } else if (powerUp.y > GAME_HEIGHT) {
+      powerUps.splice(i, 1)
+    }
+  }
+
+  // Handle keyboard movement
+  const moveSpeed = 5 * timeFactor
+  if (keys.left) {
+    player.x -= moveSpeed
+  }
+  if (keys.right) {
+    player.x += moveSpeed
+  }
+
+  player.x = Math.max(currentMargin, Math.min(GAME_WIDTH - player.width - currentMargin, player.x))
+
+  game.frameId = requestAnimationFrame(update)
+}
+
+const startGame = () => {
+  if (game.running) return
+  resetGame()
+  game.running = true
+  game.paused = false
+  game.lastTime = performance.now()
+  if (game.frameId === null) {
+    game.frameId = requestAnimationFrame(update)
+  }
+}
+
+const handleMouseMove = (event: MouseEvent) => {
+  if (!game.running || !gameContainer.value) return
+  const rect = gameContainer.value.getBoundingClientRect()
+  const mouseX = event.clientX - rect.left
+  player.x = mouseX - player.width / 2
+}
+
+const handleMouseLeave = () => {
+  if (game.running) game.paused = true
+}
+
+const handleMouseEnter = () => {
+  if (game.running) game.paused = false
+}
+
+const handleVisibilityChange = () => {
+  if (document.hidden && game.running) {
+    game.paused = true
+  }
+}
+
+const handleKeyDown = (event: KeyboardEvent) => {
+  switch (event.key.toLowerCase()) {
+    case 'a':
+    case 'arrowleft':
+      keys.left = true
+      event.preventDefault()
+      break
+    case 'd':
+    case 'arrowright':
+      keys.right = true
+      event.preventDefault()
+      break
+    case 'enter':
+      if (!game.running) {
+        startGame()
       }
-    }
+      event.preventDefault()
+      break
+  }
+}
 
-    const handleMouseMove = (event: MouseEvent) => {
-      if (!game.running || !gameContainer.value) return
-      const rect = gameContainer.value.getBoundingClientRect()
-      const mouseX = event.clientX - rect.left
-      player.x = mouseX - player.width / 2
-    }
+const handleKeyUp = (event: KeyboardEvent) => {
+  switch (event.key.toLowerCase()) {
+    case 'a':
+    case 'arrowleft':
+      keys.left = false
+      event.preventDefault()
+      break
+    case 'd':
+    case 'arrowright':
+      keys.right = false
+      event.preventDefault()
+      break
+  }
+}
 
-    const handleMouseLeave = () => {
-      if (game.running) game.paused = true
-    }
+// --- Lifecycle ---
+onMounted(() => {
+  resetGame()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  document.addEventListener('keydown', handleKeyDown)
+  document.addEventListener('keyup', handleKeyUp)
+})
 
-    const handleMouseEnter = () => {
-      if (game.running) game.paused = false
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.hidden && game.running) {
-        game.paused = true
-      }
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      switch (event.key.toLowerCase()) {
-        case 'a':
-        case 'arrowleft':
-          keys.left = true
-          event.preventDefault()
-          break
-        case 'd':
-        case 'arrowright':
-          keys.right = true
-          event.preventDefault()
-          break
-        case 'enter':
-          if (!game.running) {
-            startGame()
-          }
-          event.preventDefault()
-          break
-      }
-    }
-
-    const handleKeyUp = (event: KeyboardEvent) => {
-      switch (event.key.toLowerCase()) {
-        case 'a':
-        case 'arrowleft':
-          keys.left = false
-          event.preventDefault()
-          break
-        case 'd':
-        case 'arrowright':
-          keys.right = false
-          event.preventDefault()
-          break
-      }
-    }
-
-    onMounted(() => {
-      resetGame()
-      document.addEventListener('visibilitychange', handleVisibilityChange)
-      document.addEventListener('keydown', handleKeyDown)
-      document.addEventListener('keyup', handleKeyUp)
-    })
-
-    onBeforeUnmount(() => {
-      if (game.frameId !== null) cancelAnimationFrame(game.frameId)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      document.removeEventListener('keydown', handleKeyDown)
-      document.removeEventListener('keyup', handleKeyUp)
-    })
-
-    return {
-      GAME_WIDTH,
-      GAME_HEIGHT,
-      gameContainer,
-      game,
-      theme,
-      player,
-      playerStyle,
-      arenaStyle,
-      boxes,
-      boxStyle,
-      powerUps,
-      powerUpStyle,
-      powerUpIcon,
-      getShieldTimeRemaining,
-      getShieldTimePercent,
-      getSlowTimeRemaining,
-      getSlowTimePercent,
-      startGame,
-      handleMouseMove,
-      handleMouseLeave,
-      handleMouseEnter,
-    }
-  },
+onBeforeUnmount(() => {
+  if (game.frameId !== null) cancelAnimationFrame(game.frameId)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  document.removeEventListener('keydown', handleKeyDown)
+  document.removeEventListener('keyup', handleKeyUp)
 })
 </script>
 
