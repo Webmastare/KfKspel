@@ -1417,7 +1417,9 @@ watch(selectedDate, (newDate) => {
   }
 
   .keyboard-container {
-    width: 95%;
+    width: calc(100% - 10px);
+    margin-left: 5px;
+    margin-right: 5px;
 
     .keyboard-row .key {
       min-width: 30px;
