@@ -67,6 +67,11 @@ export default [
         component: () => import("@/pages/minigames/Dodge.vue"),
     },
     {
+        path: "/defense-game",
+        name: "DefenseGame",
+        component: () => import("@/pages/minigames/Defense.vue"),
+    },
+    {
         path: "/ordel-embed",
         name: "OrdelEmbed",
         component: () => import("@/pages/OrdelEmbed.vue"),
