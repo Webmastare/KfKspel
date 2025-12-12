@@ -1207,7 +1207,6 @@ watch(selectedDate, (newDate) => {
     }
 
     .month-item {
-      min-width: 120px;
       padding: 12px 20px;
       background: var(--theme-bg-tertiary);
       border: 2px solid var(--theme-button-primary-border);
@@ -1440,8 +1439,7 @@ watch(selectedDate, (newDate) => {
     }
 
     .month-selector .month-item {
-      min-width: 100px;
-      padding: 10px 15px;
+      padding: 10px 5px;
       font-size: 0.9rem;
     }
 
