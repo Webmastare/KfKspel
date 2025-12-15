@@ -3,7 +3,7 @@
     <!-- Top UI Bar -->
     <div class="top-ui-bar">
       <div class="health-section">
-        <div class="health-label">Health</div>
+        <div class="health-label">Health {{ player.health }} / {{ player.maxHealth }}</div>
         <div class="health-bar">
           <div
             class="health"
@@ -15,6 +15,39 @@
       <div class="score-section">
         <div class="score-display">Score: {{ game.score }}</div>
         <div class="money-display">💰 {{ player.money }}</div>
+      </div>
+
+      <div class="xp-section">
+        <div class="level-display">Level {{ player.level }}</div>
+        <div class="xp-bar-container">
+          <div class="xp-bar">
+            <div
+              class="xp-progress"
+              :style="{ width: (player.xp / player.xpToNextLevel) * 100 + '%' }"
+            ></div>
+          </div>
+          <div class="xp-text">{{ player.xp }} / {{ player.xpToNextLevel }}</div>
+        </div>
+        <div class="multiplier-display">
+          <div class="multiplier-main">{{ game.xpMultiplier.toFixed(3) }}x</div>
+          <div class="multiplier-arc-container">
+            <svg class="multiplier-arc" width="24" height="24" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" fill="none" stroke="#444" stroke-width="2" />
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+                fill="none"
+                stroke="#fbbf24"
+                stroke-width="2"
+                stroke-dasharray="62.83"
+                :stroke-dashoffset="62.83 - (game.xpMultiplier % 1) * 62.83"
+                transform="rotate(-90 12 12)"
+                class="multiplier-progress-arc"
+              />
+            </svg>
+          </div>
+        </div>
       </div>
 
       <div class="weapon-section">
@@ -51,14 +84,10 @@
     <!-- Bottom UI Bar -->
     <div class="bottom-ui-bar">
       <div class="game-stats">
+        <span>Wave: {{ game.waveNumber }}</span>
+        <span>Difficulty: {{ game.difficulty }}</span>
         <span>Enemies: {{ enemies.length }}</span>
         <span>Killed: {{ game.enemiesKilled }}</span>
-        <span
-          >Spawn Rate:
-          {{
-            (1000 / (game.baseEnemySpawnInterval / (1 + game.enemiesKilled / 20))).toFixed(1)
-          }}/s</span
-        >
       </div>
 
       <div class="controls">
@@ -68,7 +97,17 @@
         </button>
       </div>
 
-      <div class="help-text">WASD/Arrows: Move | Space: Switch Weapon | ESC: Pause</div>
+      <div class="help-text">
+        WASD/Arrows: Move | Space: Switch Weapon | ESC: Pause<br />
+        <small
+          >Enemy Types:
+          <span style="color: #ef4444">■ Basic</span>
+          <span v-if="game.difficulty >= 3" style="color: #fbbf24">■ Fast</span>
+          <span v-if="game.difficulty >= 5" style="color: #8b5cf6">■ Shooter</span>
+          <span v-if="game.difficulty >= 7" style="color: #6b7280">■ Tank</span>
+          <span v-if="game.difficulty >= 10" style="color: #dc2626">■ Elite</span>
+        </small>
+      </div>
     </div>
 
     <!-- Shop Component -->
@@ -76,6 +115,9 @@
       ref="shopComponent"
       :isVisible="showShop"
       :playerMoney="player.money"
+      :playerLevel="player.level"
+      :currentXp="player.xp"
+      :xpToNext="player.xpToNextLevel"
       :currentWeapon="player.currentWeapon"
       :ownedWeapons="player.ownedWeapons"
       :weaponTemplates="weaponTemplates"
@@ -91,12 +133,29 @@
 import { ref, reactive, computed, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import type {
   Enemy,
+  EnemyBullet,
   Player,
   GameState,
   Bullet,
   Weapon,
 } from '@/components/defenseGame/defenseTypes'
-import { weaponTemplates, createWeaponCopy } from '@/components/defenseGame/defenseData'
+import { EnemyType } from '@/components/defenseGame/defenseTypes'
+import {
+  weaponTemplates,
+  createWeaponCopy,
+  enemyTemplates,
+  getDifficultyLevel,
+  getWaveNumber,
+  scaleEnemyStats,
+  selectEnemyType,
+  CollisionSystem,
+  calculateXpGained,
+  checkLevelUp,
+  getXpRequiredForLevel,
+  updateMultiplier,
+  increaseMultiplier,
+  getEnemyXpValue,
+} from '@/components/defenseGame/defenseData'
 import DefenseShop from '@/components/defenseGame/DefenseShop.vue'
 
 // Canvas references
@@ -110,17 +169,8 @@ let minimapCtx: CanvasRenderingContext2D | null = null
 // Shop state
 const showShop = ref(false)
 
-// Input state
-const keys = reactive({
-  w: false,
-  a: false,
-  s: false,
-  d: false,
-  ArrowUp: false,
-  ArrowLeft: false,
-  ArrowDown: false,
-  ArrowRight: false,
-})
+// Input state - using Set for cleaner key tracking
+const activeKeys = reactive(new Set<string>())
 
 const basicGunTemplate = weaponTemplates['Basic Gun']!
 const player: Player = reactive({
@@ -138,10 +188,16 @@ const player: Player = reactive({
   ownedWeapons: {
     'Basic Gun': createWeaponCopy(basicGunTemplate),
   },
+  // XP System
+  level: 1,
+  xp: 0,
+  xpToNextLevel: getXpRequiredForLevel(2), // XP needed for level 2
+  totalXp: 0,
 })
 
 const enemies = reactive<Enemy[]>([])
 const bullets = reactive<Bullet[]>([])
+const enemyBullets = reactive<EnemyBullet[]>([])
 const game = reactive<GameState>({
   game_width: 900, // Larger canvas for better visibility
   game_height: 600,
@@ -151,11 +207,19 @@ const game = reactive<GameState>({
   paused: false,
   score: 0,
   lastTime: 0,
-  baseEnemySpawnInterval: 100,
+  baseEnemySpawnInterval: 1500, // Increased from 100ms to 1.5 seconds
   frameId: null,
   enemiesKilled: 0,
+  difficulty: 1,
+  waveNumber: 1,
   camera: { x: 0, y: 0 },
+  // XP Multiplier System
+  xpMultiplier: 1.0, // Start with 1x multiplier
+  lastKillTime: 0, // Timestamp of last enemy kill
 })
+
+// Initialize collision system
+const collisionSystem = new CollisionSystem(game.world_width, game.world_height, 100)
 
 // --- Canvas Rendering Functions ---
 function initCanvas() {
@@ -227,6 +291,12 @@ function drawPlayer() {
   ctx.lineWidth = 2
   ctx.fillRect(screenX - halfWidth, screenY - halfHeight, player.width, player.height)
   ctx.strokeRect(screenX - halfWidth, screenY - halfHeight, player.width, player.height)
+
+  // Draw gun range indicator (optional)
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'
+  ctx.beginPath()
+  ctx.arc(screenX, screenY, player.currentWeapon.range, 0, Math.PI * 2)
+  ctx.stroke()
 }
 
 // Optimized visibility check helper
@@ -248,27 +318,46 @@ function drawEnemy(enemy: Enemy) {
   const screenY = enemy.y - game.camera.y
   const halfWidth = enemy.width / 2
   const halfHeight = enemy.height / 2
+  const template = enemyTemplates[enemy.type]
 
-  // Draw enemy with border in one operation
-  ctx.fillStyle = enemy.speed > 4 ? '#dc2626' : '#ef4444'
-  ctx.strokeStyle = '#991b1b'
-  ctx.lineWidth = 1
+  // Draw enemy with type-specific colors
+  ctx.fillStyle = template.color
+  ctx.strokeStyle = template.borderColor
+  ctx.lineWidth = enemy.type === EnemyType.ELITE ? 3 : enemy.type === EnemyType.TANK ? 2 : 1
   ctx.fillRect(screenX - halfWidth, screenY - halfHeight, enemy.width, enemy.height)
   ctx.strokeRect(screenX - halfWidth, screenY - halfHeight, enemy.width, enemy.height)
 
+  // Add type indicators
+  if (enemy.type === EnemyType.FAST) {
+    // Add speed lines for fast enemies
+    ctx.strokeStyle = '#fbbf24'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(screenX - halfWidth - 5, screenY)
+    ctx.lineTo(screenX - halfWidth + 5, screenY)
+    ctx.stroke()
+  } else if (enemy.type === EnemyType.SHOOTER || enemy.type === EnemyType.ELITE) {
+    // Add weapon indicator for shooting enemies
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(screenX - 2, screenY - halfHeight - 4, 4, 4)
+  }
+
   // Draw health bar efficiently
-  const healthBarY = screenY - halfHeight - 8
+  const healthBarY = screenY - halfHeight - 10
   const healthPercent = enemy.health / enemy.maxHealth
 
   // Background
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
-  ctx.fillRect(screenX - halfWidth, healthBarY, enemy.width, 4)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+  ctx.fillRect(screenX - halfWidth, healthBarY, enemy.width, 6)
 
-  // Foreground
-  ctx.fillStyle = healthPercent > 0.5 ? '#22c55e' : healthPercent > 0.25 ? '#eab308' : '#ef4444'
-  ctx.fillRect(screenX - halfWidth, healthBarY, enemy.width * healthPercent, 4)
+  // Foreground with enemy type color tint
+  let healthColor = '#22c55e'
+  if (healthPercent <= 0.25) healthColor = '#ef4444'
+  else if (healthPercent <= 0.5) healthColor = '#eab308'
+
+  ctx.fillStyle = healthColor
+  ctx.fillRect(screenX - halfWidth, healthBarY, enemy.width * healthPercent, 6)
 }
-
 function drawBullet(bullet: Bullet) {
   if (!ctx || !isVisible(bullet.x, bullet.y, bullet.width, bullet.height)) return
 
@@ -276,10 +365,27 @@ function drawBullet(bullet: Bullet) {
   const screenY = bullet.y - game.camera.y
   const radius = bullet.width / 2
 
-  // Draw bullet with glow in batch operations
+  // Draw player bullet with glow
   ctx.fillStyle = '#fbbf24'
   ctx.shadowColor = '#fbbf24'
   ctx.shadowBlur = 8
+  ctx.beginPath()
+  ctx.arc(screenX, screenY, radius, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.shadowBlur = 0
+}
+
+function drawEnemyBullet(bullet: EnemyBullet) {
+  if (!ctx || !isVisible(bullet.x, bullet.y, bullet.width, bullet.height)) return
+
+  const screenX = bullet.x - game.camera.x
+  const screenY = bullet.y - game.camera.y
+  const radius = bullet.width / 2
+
+  // Draw enemy bullet with red color and glow
+  ctx.fillStyle = '#ef4444'
+  ctx.shadowColor = '#ef4444'
+  ctx.shadowBlur = 6
   ctx.beginPath()
   ctx.arc(screenX, screenY, radius, 0, Math.PI * 2)
   ctx.fill()
@@ -335,15 +441,25 @@ function drawMinimap() {
     minimapCtx.fill()
   })
 
-  // Draw bullets as tiny yellow dots (optional, might be too cluttered)
-  if (bullets.length < 50) {
-    // Only show bullets if there aren't too many
-    minimapCtx.fillStyle = '#fbbf24' // Yellow for bullets
+  // Draw bullets as tiny dots (optional, might be too cluttered)
+  if (bullets.length + enemyBullets.length < 50) {
+    // Player bullets - yellow
+    minimapCtx.fillStyle = '#fbbf24'
     bullets.forEach((bullet) => {
       if (!minimapCtx) return
       const bulletX = bullet.x * scaleX
       const bulletY = bullet.y * scaleY
+      minimapCtx.beginPath()
+      minimapCtx.arc(bulletX, bulletY, 0.5, 0, Math.PI * 2)
+      minimapCtx.fill()
+    })
 
+    // Enemy bullets - red
+    minimapCtx.fillStyle = '#ef4444'
+    enemyBullets.forEach((bullet) => {
+      if (!minimapCtx) return
+      const bulletX = bullet.x * scaleX
+      const bulletY = bullet.y * scaleY
       minimapCtx.beginPath()
       minimapCtx.arc(bulletX, bulletY, 0.5, 0, Math.PI * 2)
       minimapCtx.fill()
@@ -368,10 +484,15 @@ function renderFrame() {
     drawBullet(bullet)
   }
 
+  // Draw enemy bullets
+  for (const enemyBullet of enemyBullets) {
+    drawEnemyBullet(enemyBullet)
+  }
+
   // Draw minimap
   drawMinimap()
 }
-
+/** Timestamp: time since first called */
 function gameLoop(timestamp: number) {
   const deltaTime = timestamp - game.lastTime
   game.lastTime = timestamp
@@ -380,10 +501,15 @@ function gameLoop(timestamp: number) {
     // Update game state
     checkEnemySpawn(timestamp)
     updateEnemies(deltaTime)
+    // Process enemy-to-enemy collisions
+    collisionSystem.processCollisions(enemies)
     updateBullets(deltaTime)
+    updateEnemyBullets(deltaTime)
     updatePlayerPosition()
     updateCamera()
     handleShooting(timestamp)
+    // Update XP multiplier decay
+    updateXpMultiplier(deltaTime)
   }
 
   // Always render the frame
@@ -397,17 +523,23 @@ function updatePlayerPosition() {
   let deltaX = 0
   let deltaY = 0
 
+  // Check for active movement keys
+  const hasUpKey = Array.from(activeKeys).some(isUpKey)
+  const hasDownKey = Array.from(activeKeys).some(isDownKey)
+  const hasLeftKey = Array.from(activeKeys).some(isLeftKey)
+  const hasRightKey = Array.from(activeKeys).some(isRightKey)
+
   // Handle multiple key presses for diagonal movement
-  if (keys.w || keys.ArrowUp) {
+  if (hasUpKey) {
     deltaY -= player.speed
   }
-  if (keys.s || keys.ArrowDown) {
+  if (hasDownKey) {
     deltaY += player.speed
   }
-  if (keys.a || keys.ArrowLeft) {
+  if (hasLeftKey) {
     deltaX -= player.speed
   }
-  if (keys.d || keys.ArrowRight) {
+  if (hasRightKey) {
     deltaX += player.speed
   }
 
@@ -443,6 +575,15 @@ function updateCamera() {
   // Keep camera within world bounds
   game.camera.x = Math.max(0, Math.min(game.world_width - game.game_width, game.camera.x))
   game.camera.y = Math.max(0, Math.min(game.world_height - game.game_height, game.camera.y))
+}
+
+function updateXpMultiplier(deltaTime: number) {
+  // Only decay if there was a previous kill
+  if (game.lastKillTime > 0) {
+    const timeSinceLastKill = Date.now() - game.lastKillTime
+    // Update multiplier with decay if no recent kills
+    game.xpMultiplier = updateMultiplier(game.xpMultiplier, timeSinceLastKill, deltaTime)
+  }
 }
 
 function handleShooting(timestamp: number) {
@@ -525,11 +666,31 @@ function updateBullets(deltaTime: number) {
 
         if (enemy.health <= 0) {
           enemies.splice(j, 1)
-          game.score += 10
+          game.score += enemy.value * 10 // Use enemy value for scoring
           game.enemiesKilled++
-          // Award money for killing enemies
-          const moneyReward = 5 + Math.floor(Math.random() * 8) // 5-12 money per kill
-          player.money += moneyReward
+          // Award money based on enemy value
+          player.money += enemy.value
+
+          // XP System - Calculate XP with multiplier
+          const currentTime = Date.now()
+
+          // Update multiplier based on kill timing
+          game.xpMultiplier = increaseMultiplier(game.xpMultiplier)
+          game.lastKillTime = currentTime
+
+          // Award XP based on enemy type and multiplier
+          const xpGained = calculateXpGained(enemy.type, game.xpMultiplier)
+          player.xp += xpGained
+          player.totalXp += xpGained
+
+          // Check for level up
+          const levelResult = checkLevelUp(player.level, player.xp, player.xpToNextLevel)
+          if (levelResult.leveledUp) {
+            player.xp = 0
+            player.level = levelResult.newLevel
+            player.xpToNextLevel = levelResult.newXpToNextLevel
+            // TODO: Could add level up effects/rewards here later
+          }
         }
         break
       }
@@ -558,10 +719,43 @@ function updateBullets(deltaTime: number) {
   }
 }
 
+function updateEnemyBullets(deltaTime: number) {
+  for (let i = enemyBullets.length - 1; i >= 0; i--) {
+    const bullet = enemyBullets[i]
+    if (!bullet) continue
+
+    // Move bullet in straight line based on its angle
+    const deltaSpeed = bullet.speed * (deltaTime / 1000)
+    bullet.x += Math.cos(bullet.angle) * deltaSpeed
+    bullet.y += Math.sin(bullet.angle) * deltaSpeed
+
+    // Check for player hit
+    const distToPlayer = Math.hypot(bullet.x - player.x, bullet.y - player.y)
+    if (distToPlayer < (player.width + bullet.width) / 2 + 10) {
+      player.health -= bullet.damage
+      enemyBullets.splice(i, 1)
+      continue
+    }
+
+    // Remove bullets that are out of bounds or too old
+    if (
+      bullet.x < -50 ||
+      bullet.x > game.world_width + 50 ||
+      bullet.y < -50 ||
+      bullet.y > game.world_height + 50 ||
+      Date.now() - bullet.createdAt > 2000
+    ) {
+      enemyBullets.splice(i, 1)
+    }
+  }
+}
+
 // Optimized enemy spawning - integrated into game loop instead of separate interval
 let lastSpawnTime = 0
 function checkEnemySpawn(timestamp: number) {
-  const spawnInterval = game.baseEnemySpawnInterval / (1 + game.enemiesKilled / 20)
+  // Much more gradual spawn rate increase
+  const difficultyMultiplier = 1 + (game.difficulty - 1) * 0.08 // Reduced from 0.15 to 0.08
+  const spawnInterval = game.baseEnemySpawnInterval / difficultyMultiplier
   if (timestamp - lastSpawnTime > spawnInterval) {
     spawnEnemy()
     lastSpawnTime = timestamp
@@ -569,22 +763,78 @@ function checkEnemySpawn(timestamp: number) {
 }
 
 function updateEnemies(deltaTime: number) {
-  enemies.forEach((enemy) => {
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const enemy = enemies[i]
+    if (!enemy) continue
+
     // Enemies should move towards the player
     const angleToPlayer = Math.atan2(player.y - enemy.y, player.x - enemy.x)
-    enemy.x += enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16) // Assuming 60 FPS baseline
-    enemy.y += enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+    const distToPlayer = Math.hypot(player.x - enemy.x, player.y - enemy.y)
+
+    // Different movement behavior for different enemy types
+    if (enemy.type === EnemyType.SHOOTER || enemy.type === EnemyType.ELITE) {
+      // Shooter enemies try to maintain distance and shoot
+      if (enemy.range && distToPlayer > enemy.range * 0.8) {
+        // Move closer if too far
+        enemy.x += enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
+        enemy.y += enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+      } else if (distToPlayer < enemy.range! * 0.6) {
+        // Move away if too close
+        enemy.x -= enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
+        enemy.y -= enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+      }
+
+      // Handle shooting
+      handleEnemyShooting(enemy, distToPlayer, angleToPlayer)
+    } else {
+      // Regular movement towards player for other enemy types
+      enemy.x += enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
+      enemy.y += enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+    }
 
     // If enemy reaches player, reduce player health
-    const distToPlayer = Math.hypot(player.x - enemy.x, player.y - enemy.y)
-    if (distToPlayer < (player.width + enemy.width) / 2) {
+    if (distToPlayer < (player.width + enemy.width) / 2 + 5) {
       player.health -= enemy.damage
-      enemies.splice(enemies.indexOf(enemy), 1)
+      enemies.splice(i, 1)
     }
-  })
+  }
+}
+
+function handleEnemyShooting(enemy: Enemy, distToPlayer: number, angleToPlayer: number) {
+  if (!enemy.range || !enemy.fireRate || !enemy.bulletSpeed || enemy.lastShotTime === undefined)
+    return
+
+  const now = performance.now()
+  const shotInterval = 1000 / enemy.fireRate
+
+  if (distToPlayer <= enemy.range && now - enemy.lastShotTime >= shotInterval) {
+    const enemyBullet: EnemyBullet = {
+      id: Date.now() + Math.random(),
+      x: enemy.x,
+      y: enemy.y,
+      width: 6,
+      height: 6,
+      speed: enemy.bulletSpeed,
+      angle: angleToPlayer,
+      damage: Math.floor(enemy.damage * 0.6), // Enemy bullets do less damage
+      createdAt: now,
+    }
+
+    enemyBullets.push(enemyBullet)
+    enemy.lastShotTime = now
+  }
 }
 
 function spawnEnemy() {
+  // Update difficulty and wave based on enemies killed
+  game.difficulty = getDifficultyLevel(game.enemiesKilled)
+  game.waveNumber = getWaveNumber(game.enemiesKilled)
+
+  // Select enemy type based on difficulty
+  const enemyType = selectEnemyType(game.difficulty)
+  const template = enemyTemplates[enemyType]
+  const scaledStats = scaleEnemyStats(template, game.difficulty)
+
   // Spawn enemies at the edges of the world
   const side = Math.floor(Math.random() * 4) // 0: top, 1: right, 2: bottom, 3: left
   let x, y
@@ -592,18 +842,18 @@ function spawnEnemy() {
   switch (side) {
     case 0: // top
       x = Math.random() * game.world_width
-      y = -30
+      y = -50
       break
     case 1: // right
-      x = game.world_width + 30
+      x = game.world_width + 50
       y = Math.random() * game.world_height
       break
     case 2: // bottom
       x = Math.random() * game.world_width
-      y = game.world_height + 30
+      y = game.world_height + 50
       break
     case 3: // left
-      x = -30
+      x = -50
       y = Math.random() * game.world_height
       break
     default:
@@ -612,79 +862,98 @@ function spawnEnemy() {
   }
 
   const enemy: Enemy = {
-    id: Date.now() + Math.random(), // Ensure unique ID
+    id: Date.now() + Math.random(),
     x,
     y,
-    width: 20 + Math.random() * 10,
-    height: 20 + Math.random() * 10,
-    speed: 1 + Math.random() * 2,
     angle: 0,
-    damage: 10,
-    health: 50,
-    maxHealth: 50,
+    ...scaledStats,
   }
+
   enemies.push(enemy)
 }
 
-// Optimized key mapping for movement
-const keyMappings = {
-  w: ['w', 'ArrowUp'],
-  s: ['s', 'ArrowDown'],
-  a: ['a', 'ArrowLeft'],
-  d: ['d', 'ArrowRight'],
-  arrowup: ['w', 'ArrowUp'],
-  arrowdown: ['s', 'ArrowDown'],
-  arrowleft: ['a', 'ArrowLeft'],
-  arrowright: ['d', 'ArrowRight'],
-} as const
-
-function setKeyState(key: string, state: boolean) {
-  const mappedKeys = keyMappings[key as keyof typeof keyMappings]
-  if (mappedKeys) {
-    mappedKeys.forEach((k) => {
-      keys[k as keyof typeof keys] = state
-    })
+// Helper functions for key handling
+function isMovementKey(key: string): boolean {
+  switch (key.toLowerCase()) {
+    case 'w':
+    case 's':
+    case 'a':
+    case 'd':
+    case 'arrowup':
+    case 'arrowdown':
+    case 'arrowleft':
+    case 'arrowright':
+      return true
+    default:
+      return false
   }
 }
 
+function isUpKey(key: string): boolean {
+  return key === 'w' || key === 'arrowup'
+}
+
+function isDownKey(key: string): boolean {
+  return key === 's' || key === 'arrowdown'
+}
+
+function isLeftKey(key: string): boolean {
+  return key === 'a' || key === 'arrowleft'
+}
+
+function isRightKey(key: string): boolean {
+  return key === 'd' || key === 'arrowright'
+}
+
 function handleKeyPress(event: KeyboardEvent) {
+  if (!event.key) return // Guard against undefined key
+
   const key = event.key.toLowerCase()
 
   // Handle movement keys
-  setKeyState(key, true)
+  if (isMovementKey(key)) {
+    activeKeys.add(key)
+  }
 
-  // Handle special keys
-  const specialKeys = {
-    ' ': () => {
+  // Handle action keys
+  switch (key) {
+    case ' ':
       event.preventDefault()
       const ownedWeaponNames = Object.keys(player.ownedWeapons)
       const currentIndex = ownedWeaponNames.indexOf(player.currentWeapon.name)
       const nextIndex = (currentIndex + 1) % ownedWeaponNames.length
       const nextWeapon = ownedWeaponNames[nextIndex]
       if (nextWeapon) handleSelectWeapon(nextWeapon)
-    },
-    i: () => {
+      break
+
+    case 'i':
       event.preventDefault()
       openWeaponShop()
-    },
-    p: () => {
+      break
+
+    case 'p':
       event.preventDefault()
       togglePause()
-    },
-    escape: () => {
-      event.preventDefault()
-      showShop.value ? closeShop() : togglePause()
-    },
-  }
+      break
 
-  const action = specialKeys[key as keyof typeof specialKeys]
-  if (action && (key !== 'escape' || !showShop.value || key === 'escape')) {
-    action()
+    case 'escape':
+      event.preventDefault()
+      if (showShop.value) {
+        closeShop()
+      } else {
+        togglePause()
+      }
+      break
   }
 }
 
 function handleKeyUp(event: KeyboardEvent) {
-  setKeyState(event.key.toLowerCase(), false)
+  if (!event.key) return // Guard against undefined key
+
+  const key = event.key.toLowerCase()
+  if (isMovementKey(key)) {
+    activeKeys.delete(key)
+  }
 }
 
 function handleCanvasClick(event: MouseEvent) {
@@ -766,7 +1035,8 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeyPress)
   window.addEventListener('keyup', handleKeyUp)
 
-  // Weapons are already initialized in the player reactive object
+  // Collision system is automatically initialized with world dimensions
+  // and will be processed each frame in the game loop
 })
 
 onBeforeUnmount(() => {
@@ -865,6 +1135,74 @@ onBeforeUnmount(() => {
     }
   }
 
+  .xp-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 160px;
+
+    .level-display {
+      font-size: 1.1em;
+      font-weight: bold;
+      color: var(--theme-text-primary);
+      text-align: center;
+    }
+
+    .xp-bar-container {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+
+      .xp-bar {
+        width: 140px;
+        height: 16px;
+        background-color: var(--theme-border-light);
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--theme-border-light);
+
+        .xp-progress {
+          height: 100%;
+          background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+          transition: width 0.3s ease;
+          border-radius: 7px;
+        }
+      }
+
+      .xp-text {
+        font-size: 0.75em;
+        color: var(--theme-text-secondary);
+        text-align: center;
+      }
+    }
+
+    .multiplier-display {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+
+      .multiplier-main {
+        font-weight: bold;
+        font-size: 1.2em;
+        color: #fbbf24;
+        text-shadow: 0 0 4px rgba(251, 191, 36, 0.4);
+      }
+
+      .multiplier-arc-container {
+        position: relative;
+
+        .multiplier-arc {
+          transform: rotate(-90deg);
+
+          .multiplier-progress-arc {
+            transition: stroke-dashoffset 0.2s ease;
+          }
+        }
+      }
+    }
+  }
+
   .weapon-section {
     display: flex;
     flex-direction: column;
@@ -932,6 +1270,18 @@ onBeforeUnmount(() => {
     font-size: 0.85em;
     color: var(--theme-text-secondary);
     text-align: right;
+
+    small {
+      display: block;
+      margin-top: 4px;
+      font-size: 0.8em;
+      opacity: 0.8;
+
+      span {
+        margin-right: 8px;
+        font-weight: bold;
+      }
+    }
   }
 }
 

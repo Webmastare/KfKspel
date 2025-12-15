@@ -14,6 +14,11 @@ interface Player extends GameObject {
     upgrades: Record<string, Upgrade>;
     money: number;
     ownedWeapons: Record<string, Weapon>;
+    // XP System
+    level: number;
+    xp: number;
+    xpToNextLevel: number;
+    totalXp: number;
 }
 
 interface Upgrade {
@@ -32,6 +37,7 @@ interface Weapon {
     range: number;
     bulletSpeed: number;
     bulletSize: number;
+    levelRequired?: number; // Level requirement to unlock this weapon
 }
 
 interface Bullet extends GameObject {
@@ -48,6 +54,26 @@ interface Enemy extends GameObject {
     health: number;
     maxHealth: number;
     damage: number;
+    type: EnemyType;
+    lastShotTime?: number;
+    range?: number;
+    fireRate?: number;
+    bulletSpeed?: number;
+    value: number; // Money reward when killed
+}
+
+interface EnemyBullet extends GameObject {
+    id: number;
+    damage: number;
+    createdAt: number;
+}
+
+enum EnemyType {
+    BASIC = "basic",
+    FAST = "fast",
+    TANK = "tank",
+    SHOOTER = "shooter",
+    ELITE = "elite",
 }
 
 interface Camera {
@@ -68,15 +94,23 @@ interface GameState {
     enemiesKilled: number;
     baseEnemySpawnInterval: number;
     camera: Camera;
+    difficulty: number;
+    waveNumber: number;
+    // XP Multiplier System
+    xpMultiplier: number; // Float value for precise multiplier
+    lastKillTime: number; // Timestamp of last enemy kill for multiplier decay
 }
 
 export type {
     Bullet,
     Camera,
     Enemy,
+    EnemyBullet,
     GameObject,
     GameState,
     Player,
     Upgrade,
     Weapon,
 };
+
+export { EnemyType };
