@@ -41,16 +41,23 @@
                 <span v-else class="equipped">⚡ Equipped</span>
               </div>
               <div class="weapon-stats">
-                <div>💥 Damage: {{ weapon.damage }}</div>
+                <div>💥 Damage: {{ weapon.bullet.damage }}</div>
                 <div>⚡ Fire Rate: {{ weapon.fireRate.toFixed(1) }}/s</div>
                 <div>📏 Range: {{ weapon.range }}</div>
-                <div>🎯 Penetration: {{ weapon.penetration }}</div>
+                <template v-if="weapon.weaponType === 'shotgun'">
+                  <div>🔫 Bullets: {{ weapon.bulletCount }}</div>
+                  <div>📐 Spread: {{ weapon.spread }}°</div>
+                </template>
+                <template v-else>
+                  <div>🎯 Penetration: {{ weapon.penetration }}</div>
+                </template>
               </div>
 
               <!-- Upgrade Section -->
               <div class="upgrades">
                 <h5>⬆️ Upgrades</h5>
                 <div class="upgrade-buttons">
+                  <!-- Common upgrades for all weapons -->
                   <button
                     @click="upgradeWeapon(weapon.name, 'damage')"
                     :disabled="!canAfford(getUpgradeCost(weapon, 'damage'))"
@@ -78,7 +85,32 @@
                     +{{ getStatIncrease(weapon, 'range') }} Range
                     <span class="cost">({{ getUpgradeCost(weapon, 'range') }}💰)</span>
                   </button>
+
+                  <!-- Shotgun-specific upgrades -->
+                  <template v-if="weapon.weaponType === 'shotgun'">
+                    <button
+                      @click="upgradeWeapon(weapon.name, 'bulletCount')"
+                      :disabled="!canAfford(getUpgradeCost(weapon, 'bulletCount'))"
+                      class="upgrade-btn"
+                      :title="getUpgradePreview(weapon, 'bulletCount')"
+                    >
+                      +{{ getStatIncrease(weapon, 'bulletCount') }} Bullet
+                      <span class="cost">({{ getUpgradeCost(weapon, 'bulletCount') }}💰)</span>
+                    </button>
+                    <button
+                      @click="upgradeWeapon(weapon.name, 'spread')"
+                      :disabled="!canAfford(getUpgradeCost(weapon, 'spread'))"
+                      class="upgrade-btn"
+                      :title="getUpgradePreview(weapon, 'spread')"
+                    >
+                      -{{ getStatIncrease(weapon, 'spread') }} Spread
+                      <span class="cost">({{ getUpgradeCost(weapon, 'spread') }}💰)</span>
+                    </button>
+                  </template>
+
+                  <!-- Regular weapon penetration upgrade -->
                   <button
+                    v-else
                     @click="upgradeWeapon(weapon.name, 'penetration')"
                     :disabled="!canAfford(getUpgradeCost(weapon, 'penetration'))"
                     class="upgrade-btn"
@@ -133,10 +165,16 @@
               </div>
 
               <div class="weapon-stats">
-                <div>💥 Damage: {{ weapon.damage }}</div>
+                <div>💥 Damage: {{ weapon.bullet.damage }}</div>
                 <div>⚡ Fire Rate: {{ weapon.fireRate.toFixed(1) }}/s</div>
                 <div>📏 Range: {{ weapon.range }}</div>
-                <div>🎯 Penetration: {{ weapon.penetration }}</div>
+                <template v-if="weapon.weaponType === 'shotgun'">
+                  <div>🔫 Bullets: {{ weapon.bulletCount }}</div>
+                  <div>📐 Spread: {{ weapon.spread }}°</div>
+                </template>
+                <template v-else>
+                  <div>🎯 Penetration: {{ weapon.penetration }}</div>
+                </template>
               </div>
             </div>
           </div>
@@ -169,10 +207,16 @@
               </div>
 
               <div class="weapon-stats locked-stats">
-                <div>💥 Damage: {{ weapon.damage }}</div>
+                <div>💥 Damage: {{ weapon.bullet.damage }}</div>
                 <div>⚡ Fire Rate: {{ weapon.fireRate.toFixed(1) }}/s</div>
                 <div>📏 Range: {{ weapon.range }}</div>
-                <div>🎯 Penetration: {{ weapon.penetration }}</div>
+                <template v-if="weapon.weaponType === 'shotgun'">
+                  <div>🔫 Bullets: {{ weapon.bulletCount }}</div>
+                  <div>📐 Spread: {{ weapon.spread }}°</div>
+                </template>
+                <template v-else>
+                  <div>🎯 Penetration: {{ weapon.penetration }}</div>
+                </template>
               </div>
             </div>
           </div>
@@ -282,13 +326,17 @@ function getStatIncrease(weapon: Weapon, stat: string): string {
 
   switch (stat) {
     case 'damage':
-      return Math.floor(baseWeapon.damage * 0.2).toString()
+      return Math.floor(baseWeapon.bullet.damage * 0.2).toString()
     case 'fireRate':
       return (baseWeapon.fireRate * 0.15).toFixed(1)
     case 'range':
       return Math.floor(baseWeapon.range * 0.1).toString()
     case 'penetration':
       return '1'
+    case 'bulletCount':
+      return '1'
+    case 'spread':
+      return '2°'
     default:
       return '?'
   }
@@ -300,13 +348,23 @@ function getUpgradePreview(weapon: Weapon, stat: string): string {
 
   switch (stat) {
     case 'damage':
-      return `Increase damage by ${increase} (${weapon.damage} → ${weapon.damage + parseInt(increase)}) for ${cost} coins`
+      return `Increase damage by ${increase} (${weapon.bullet.damage} → ${weapon.bullet.damage + parseInt(increase)}) for ${cost} coins`
     case 'fireRate':
       return `Increase fire rate by ${increase}/s (${weapon.fireRate.toFixed(1)} → ${(weapon.fireRate + parseFloat(increase)).toFixed(1)}) for ${cost} coins`
     case 'range':
       return `Increase range by ${increase} (${weapon.range} → ${weapon.range + parseInt(increase)}) for ${cost} coins`
     case 'penetration':
-      return `Increase penetration by ${increase} (${weapon.penetration} → ${weapon.penetration + 1}) for ${cost} coins`
+      return weapon.penetration !== undefined
+        ? `Increase penetration by ${increase} (${weapon.penetration} → ${weapon.penetration + 1}) for ${cost} coins`
+        : `Upgrade ${stat} for ${cost} coins`
+    case 'bulletCount':
+      return weapon.bulletCount !== undefined
+        ? `Add ${increase} bullet (${weapon.bulletCount} → ${weapon.bulletCount + 1}) for ${cost} coins`
+        : `Upgrade ${stat} for ${cost} coins`
+    case 'spread':
+      return weapon.spread !== undefined
+        ? `Reduce spread by ${increase} (${weapon.spread}° → ${Math.max(5, weapon.spread - 2)}°) for ${cost} coins`
+        : `Upgrade ${stat} for ${cost} coins`
     default:
       return `Upgrade ${stat} for ${cost} coins`
   }

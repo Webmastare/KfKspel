@@ -5,63 +5,118 @@ import { EnemyType } from "./defenseTypes";
 const weaponTemplates: Record<string, Weapon> = {
     "Basic Gun": {
         name: "Basic Gun",
-        damage: 25,
         fireRate: 1,
         penetration: 1,
         lastShotTime: 0,
         range: 350,
-        bulletSpeed: 700,
-        bulletSize: 4,
         cost: 0,
         levelRequired: 1,
+        weaponType: "single",
+        bullet: {
+            speed: 700,
+            size: 4,
+            damage: 25,
+            particleCount: 1.0,
+            explosionRadius: 0.8,
+            color: "#FFD700",
+            trailLength: 1.0,
+        },
+    },
+    "Shotgun": {
+        name: "Shotgun",
+        fireRate: 1.2,
+        lastShotTime: 0,
+        range: 250,
+        cost: 200,
+        levelRequired: 2,
+        weaponType: "shotgun",
+        bulletCount: 5,
+        spread: 25, // 25 degree spread
+        bullet: {
+            speed: 600,
+            size: 3,
+            damage: 18,
+            particleCount: 0.7,
+            explosionRadius: 0.6,
+            color: "#FF8C00",
+            trailLength: 0.5,
+        },
     },
     "Rapid Fire": {
         name: "Rapid Fire",
-        damage: 15,
         fireRate: 15,
         penetration: 2,
         lastShotTime: 0,
         range: 300,
-        bulletSpeed: 900,
-        bulletSize: 3,
         cost: 150,
         levelRequired: 3,
+        weaponType: "single",
+        bullet: {
+            speed: 900,
+            size: 3,
+            damage: 15,
+            particleCount: 0.8,
+            explosionRadius: 0.5,
+            color: "#00FF00",
+            trailLength: 1.2,
+        },
     },
     "Heavy Cannon": {
         name: "Heavy Cannon",
-        damage: 75,
         fireRate: 3,
         penetration: 3,
         lastShotTime: 0,
         range: 400,
-        bulletSpeed: 700,
-        bulletSize: 8,
         cost: 300,
         levelRequired: 5,
+        weaponType: "single",
+        bullet: {
+            speed: 700,
+            size: 8,
+            damage: 75,
+            particleCount: 2.0,
+            explosionRadius: 1.5,
+            color: "#FF6600",
+            trailLength: 1.5,
+        },
     },
     "Sniper Rifle": {
         name: "Sniper Rifle",
-        damage: 150,
         fireRate: 1.5,
         penetration: 5,
         lastShotTime: 0,
         range: 600,
-        bulletSpeed: 1200,
-        bulletSize: 6,
         cost: 500,
         levelRequired: 8,
+        weaponType: "single",
+        bullet: {
+            speed: 1200,
+            size: 6,
+            damage: 150,
+            particleCount: 1.5,
+            explosionRadius: 1.0,
+            color: "#00FFFF",
+            trailLength: 2.0,
+        },
     },
     "Plasma Cannon": {
         name: "Plasma Cannon",
-        damage: 100,
         fireRate: 5,
         penetration: 4,
         lastShotTime: 0,
         range: 450,
-        bulletSpeed: 800,
-        bulletSize: 10,
         cost: 750,
         levelRequired: 12,
+        weaponType: "single",
+        bullet: {
+            speed: 800,
+            size: 10,
+            damage: 100,
+            particleCount: 2.5,
+            explosionRadius: 2.0,
+            color: "#FF00FF",
+            trailLength: 1.8,
+        },
     },
 };
 
@@ -80,7 +135,8 @@ function calculateUpgradeCost(
     switch (stat) {
         case "damage":
             currentLevel = Math.floor(
-                (weapon.damage - baseWeapon.damage) / (baseWeapon.damage * 0.2),
+                (weapon.bullet.damage - baseWeapon.bullet.damage) /
+                    (baseWeapon.bullet.damage * 0.2),
             );
             break;
         case "fireRate":
@@ -95,7 +151,13 @@ function calculateUpgradeCost(
             );
             break;
         case "penetration":
-            currentLevel = weapon.penetration - baseWeapon.penetration;
+            // Only for single-shot weapons with penetration
+            if (
+                weapon.penetration !== undefined &&
+                baseWeapon.penetration !== undefined
+            ) {
+                currentLevel = weapon.penetration - baseWeapon.penetration;
+            }
             break;
     }
 
