@@ -67,6 +67,7 @@
         :width="game.game_width"
         :height="game.game_height"
         @click="handleCanvasClick"
+        @mousemove="handleCanvasMouseMove"
         tabindex="0"
       ></canvas>
 
@@ -92,9 +93,11 @@
         >
           <div class="powerup-info">
             <span class="powerup-name">{{ powerup.name }}</span>
-            <span class="powerup-desc">{{ powerup.description }}</span>
+            <span class="powerup-desc"
+              >{{ powerup.description[0] }} {{ powerup.value }} {{ powerup.description[1] }}</span
+            >
           </div>
-          <div class="powerup-timer">
+          <div class="powerup-timer" v-if="powerup.effectType === 'duration'">
             <div class="timer-bar">
               <div
                 class="timer-progress"
@@ -157,10 +160,12 @@
       :currentWeapon="player.currentWeapon"
       :ownedWeapons="player.ownedWeapons"
       :weaponTemplates="weaponTemplates"
+      :placeableTemplates="placeableTemplates"
       @close="closeShop"
       @buyWeapon="handleBuyWeapon"
       @selectWeapon="handleSelectWeapon"
       @upgradeWeapon="handleUpgradeWeapon"
+      @startPlacement="handleStartPlacement"
     />
   </div>
 </template>
@@ -173,27 +178,41 @@ import type {
   Player,
   GameState,
   Bullet,
-  Weapon,
   Powerup,
   ActivePowerup,
+  Placeable,
+  PlaceableTemplate,
+  PlacementPreview,
+  Turret,
+  Wall,
 } from '@/components/defenseGame/defenseTypes'
-import { EnemyType, PowerupType } from '@/components/defenseGame/defenseTypes'
+import { EnemyType, PowerupType, PlaceableType } from '@/components/defenseGame/defenseTypes'
+// Enemy-related imports
 import {
-  weaponTemplates,
-  createWeaponCopy,
   enemyTemplates,
   getDifficultyLevel,
   getWaveNumber,
   scaleEnemyStats,
   selectEnemyType,
-  CollisionSystem,
+  getEnemyXpValue,
+} from '@/components/defenseGame/enemies'
+// Weapon-related imports
+import {
+  weaponTemplates,
+  createWeaponCopy,
+  calculateUpgradeCost,
+} from '@/components/defenseGame/weapons'
+// Player-related imports
+import {
   calculateXpGained,
   checkLevelUp,
   getXpRequiredForLevel,
   updateMultiplier,
   increaseMultiplier,
-  getEnemyXpValue,
-} from '@/components/defenseGame/defenseData'
+} from '@/components/defenseGame/player'
+// Collision system import
+import { CollisionSystem } from '@/components/defenseGame/collision'
+// Powerup system imports
 import {
   createPowerup,
   getPowerupSpawnChance,
@@ -201,6 +220,7 @@ import {
   powerupTemplates,
   shouldPowerupDespawn,
 } from '@/components/defenseGame/powerupSystem'
+// Animation system imports
 import {
   createDefenseAnimationState,
   updateDefenseAnimations,
@@ -210,6 +230,17 @@ import {
   renderDefenseAnimations,
   type DefenseAnimationState,
 } from '@/components/defenseGame/animations'
+// Placeable system imports
+import {
+  placeableTemplates,
+  createPlaceable,
+  isValidPlacement,
+  createPlacementPreview,
+  updateTurret,
+  damagePlaceable,
+  findClosestEnemyInRange as findClosestEnemyForTurret,
+  checkLineWallIntersection,
+} from '@/components/defenseGame/placeables'
 import DefenseShop from '@/components/defenseGame/DefenseShop.vue'
 
 // Canvas references
@@ -301,11 +332,19 @@ const bullets = reactive<Bullet[]>([])
 const enemyBullets = reactive<EnemyBullet[]>([])
 const powerups = reactive<Powerup[]>([])
 const activePowerups = reactive<ActivePowerup[]>([])
+const placeables = reactive<Placeable[]>([])
+
+// Placement system state
+const placementMode = ref<{ active: boolean; template: PlaceableTemplate | null }>({
+  active: false,
+  template: null,
+})
+const placementPreview = ref<PlacementPreview | null>(null)
 const game = reactive<GameState>({
-  game_width: 900, // Larger canvas for better visibility
+  game_width: 900,
   game_height: 600,
-  world_width: 1200, // Larger world
-  world_height: 900,
+  world_width: 1800,
+  world_height: 1400,
   running: false,
   paused: false,
   score: 0,
@@ -446,7 +485,7 @@ function drawEnemy(enemy: Enemy) {
 
     // Add shooting state indicator for shooter enemies
     if (enemy.fireRate && enemy.lastShotTime !== undefined) {
-      const now = performance.now()
+      const now = Date.now()
       const shotInterval = 1000 / enemy.fireRate
       const timeSinceLastShot = now - enemy.lastShotTime
       const chargePercent = Math.min(timeSinceLastShot / shotInterval, 1)
@@ -560,6 +599,27 @@ function drawPowerup(powerup: Powerup) {
   ctx.beginPath()
   ctx.arc(screenX - 2, screenY - 2, radius * 0.3, 0, Math.PI * 2)
   ctx.fill()
+
+  // Draw an arc around the powerup to indicate time before despawn
+  const despawnTime = powerup.spawnTime + powerup.lifetime
+  const timeLeft = despawnTime - Date.now()
+  if (timeLeft > 0) {
+    const despawnPercent = timeLeft / powerup.lifetime
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(screenX, screenY, radius + 4, -Math.PI / 2, -Math.PI / 2 + despawnPercent * Math.PI * 2)
+    ctx.stroke()
+  }
+
+  // Draw powerup icon
+  if (powerup.icon) {
+    ctx.fillStyle = 'white'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.font = '16px Arial'
+    ctx.fillText(powerup.icon, screenX, screenY)
+  }
 }
 
 function drawMinimap() {
@@ -650,6 +710,114 @@ function drawMinimap() {
   }
 }
 
+function drawPlaceable(placeable: Placeable) {
+  if (!ctx || !isVisible(placeable.x, placeable.y, placeable.width, placeable.height)) return
+
+  const screenX = placeable.x - game.camera.x
+  const screenY = placeable.y - game.camera.y
+  const halfWidth = placeable.width / 2
+  const halfHeight = placeable.height / 2
+
+  if (placeable.type === PlaceableType.TURRET) {
+    const turret = placeable as Turret
+
+    // Draw turret body
+    ctx.fillStyle = '#4a6aa6'
+    ctx.strokeStyle = '#2a4a6a'
+    ctx.lineWidth = 2
+    ctx.fillRect(screenX - halfWidth, screenY - halfHeight, placeable.width, placeable.height)
+    ctx.strokeRect(screenX - halfWidth, screenY - halfHeight, placeable.width, placeable.height)
+
+    // Draw turret gun barrel pointing at target
+    const barrelLength = 20
+    const barrelEndX = screenX + Math.cos(turret.angle) * barrelLength
+    const barrelEndY = screenY + Math.sin(turret.angle) * barrelLength
+
+    ctx.strokeStyle = '#666'
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.moveTo(screenX, screenY)
+    ctx.lineTo(barrelEndX, barrelEndY)
+    ctx.stroke()
+
+    // Draw range indicator (faded circle)
+    ctx.strokeStyle = 'rgba(74, 106, 166, 0.2)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.arc(screenX, screenY, turret.range, 0, Math.PI * 2)
+    ctx.stroke()
+  } else if (placeable.type === PlaceableType.WALL) {
+    const wall = placeable as Wall
+
+    // Draw wall
+    ctx.fillStyle = wall.blocksBullets ? '#8B4513' : '#A0522D' // Brown for bullet-blocking, lighter for movement-only
+    ctx.strokeStyle = '#654321'
+    ctx.lineWidth = 2
+    ctx.fillRect(screenX - halfWidth, screenY - halfHeight, placeable.width, placeable.height)
+    ctx.strokeRect(screenX - halfWidth, screenY - halfHeight, placeable.width, placeable.height)
+
+    // Add texture lines for walls
+    ctx.strokeStyle = '#543A21'
+    ctx.lineWidth = 1
+    for (let i = 0; i < placeable.width; i += 10) {
+      ctx.beginPath()
+      ctx.moveTo(screenX - halfWidth + i, screenY - halfHeight)
+      ctx.lineTo(screenX - halfWidth + i, screenY + halfHeight)
+      ctx.stroke()
+    }
+  }
+
+  // Draw health bar
+  const healthBarY = screenY - halfHeight - 10
+  const healthPercent = placeable.health / placeable.maxHealth
+
+  // Background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+  ctx.fillRect(screenX - halfWidth, healthBarY, placeable.width, 6)
+
+  // Foreground
+  let healthColor = '#22c55e'
+  if (healthPercent <= 0.25) healthColor = '#ef4444'
+  else if (healthPercent <= 0.5) healthColor = '#eab308'
+
+  ctx.fillStyle = healthColor
+  ctx.fillRect(screenX - halfWidth, healthBarY, placeable.width * healthPercent, 6)
+}
+
+function drawPlacementPreview(preview: PlacementPreview) {
+  if (!ctx) return
+
+  const screenX = preview.x - game.camera.x
+  const screenY = preview.y - game.camera.y
+  const halfWidth = preview.width / 2
+  const halfHeight = preview.height / 2
+
+  // Draw preview with transparency and color coding
+  ctx.globalAlpha = 0.7
+  ctx.fillStyle = preview.isValid ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)'
+  ctx.strokeStyle = preview.isValid ? '#00ff00' : '#ff0000'
+  ctx.lineWidth = 2
+  ctx.setLineDash([5, 5]) // Dashed outline
+
+  ctx.fillRect(screenX - halfWidth, screenY - halfHeight, preview.width, preview.height)
+  ctx.strokeRect(screenX - halfWidth, screenY - halfHeight, preview.width, preview.height)
+
+  // Draw type-specific preview
+  if (preview.type === PlaceableType.TURRET) {
+    // Draw turret range preview
+    ctx.strokeStyle = preview.isValid ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    const range = preview.template.range || 200
+    ctx.arc(screenX, screenY, range, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+
+  // Reset canvas state
+  ctx.globalAlpha = 1
+  ctx.setLineDash([])
+}
+
 function renderFrame() {
   clearCanvas()
   drawBackground()
@@ -677,6 +845,16 @@ function renderFrame() {
     drawPowerup(powerup)
   }
 
+  // Draw placeables
+  for (const placeable of placeables) {
+    drawPlaceable(placeable)
+  }
+
+  // Draw placement preview if in placement mode
+  if (placementPreview.value) {
+    drawPlacementPreview(placementPreview.value)
+  }
+
   // Draw animations on top of everything
   if (ctx) {
     renderDefenseAnimations(ctx, animationState, 1, game.camera.x, game.camera.y)
@@ -688,7 +866,7 @@ function renderFrame() {
 /** Timestamp: time since first called */
 // Powerup system variables
 let lastPowerupSpawnTime = 0
-const powerupSpawnInterval = 8000 // Try to spawn a powerup every 8 seconds
+const powerupSpawnInterval = 100 // Try to spawn a powerup every 8 seconds
 
 function checkPowerupSpawn(timestamp: number) {
   const spawnChance = getPowerupSpawnChance(game.enemiesKilled, game.difficulty)
@@ -741,6 +919,18 @@ function collectPowerup(powerup: Powerup) {
         player.money += powerup.effect.value
         break
     }
+    // Add to active powerups to display in HUD
+    const activePowerup: ActivePowerup = {
+      type: powerup.type,
+      effectType: 'instant',
+      name: powerup.name,
+      value: powerup.effect.value,
+      description: powerup.description,
+      color: powerup.color,
+      remainingTime: 3000,
+      startTime: now,
+    }
+    activePowerups.push(activePowerup)
   } else if (powerup.effect.type === 'duration') {
     // Add or refresh duration-based effect
     const existingIndex = activePowerups.findIndex((ap) => ap.type === powerup.type)
@@ -749,11 +939,17 @@ function collectPowerup(powerup: Powerup) {
       // Refresh existing powerup
       activePowerups[existingIndex].remainingTime = powerup.effect.duration!
       activePowerups[existingIndex].startTime = now
+      // Increase value if new value is higher (for stacking effects)
+      if (powerup.effect.value > activePowerups[existingIndex].value) {
+        activePowerups[existingIndex].value = powerup.effect.value
+      }
     } else {
       // Add new active powerup
       const activePowerup: ActivePowerup = {
         type: powerup.type,
+        effectType: 'duration',
         name: powerup.name,
+        value: powerup.effect.value, // Slight randomization for variety
         description: powerup.description,
         color: powerup.color,
         remainingTime: powerup.effect.duration!,
@@ -762,9 +958,6 @@ function collectPowerup(powerup: Powerup) {
       activePowerups.push(activePowerup)
     }
   }
-
-  // Show collection notification (could add visual feedback here)
-  console.log(`Collected: ${powerup.name}`)
 }
 
 function updateActivePowerups(deltaTime: number) {
@@ -786,7 +979,7 @@ function getEffectivePlayerSpeed(): number {
 
   for (const powerup of activePowerups) {
     if (powerup.type === PowerupType.SPEED_BOOST) {
-      speedMultiplier *= powerup.description.includes('40%') ? 1.4 : 1.5 // Extract from template
+      speedMultiplier *= powerup.value / 100 + 1
     }
   }
 
@@ -798,7 +991,7 @@ function getEffectiveWeaponDamage(): number {
 
   for (const powerup of activePowerups) {
     if (powerup.type === PowerupType.DAMAGE_BOOST) {
-      damageMultiplier *= 1.5 // 50% boost
+      damageMultiplier *= powerup.value / 100 + 1
     }
   }
 
@@ -810,7 +1003,7 @@ function getEffectiveFireRate(): number {
 
   for (const powerup of activePowerups) {
     if (powerup.type === PowerupType.FIRE_RATE_BOOST) {
-      fireRateMultiplier *= 2.0 // 100% boost
+      fireRateMultiplier *= powerup.value / 100 + 1
     }
   }
 
@@ -822,7 +1015,7 @@ function getEffectivePenetration(): number {
 
   for (const powerup of activePowerups) {
     if (powerup.type === PowerupType.PENETRATION_BOOST) {
-      penetrationBonus += 2
+      penetrationBonus += powerup.value
     }
   }
 
@@ -832,7 +1025,7 @@ function getEffectivePenetration(): number {
 function getEffectiveBulletCount(): number {
   for (const powerup of activePowerups) {
     if (powerup.type === PowerupType.MULTISHOT) {
-      return 3 // Always shoot 3 bullets with multishot
+      return powerup.value
     }
   }
 
@@ -845,16 +1038,14 @@ function hasShield(): boolean {
 
 function consumeShieldHit() {
   const shieldIndex = activePowerups.findIndex((p) => p.type === PowerupType.SHIELD)
-  if (shieldIndex >= 0) {
+  if (shieldIndex >= 0 && activePowerups[shieldIndex]) {
     const shield = activePowerups[shieldIndex]
     if (!shield) return
 
     // Decrease shield value (hit count)
-    const remainingHits = parseInt(shield.description.match(/\d+/)?.[0] || '3') - 1
-    if (remainingHits <= 0) {
+    activePowerups[shieldIndex].value -= 1
+    if (activePowerups[shieldIndex].value <= 0) {
       activePowerups.splice(shieldIndex, 1)
-    } else {
-      shield.description = shield.description.replace(/\d+/, remainingHits.toString())
     }
   }
 }
@@ -868,6 +1059,7 @@ function gameLoop(timestamp: number) {
     checkEnemySpawn(timestamp)
     checkPowerupSpawn(timestamp)
     updateEnemies(deltaTime)
+    updatePlaceables(deltaTime, timestamp)
     updatePowerups()
     updateActivePowerups(deltaTime)
     // Process enemy-to-enemy collisions
@@ -1081,8 +1273,37 @@ function updateBullets(deltaTime: number) {
 
     // Move bullet in straight line based on its angle
     const deltaSpeed = bullet.speed * (deltaTime / 1000) // Normalize to 60fps
+    const oldX = bullet.x
+    const oldY = bullet.y
     bullet.x += Math.cos(bullet.angle) * deltaSpeed
     bullet.y += Math.sin(bullet.angle) * deltaSpeed
+
+    // Check for wall collisions
+    let hitWall = false
+    for (const placeable of placeables) {
+      if (placeable.type === PlaceableType.WALL) {
+        const wall = placeable as Wall
+        const intersection = checkLineWallIntersection(oldX, oldY, bullet.x, bullet.y, wall)
+        if (intersection.intersects) {
+          // Hit wall
+          addBulletImpact(
+            animationState,
+            intersection.intersectionX || bullet.x,
+            intersection.intersectionY || bullet.y,
+            bullet.particleCount,
+            bullet.explosionRadius,
+            bullet.color || '#FFD700',
+          )
+          hitWall = true
+          break
+        }
+      }
+    }
+
+    if (hitWall) {
+      bullets.splice(i, 1)
+      continue
+    }
 
     // Check for enemy hits with generous detection
     let hitEnemy = false
@@ -1178,8 +1399,42 @@ function updateEnemyBullets(deltaTime: number) {
 
     // Move bullet in straight line based on its angle
     const deltaSpeed = bullet.speed * (deltaTime / 1000)
+    const oldX = bullet.x
+    const oldY = bullet.y
     bullet.x += Math.cos(bullet.angle) * deltaSpeed
     bullet.y += Math.sin(bullet.angle) * deltaSpeed
+
+    // Check for wall collisions
+    let hitWall = false
+    for (const placeable of placeables) {
+      if (placeable.type === PlaceableType.WALL) {
+        const wall = placeable as Wall
+        if (wall.blocksBullets) {
+          const intersection = checkLineWallIntersection(oldX, oldY, bullet.x, bullet.y, wall)
+          if (intersection.intersects) {
+            // Enemy bullets can damage walls
+            damagePlaceable(wall, bullet.damage)
+
+            // Add impact effect
+            addBulletImpact(
+              animationState,
+              intersection.intersectionX || bullet.x,
+              intersection.intersectionY || bullet.y,
+              0.5, // Small impact for enemy bullets
+              0.3,
+              '#ef4444',
+            )
+            hitWall = true
+            break
+          }
+        }
+      }
+    }
+
+    if (hitWall) {
+      enemyBullets.splice(i, 1)
+      continue
+    }
 
     // Check for player hit
     const distToPlayer = Math.hypot(bullet.x - player.x, bullet.y - player.y)
@@ -1232,20 +1487,38 @@ function updateEnemies(deltaTime: number) {
       // Shooter enemies try to maintain distance and shoot
       if (enemy.range && distToPlayer > enemy.range * 0.8) {
         // Move closer if too far
-        enemy.x += enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
-        enemy.y += enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+        const newX = enemy.x + enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
+        const newY = enemy.y + enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+
+        // Check wall collision before moving
+        if (!isPositionBlockedByWall(newX, newY, enemy.width, enemy.height)) {
+          enemy.x = newX
+          enemy.y = newY
+        }
       } else if (distToPlayer < enemy.range! * 0.6) {
         // Move away if too close
-        enemy.x -= enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
-        enemy.y -= enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+        const newX = enemy.x - enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
+        const newY = enemy.y - enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+
+        // Check wall collision before moving
+        if (!isPositionBlockedByWall(newX, newY, enemy.width, enemy.height)) {
+          enemy.x = newX
+          enemy.y = newY
+        }
       }
 
       // Handle shooting
       handleEnemyShooting(enemy, distToPlayer, angleToPlayer)
     } else {
       // Regular movement towards player for other enemy types
-      enemy.x += enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
-      enemy.y += enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+      const newX = enemy.x + enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
+      const newY = enemy.y + enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+
+      // Check wall collision before moving
+      if (!isPositionBlockedByWall(newX, newY, enemy.width, enemy.height)) {
+        enemy.x = newX
+        enemy.y = newY
+      }
     }
 
     // If enemy reaches player, reduce player health
@@ -1261,17 +1534,16 @@ function updateEnemies(deltaTime: number) {
 }
 
 function handleEnemyShooting(enemy: Enemy, distToPlayer: number, angleToPlayer: number) {
-  // More robust checking for shooting capabilities
   if (!enemy.range || !enemy.fireRate || !enemy.bulletSpeed) {
     return // Enemy can't shoot if missing required properties
   }
 
   // Initialize lastShotTime if it's undefined (fallback for any missed initialization)
   if (enemy.lastShotTime === undefined || enemy.lastShotTime === null) {
-    enemy.lastShotTime = performance.now() - 1000 // Allow immediate shooting
+    enemy.lastShotTime = Date.now() - 10000 // Allow immediate shooting
   }
 
-  const now = performance.now()
+  const now = Date.now()
   const shotInterval = 1000 / enemy.fireRate
 
   if (distToPlayer <= enemy.range && now - enemy.lastShotTime >= shotInterval) {
@@ -1343,6 +1615,77 @@ function spawnEnemy() {
   enemies.push(enemy)
 }
 
+function updatePlaceables(deltaTime: number, timestamp: number) {
+  // Update turrets - they should target and shoot at enemies
+  for (let i = placeables.length - 1; i >= 0; i--) {
+    const placeable = placeables[i]
+    if (!placeable) continue
+
+    if (placeable.type === PlaceableType.TURRET) {
+      const turret = placeable as Turret
+
+      // Update turret targeting and shooting
+      updateTurret(turret, enemies, timestamp)
+
+      // Create bullets from turret if it should shoot
+      if (turret.targetEnemyId) {
+        const timeSinceLastShot = timestamp - turret.lastShotTime
+        const shotInterval = 1000 / turret.weapon.fireRate
+
+        if (timeSinceLastShot >= shotInterval) {
+          const target = enemies.find((e) => e.id === turret.targetEnemyId)
+          if (target) {
+            // Create bullet from turret to target
+            const bullet: Bullet = {
+              id: Date.now() + Math.random() * 1000,
+              x: turret.x,
+              y: turret.y,
+              width: turret.weapon.bullet.size,
+              height: turret.weapon.bullet.size,
+              speed: turret.weapon.bullet.speed,
+              angle: turret.angle,
+              damage: turret.weapon.bullet.damage,
+              penetrationLeft: turret.weapon.penetration || 1,
+              targetX: target.x,
+              targetY: target.y,
+              createdAt: timestamp,
+              particleCount: turret.weapon.bullet.particleCount,
+              explosionRadius: turret.weapon.bullet.explosionRadius,
+              color: turret.weapon.bullet.color || '#FFD700',
+              trailLength: turret.weapon.bullet.trailLength || 1.0,
+            }
+            bullets.push(bullet)
+
+            // Add muzzle flash animation
+            addMuzzleFlash(
+              animationState,
+              turret.x,
+              turret.y,
+              turret.angle,
+              turret.weapon.weaponType || 'single',
+            )
+          }
+        }
+      }
+    }
+
+    // Check if placeable was destroyed
+    if (placeable.health <= 0) {
+      // Add destruction animation
+      const destroyColor = placeable.type === PlaceableType.TURRET ? '#4a6aa6' : '#ff8c42'
+      addEnemyDestroy(
+        animationState,
+        placeable.x,
+        placeable.y,
+        Math.max(placeable.width, placeable.height),
+        destroyColor,
+      )
+
+      placeables.splice(i, 1)
+    }
+  }
+}
+
 // Helper functions for key handling
 function isMovementKey(key: string): boolean {
   switch (key.toLowerCase()) {
@@ -1411,6 +1754,8 @@ function handleKeyPress(event: KeyboardEvent) {
       event.preventDefault()
       if (showShop.value) {
         closeShop()
+      } else if (placementMode.value.active) {
+        cancelPlacement()
       } else {
         togglePause()
       }
@@ -1431,6 +1776,32 @@ function handleCanvasClick(event: MouseEvent) {
   // Focus the canvas for keyboard events
   if (gameCanvas.value) {
     gameCanvas.value.focus()
+  }
+
+  // Handle placement mode
+  if (placementMode.value.active && placementPreview.value) {
+    const rect = gameCanvas.value?.getBoundingClientRect()
+    if (rect) {
+      const mouseX = event.clientX - rect.left
+      const mouseY = event.clientY - rect.top
+      const worldX = mouseX + game.camera.x
+      const worldY = mouseY + game.camera.y
+
+      if (placementPreview.value.isValid) {
+        tryPlacePlaceable(worldX, worldY)
+      }
+    }
+  }
+}
+
+function handleCanvasMouseMove(event: MouseEvent) {
+  if (!placementMode.value.active) return
+
+  const rect = gameCanvas.value?.getBoundingClientRect()
+  if (rect) {
+    const mouseX = event.clientX - rect.left
+    const mouseY = event.clientY - rect.top
+    updatePlacementPreview(mouseX, mouseY)
   }
 }
 
@@ -1506,6 +1877,90 @@ function switchWeapon(weaponName: string) {
   }
 }
 
+// Placement system functions
+function handleStartPlacement(template: PlaceableTemplate) {
+  placementMode.value.active = true
+  placementMode.value.template = template
+  closeShop() // Close shop when starting placement
+}
+
+function cancelPlacement() {
+  placementMode.value.active = false
+  placementMode.value.template = null
+  placementPreview.value = null
+}
+
+function tryPlacePlaceable(x: number, y: number) {
+  const template = placementMode.value.template
+  if (!template || !placementPreview.value?.isValid) return false
+
+  if (player.money >= template.cost) {
+    // Create and place the placeable
+    const newPlaceable = createPlaceable(template, x, y)
+    placeables.push(newPlaceable)
+
+    // Deduct money
+    player.money -= template.cost
+
+    // Exit placement mode
+    cancelPlacement()
+    return true
+  }
+  return false
+}
+
+function updatePlacementPreview(mouseX: number, mouseY: number) {
+  const template = placementMode.value.template
+  if (!template) return
+
+  // Convert screen coordinates to world coordinates
+  const worldX = mouseX + game.camera.x
+  const worldY = mouseY + game.camera.y
+
+  placementPreview.value = createPlacementPreview(
+    template,
+    worldX,
+    worldY,
+    game,
+    placeables,
+    player,
+  )
+}
+
+// Wall collision helper function
+function isPositionBlockedByWall(x: number, y: number, width: number, height: number): boolean {
+  const halfWidth = width / 2
+  const halfHeight = height / 2
+
+  for (const placeable of placeables) {
+    if (placeable.type === PlaceableType.WALL) {
+      const wall = placeable as Wall
+
+      // Check if the entity would overlap with the wall
+      const wallLeft = wall.x - wall.width / 2
+      const wallRight = wall.x + wall.width / 2
+      const wallTop = wall.y - wall.height / 2
+      const wallBottom = wall.y + wall.height / 2
+
+      const entityLeft = x - halfWidth
+      const entityRight = x + halfWidth
+      const entityTop = y - halfHeight
+      const entityBottom = y + halfHeight
+
+      // Check for overlap
+      if (
+        entityLeft < wallRight &&
+        entityRight > wallLeft &&
+        entityTop < wallBottom &&
+        entityBottom > wallTop
+      ) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
 onMounted(() => {
   // Initialize Canvas
   initCanvas()
@@ -1543,10 +1998,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   padding: 20px;
-  background-color: var(--theme-bg-secondary);
+  background-color: var(--theme-bg-primary);
   border-radius: 10px;
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
-  max-width: 1200px;
   margin: 0 auto;
   box-sizing: border-box;
 
@@ -1993,7 +2447,7 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 120px;
   right: 10px;
-  background-color: rgba(0, 0, 0, 0.9);
+  background-color: rgba(0, 0, 0, 0.5);
   border: 2px solid var(--theme-border-light);
   border-radius: 8px;
   padding: 12px;

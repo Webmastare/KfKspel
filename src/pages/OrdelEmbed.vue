@@ -434,6 +434,12 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   // Warm up the allowed words list
   useAllowedWords()
+
+  // Add no-navbar class to #inner-app for embedded mode
+  const innerApp = document.getElementById('inner-app')
+  if (innerApp) {
+    innerApp.classList.add('no-navbar')
+  }
 })
 
 import { onUnmounted } from 'vue'

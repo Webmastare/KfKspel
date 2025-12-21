@@ -69,7 +69,7 @@ export default [
     {
         path: "/defense-game",
         name: "DefenseGame",
-        component: () => import("@/pages/minigames/Defense.vue"),
+        component: () => import("@/pages/Defense.vue"),
     },
     {
         path: "/ordel-embed",

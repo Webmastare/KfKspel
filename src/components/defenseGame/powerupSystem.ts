@@ -5,19 +5,20 @@ import { PowerupType } from "./defenseTypes";
 interface PowerupTemplate {
     type: PowerupType;
     name: string;
-    description: string;
+    description: string[];
     color: string;
     glowColor: string;
     lifetime: number; // How long it stays on map (ms)
     rarity: number; // 0-1, higher = more rare
     effect: PowerupEffect;
+    icon?: string; // Optional icon
 }
 
 const powerupTemplates: Record<PowerupType, PowerupTemplate> = {
     [PowerupType.HEALTH_PACK]: {
         type: PowerupType.HEALTH_PACK,
         name: "Health Pack",
-        description: "Restore 40 health",
+        description: ["Restore", "health"],
         color: "#10b981",
         glowColor: "#6ee7b7",
         lifetime: 20000, // 20 seconds
@@ -26,11 +27,12 @@ const powerupTemplates: Record<PowerupType, PowerupTemplate> = {
             type: "instant",
             value: 40,
         },
+        icon: "❤️",
     },
     [PowerupType.DAMAGE_BOOST]: {
         type: PowerupType.DAMAGE_BOOST,
         name: "Damage Boost",
-        description: "+50% damage for 15s",
+        description: ["+", "% damage for 15s"],
         color: "#ef4444",
         glowColor: "#fca5a5",
         lifetime: 15000,
@@ -38,13 +40,14 @@ const powerupTemplates: Record<PowerupType, PowerupTemplate> = {
         effect: {
             type: "duration",
             duration: 15000,
-            value: 1.5, // 50% boost (multiply by 1.5)
+            value: 50, // 50% boost (multiply by 1.5)
         },
+        icon: "💥",
     },
     [PowerupType.SPEED_BOOST]: {
         type: PowerupType.SPEED_BOOST,
         name: "Speed Boost",
-        description: "+40% movement speed for 12s",
+        description: ["+", "% movement speed for 12s"],
         color: "#3b82f6",
         glowColor: "#93c5fd",
         lifetime: 15000,
@@ -52,13 +55,14 @@ const powerupTemplates: Record<PowerupType, PowerupTemplate> = {
         effect: {
             type: "duration",
             duration: 12000,
-            value: 1.4,
+            value: 40,
         },
+        icon: "⚡",
     },
     [PowerupType.FIRE_RATE_BOOST]: {
         type: PowerupType.FIRE_RATE_BOOST,
         name: "Rapid Fire",
-        description: "+100% fire rate for 10s",
+        description: ["+", "% fire rate for 10s"],
         color: "#f59e0b",
         glowColor: "#fcd34d",
         lifetime: 15000,
@@ -66,13 +70,14 @@ const powerupTemplates: Record<PowerupType, PowerupTemplate> = {
         effect: {
             type: "duration",
             duration: 10000,
-            value: 2.0,
+            value: 100,
         },
+        icon: "🔥",
     },
     [PowerupType.SHIELD]: {
         type: PowerupType.SHIELD,
         name: "Shield",
-        description: "Block next 3 hits",
+        description: ["Block next", "hits"],
         color: "#8b5cf6",
         glowColor: "#c4b5fd",
         lifetime: 18000,
@@ -82,11 +87,12 @@ const powerupTemplates: Record<PowerupType, PowerupTemplate> = {
             duration: 60000, // Long duration, but limited by hit count
             value: 3, // Number of hits to block
         },
+        icon: "🛡️",
     },
     [PowerupType.MULTISHOT]: {
         type: PowerupType.MULTISHOT,
         name: "Multishot",
-        description: "Shoot 3 bullets for 20s",
+        description: ["Shoot", "bullets for 20s"],
         color: "#06b6d4",
         glowColor: "#67e8f9",
         lifetime: 15000,
@@ -96,11 +102,12 @@ const powerupTemplates: Record<PowerupType, PowerupTemplate> = {
             duration: 20000,
             value: 3,
         },
+        icon: "⇶",
     },
     [PowerupType.PENETRATION_BOOST]: {
         type: PowerupType.PENETRATION_BOOST,
         name: "Piercing Shots",
-        description: "+2 penetration for 15s",
+        description: ["+", "penetration for 15s"],
         color: "#ec4899",
         glowColor: "#f9a8d4",
         lifetime: 15000,
@@ -110,11 +117,12 @@ const powerupTemplates: Record<PowerupType, PowerupTemplate> = {
             duration: 15000,
             value: 2,
         },
+        icon: "𝌓", // or 🎯
     },
     [PowerupType.CASH_BONUS]: {
         type: PowerupType.CASH_BONUS,
         name: "Cash Bonus",
-        description: "Gain $50 instantly",
+        description: ["Gain $", "instantly"],
         color: "#fbbf24",
         glowColor: "#fde68a",
         lifetime: 25000,
@@ -123,6 +131,7 @@ const powerupTemplates: Record<PowerupType, PowerupTemplate> = {
             type: "instant",
             value: 50,
         },
+        icon: "💰",
     },
 };
 
@@ -151,6 +160,7 @@ function createPowerup(x: number, y: number, type?: PowerupType): Powerup {
         spawnTime: Date.now(),
         lifetime: template.lifetime,
         effect: { ...template.effect },
+        icon: template.icon,
     };
 }
 
@@ -199,10 +209,10 @@ function getPowerupSpawnChance(
     // Base chance increases slightly with difficulty
     const baseChance = 0.02 + (difficulty - 1) * 0.005; // 2-5% base chance
 
-    // Increase chance if player has killed many enemies recently
+    // Increase chance if player has killed many enemies
     const killBonus = Math.min(0.03, enemiesKilled * 0.001);
 
-    return Math.min(0.08, baseChance + killBonus); // Cap at 8%
+    return Math.min(0.1, baseChance + killBonus); // Cap at 10%
 }
 
 /**
