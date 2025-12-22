@@ -33,6 +33,8 @@ export interface GameState {
     // XP Multiplier System
     xpMultiplier: number; // Float value for precise multiplier
     lastKillTime: number; // Timestamp of last enemy kill for multiplier decay
+    // Settings
+    autofireMode: boolean;
 }
 
 // Bullet configuration interface

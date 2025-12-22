@@ -335,16 +335,6 @@ export function updateTurret(
         const dx = target.x - turret.x;
         const dy = target.y - turret.y;
         turret.angle = Math.atan2(dy, dx);
-
-        // Check if we can shoot
-        const timeSinceLastShot = timestamp - turret.lastShotTime;
-        const shotInterval = 1000 / turret.weapon.fireRate;
-
-        if (timeSinceLastShot >= shotInterval) {
-            turret.lastShotTime = timestamp;
-            // Shooting will be handled by the main game loop
-            // which will create bullets from the turret position
-        }
     }
 }
 

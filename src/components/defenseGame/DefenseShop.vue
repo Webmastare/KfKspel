@@ -242,99 +242,101 @@
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Placeables Tab -->
-      <div v-show="activeTab === 'placeables'" class="tab-content">
-        <!-- Placeables Section -->
-        <div class="shop-section">
-          <h3>🏗️ Placeables</h3>
-          <div class="placeables-grid">
-            <!-- Turrets -->
-            <div
-              v-for="template in availableTurrets"
-              :key="template.name"
-              class="placeable-card turret"
-            >
-              <div class="placeable-header">
-                <h4>🔫 {{ template.name }}</h4>
-                <div class="placeable-cost">{{ template.cost }}💰</div>
-              </div>
-              <div class="placeable-stats">
-                <div>❤️ Health: {{ template.health }}</div>
-                <div>📏 Range: {{ template.range }}</div>
-                <div>🎯 Weapon: {{ template.weaponName }}</div>
-              </div>
-              <div class="placeable-description">{{ template.description }}</div>
-              <button
-                @click="startPlacement(template)"
-                :disabled="!canAfford(template.cost)"
-                class="place-btn"
-              >
-                Place ({{ template.cost }}💰)
-              </button>
-            </div>
-
-            <!-- Walls -->
-            <div
-              v-for="template in availableWalls"
-              :key="template.name"
-              class="placeable-card wall"
-            >
-              <div class="placeable-header">
-                <h4>🧱 {{ template.name }}</h4>
-                <div class="placeable-cost">{{ template.cost }}💰</div>
-              </div>
-              <div class="placeable-stats">
-                <div>❤️ Health: {{ template.health }}</div>
-                <div>📐 Size: {{ template.width }}x{{ template.height }}</div>
-                <div v-if="template.blocksBullets">🛡️ Blocks: Movement & Bullets</div>
-                <div v-else>🚧 Blocks: Movement Only</div>
-              </div>
-              <div class="placeable-description">{{ template.description }}</div>
-              <button
-                @click="startPlacement(template)"
-                :disabled="!canAfford(template.cost)"
-                class="place-btn"
-              >
-                Place ({{ template.cost }}💰)
-              </button>
-            </div>
-          </div>
-
-          <!-- Locked Placeables -->
-          <div v-if="lockedPlaceables.length > 0" class="locked-placeables">
-            <h4>🔒 Locked Placeables</h4>
+        <!-- Placeables Tab -->
+        <div v-show="activeTab === 'placeables'" class="tab-content">
+          <!-- Placeables Section -->
+          <div class="shop-section">
+            <h3>🏗️ Placeables</h3>
             <div class="placeables-grid">
+              <!-- Turrets -->
               <div
-                v-for="template in lockedPlaceables"
+                v-for="template in availableTurrets"
                 :key="template.name"
-                class="placeable-card locked"
+                class="placeable-card turret"
               >
                 <div class="placeable-header">
-                  <h4>{{ template.type === 'turret' ? '🔫' : '🧱' }} {{ template.name }}</h4>
-                  <div class="level-requirement">Lvl {{ template.levelRequired }}</div>
+                  <h4>🔫 {{ template.name }}</h4>
+                  <div class="placeable-cost">{{ template.cost }}💰</div>
                 </div>
-                <div class="level-progress-container">
-                  <div class="level-progress-bar">
-                    <div
-                      class="progress-fill"
-                      :style="{ width: getPlaceableLevelProgress(template) + '%' }"
-                    ></div>
-                  </div>
-                  <span class="progress-text"
-                    >Level {{ playerLevel }}/{{ template.levelRequired }}</span
-                  >
-                </div>
-                <div class="placeable-stats locked-stats">
+                <div class="placeable-stats">
                   <div>❤️ Health: {{ template.health }}</div>
-                  <div v-if="template.type === 'turret'">📏 Range: {{ template.range }}</div>
-                  <div v-if="template.type === 'turret'">🎯 Weapon: {{ template.weaponName }}</div>
-                  <div v-if="template.type === 'wall'">
-                    📐 Size: {{ template.width }}x{{ template.height }}
-                  </div>
+                  <div>📏 Range: {{ template.range }}</div>
+                  <div>🎯 Weapon: {{ template.weaponName }}</div>
                 </div>
                 <div class="placeable-description">{{ template.description }}</div>
+                <button
+                  @click="startPlacement(template)"
+                  :disabled="!canAfford(template.cost)"
+                  class="place-btn"
+                >
+                  Place ({{ template.cost }}💰)
+                </button>
+              </div>
+
+              <!-- Walls -->
+              <div
+                v-for="template in availableWalls"
+                :key="template.name"
+                class="placeable-card wall"
+              >
+                <div class="placeable-header">
+                  <h4>🧱 {{ template.name }}</h4>
+                  <div class="placeable-cost">{{ template.cost }}💰</div>
+                </div>
+                <div class="placeable-stats">
+                  <div>❤️ Health: {{ template.health }}</div>
+                  <div>📐 Size: {{ template.width }}x{{ template.height }}</div>
+                  <div v-if="template.blocksBullets">🛡️ Blocks: Movement & Bullets</div>
+                  <div v-else>🚧 Blocks: Movement Only</div>
+                </div>
+                <div class="placeable-description">{{ template.description }}</div>
+                <button
+                  @click="startPlacement(template)"
+                  :disabled="!canAfford(template.cost)"
+                  class="place-btn"
+                >
+                  Place ({{ template.cost }}💰)
+                </button>
+              </div>
+            </div>
+
+            <!-- Locked Placeables -->
+            <div v-if="lockedPlaceables.length > 0" class="locked-placeables">
+              <h4>🔒 Locked Placeables</h4>
+              <div class="placeables-grid">
+                <div
+                  v-for="template in lockedPlaceables"
+                  :key="template.name"
+                  class="placeable-card locked"
+                >
+                  <div class="placeable-header">
+                    <h4>{{ template.type === 'turret' ? '🔫' : '🧱' }} {{ template.name }}</h4>
+                    <div class="level-requirement">Lvl {{ template.levelRequired }}</div>
+                  </div>
+                  <div class="level-progress-container">
+                    <div class="level-progress-bar">
+                      <div
+                        class="progress-fill"
+                        :style="{ width: getPlaceableLevelProgress(template) + '%' }"
+                      ></div>
+                    </div>
+                    <span class="progress-text"
+                      >Level {{ playerLevel }}/{{ template.levelRequired }}</span
+                    >
+                  </div>
+                  <div class="placeable-stats locked-stats">
+                    <div>❤️ Health: {{ template.health }}</div>
+                    <div v-if="template.type === 'turret'">📏 Range: {{ template.range }}</div>
+                    <div v-if="template.type === 'turret'">
+                      🎯 Weapon: {{ template.weaponName }}
+                    </div>
+                    <div v-if="template.type === 'wall'">
+                      📐 Size: {{ template.width }}x{{ template.height }}
+                    </div>
+                  </div>
+                  <div class="placeable-description">{{ template.description }}</div>
+                </div>
               </div>
             </div>
           </div>
