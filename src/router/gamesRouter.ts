@@ -1,79 +1,52 @@
-import path from "path";
-
 export default [
     {
         path: "/2048",
         name: "2048",
-        component: () => import("@/pages/2048.vue"),
+        component: () => import("@/pages/games/2048.vue"),
     },
     {
         path: "/minesweeper",
         name: "Minesweeper",
-        component: () => import("@/pages/Minesweeper.vue"),
+        component: () => import("@/pages/games/Minesweeper.vue"),
     },
     {
         path: "/kfkblock",
         name: "KfKblock",
-        component: () => import("@/pages/KfKblock.vue"),
+        component: () => import("@/pages/games/KfKblock.vue"),
     },
     {
         path: "/kfkbandvagn",
         name: "KfKbandvagn",
-        component: () => import("@/pages/Kfkbandvagn.vue"),
+        component: () => import("@/pages/games/KfKbandvagn.vue"),
     },
     {
         path: "/snake",
         name: "Snake",
-        component: () => import("@/pages/Snake.vue"),
+        component: () => import("@/pages/games/Snake.vue"),
     },
     {
         path: "/lights-out",
         name: "LightsOut",
-        component: () => import("@/pages/LightsOut.vue"),
+        component: () => import("@/pages/games/LightsOut.vue"),
     },
     {
         path: "/circle-game",
         name: "CircleGame",
-        component: () => import("@/pages/CircleGame.vue"),
-    },
-    {
-        path: "/simulator",
-        name: "KfkSimulator",
-        component: () => import("@/pages/Simulator.vue"),
+        component: () => import("@/pages/games/CircleGame.vue"),
     },
     {
         path: "/kfkbatians",
         name: "KfkBatians",
-        component: () => import("@/pages/KfkBatians.vue"),
+        component: () => import("@/pages/games/KfkBatians.vue"),
     },
     {
         path: "/ordel",
         name: "Ordel",
-        component: () => import("@/pages/Ordel.vue"),
-    },
-    {
-        path: "/plinko",
-        name: "Plinko",
-        component: () => import("@/pages/minigames/Plinko.vue"),
-    },
-    {
-        path: "/tower-drop",
-        name: "TowerDrop",
-        component: () => import("@/pages/minigames/TowerDrop.vue"),
-    },
-    {
-        path: "/dodge-game",
-        name: "DodgeGame",
-        component: () => import("@/pages/minigames/Dodge.vue"),
-    },
-    {
-        path: "/defense-game",
-        name: "DefenseGame",
-        component: () => import("@/pages/Defense.vue"),
+        component: () => import("@/pages/games/Ordel.vue"),
     },
     {
         path: "/ordel-embed",
         name: "OrdelEmbed",
-        component: () => import("@/pages/OrdelEmbed.vue"),
+        component: () => import("@/pages/games/OrdelEmbed.vue"),
     },
 ];
