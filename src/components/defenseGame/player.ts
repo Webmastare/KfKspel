@@ -1,4 +1,4 @@
-import type { Player, Upgrade } from "./defenseTypes";
+import type { Player } from "./defenseTypes";
 import { EnemyType } from "./defenseTypes";
 
 // Player-related interfaces that can be exported
@@ -133,7 +133,6 @@ export function createPlayer(weaponTemplate: any): Player {
         health: 100,
         maxHealth: 100,
         currentWeapon: weaponTemplate,
-        upgrades: {},
         money: 10000, // Starting money
         ownedWeapons: {},
         // XP System

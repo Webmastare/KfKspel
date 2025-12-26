@@ -1,178 +1,186 @@
-import { EnemyType } from "./defenseTypes";
+import { type Enemy, EnemyType } from "./defenseTypes";
 
-// Enemy template interface for defining base stats
-export interface EnemyTemplate {
-    type: EnemyType;
-    baseHealth: number;
-    baseSpeed: number;
-    baseDamage: number;
-    baseValue: number;
-    size: { width: number; height: number };
+// Base config type for non-shooting enemies
+type BaseEnemyConfig = {
+    health: number;
+    speed: number;
+    damage: number;
+    value: number;
+    width: number;
+    height: number;
     color: string;
     borderColor: string;
-    canShoot?: boolean;
-    range?: number;
-    fireRate?: number;
-    bulletSpeed?: number;
-    spawnWeight: number; // Higher = more likely to spawn
-}
+    spawnWeight: number;
+};
 
-// Enemy templates with base stats for each enemy type
-export const enemyTemplates: Record<EnemyType, EnemyTemplate> = {
+// Extended config for shooting enemies
+type ShootingEnemyConfig = BaseEnemyConfig & {
+    range: number;
+    fireRate: number;
+    bulletSpeed: number;
+    lastShotTime: number;
+};
+
+// Simplified enemy configs
+const enemyConfigs = {
     [EnemyType.BASIC]: {
-        type: EnemyType.BASIC,
-        baseHealth: 35, // Reduced from 50
-        baseSpeed: 1.2, // Reduced from 1.5
-        baseDamage: 8, // Reduced from 10
-        baseValue: 5,
-        size: { width: 20, height: 20 },
+        health: 35,
+        speed: 1.2,
+        damage: 8,
+        value: 5,
+        width: 20,
+        height: 20,
         color: "#ef4444",
         borderColor: "#991b1b",
         spawnWeight: 10,
-    },
+    } satisfies BaseEnemyConfig,
     [EnemyType.FAST]: {
-        type: EnemyType.FAST,
-        baseHealth: 25, // Reduced from 30
-        baseSpeed: 2.8, // Reduced from 3.5
-        baseDamage: 6, // Reduced from 8
-        baseValue: 8,
-        size: { width: 16, height: 16 },
+        health: 25,
+        speed: 2.8,
+        damage: 6,
+        value: 8,
+        width: 16,
+        height: 16,
         color: "#fbbf24",
         borderColor: "#d97706",
         spawnWeight: 6,
-    },
+    } satisfies BaseEnemyConfig,
     [EnemyType.TANK]: {
-        type: EnemyType.TANK,
-        baseHealth: 80, // Reduced from 120
-        baseSpeed: 0.7, // Reduced from 0.8
-        baseDamage: 18, // Reduced from 25
-        baseValue: 15,
-        size: { width: 32, height: 32 },
+        health: 80,
+        speed: 0.7,
+        damage: 18,
+        value: 15,
+        width: 32,
+        height: 32,
         color: "#6b7280",
         borderColor: "#374151",
         spawnWeight: 3,
-    },
+    } satisfies BaseEnemyConfig,
     [EnemyType.SHOOTER]: {
-        type: EnemyType.SHOOTER,
-        baseHealth: 30, // Reduced from 40
-        baseSpeed: 0.9, // Reduced from 1.0
-        baseDamage: 4, // Reduced from 5
-        baseValue: 12,
-        size: { width: 22, height: 22 },
+        health: 30,
+        speed: 0.9,
+        damage: 4,
+        value: 12,
+        width: 22,
+        height: 22,
         color: "#8b5cf6",
         borderColor: "#5b21b6",
-        canShoot: true,
-        range: 240, // Reduced from 300
-        fireRate: 0.6, // Reduced from 1.5
-        bulletSpeed: 300,
         spawnWeight: 4,
-    },
+        range: 240,
+        fireRate: 0.6,
+        bulletSpeed: 300,
+        lastShotTime: 0,
+    } satisfies ShootingEnemyConfig,
     [EnemyType.ELITE]: {
-        type: EnemyType.ELITE,
-        baseHealth: 120, // Reduced from 200
-        baseSpeed: 1.6, // Reduced from 2.0
-        baseDamage: 22, // Reduced from 35
-        baseValue: 25,
-        size: { width: 28, height: 28 },
+        health: 120,
+        speed: 1.6,
+        damage: 22,
+        value: 25,
+        width: 28,
+        height: 28,
         color: "#dc2626",
         borderColor: "#7f1d1d",
-        canShoot: true,
-        range: 300, // Reduced from 350
-        fireRate: 1.2, // Reduced from 2.0
-        bulletSpeed: 450, // Reduced from 500
         spawnWeight: 1,
-    },
+        range: 300,
+        fireRate: 1.2,
+        bulletSpeed: 450,
+        lastShotTime: 0,
+    } satisfies ShootingEnemyConfig,
 };
 
-// Difficulty scaling functions - much more gradual progression
-export function getDifficultyLevel(enemiesKilled: number): number {
-    return Math.floor(enemiesKilled / 25) + 1; // Increased from 10 to 25
-}
+// Helper to check if enemy has shooting config
+const hasShootingConfig = (
+    config: BaseEnemyConfig | ShootingEnemyConfig,
+): config is ShootingEnemyConfig => "range" in config;
 
-export function getWaveNumber(enemiesKilled: number): number {
-    return Math.floor(enemiesKilled / 30) + 1; // Increased from 15 to 30
-}
+// Simplified difficulty functions
+export const getDifficultyLevel = (enemiesKilled: number) =>
+    Math.floor(enemiesKilled / 25) + 1;
+export const getWaveNumber = (enemiesKilled: number) =>
+    Math.floor(enemiesKilled / 30) + 1;
 
 /**
- * Scale enemy stats based on current difficulty level
+ * Create enemy with scaled stats based on difficulty
  */
-export function scaleEnemyStats(template: EnemyTemplate, difficulty: number) {
-    // Much more gradual scaling - reduced multipliers
-    const healthMultiplier = 1 + (difficulty - 1) * 0.15;
-    const speedMultiplier = 1 + (difficulty - 1) * 0.05;
-    const damageMultiplier = 1 + (difficulty - 1) * 0.1;
-    const valueMultiplier = 1 + (difficulty - 1) * 0.1;
+export function createEnemy(
+    type: EnemyType,
+    difficulty: number,
+    id: number,
+): Enemy {
+    const config = enemyConfigs[type];
+    const healthMult = 1 + (difficulty - 1) * 0.15;
+    const speedMult = 1 + (difficulty - 1) * 0.05;
+    const damageMult = 1 + (difficulty - 1) * 0.1;
+    const valueMult = 1 + (difficulty - 1) * 0.1;
 
-    const stats: any = {
-        health: Math.floor(template.baseHealth * healthMultiplier),
-        maxHealth: Math.floor(template.baseHealth * healthMultiplier),
-        speed: template.baseSpeed * speedMultiplier,
-        damage: Math.floor(template.baseDamage * damageMultiplier),
-        value: Math.floor(template.baseValue * valueMultiplier),
-        width: template.size.width,
-        height: template.size.height,
-        type: template.type,
+    const scaledHealth = Math.floor(config.health * healthMult);
+
+    const baseEnemy = {
+        id,
+        x: 0,
+        y: 0,
+        angle: 0, // Position set by spawn logic
+        type,
+        health: scaledHealth,
+        maxHealth: scaledHealth,
+        speed: config.speed * speedMult,
+        damage: Math.floor(config.damage * damageMult),
+        value: Math.floor(config.value * valueMult),
+        width: config.width,
+        height: config.height,
+        color: config.color,
+        borderColor: config.borderColor,
     };
 
-    if (template.range !== undefined) {
-        const rangeMultiplier = 1 + (difficulty - 1) * 0.02;
-        stats.range = template.range * rangeMultiplier;
+    // Add shooting properties if enemy can shoot
+    if (hasShootingConfig(config)) {
+        return {
+            ...baseEnemy,
+            range: config.range * (1 + (difficulty - 1) * 0.02),
+            fireRate: config.fireRate * (1 + (difficulty - 1) * 0.03),
+            bulletSpeed: config.bulletSpeed * (1 + (difficulty - 1) * 0.04),
+            lastShotTime: 0,
+        };
     }
-    if (template.fireRate !== undefined) {
-        const fireRateMultiplier = 1 + (difficulty - 1) * 0.03;
-        stats.fireRate = template.fireRate * fireRateMultiplier;
-    }
-    if (template.bulletSpeed !== undefined) {
-        const bulletSpeedMultiplier = 1 + (difficulty - 1) * 0.04;
-        stats.bulletSpeed = template.bulletSpeed * bulletSpeedMultiplier;
-    }
-    if (template.canShoot) stats.lastShotTime = 0;
 
-    return stats;
+    return baseEnemy;
 }
 
 /**
- * Select enemy type based on difficulty level with weighted random selection
+ * Select enemy type based on difficulty with weighted random selection
  */
 export function selectEnemyType(difficulty: number): EnemyType {
-    // Determine available enemy types based on difficulty
-    let availableTypes: Array<{ type: EnemyType; weight: number }> = [
+    const availableTypes = [
         {
             type: EnemyType.BASIC,
-            weight: enemyTemplates[EnemyType.BASIC].spawnWeight,
+            weight: enemyConfigs[EnemyType.BASIC].spawnWeight,
         },
+        ...(difficulty >= 3
+            ? [{
+                type: EnemyType.FAST,
+                weight: enemyConfigs[EnemyType.FAST].spawnWeight,
+            }]
+            : []),
+        ...(difficulty >= 5
+            ? [{
+                type: EnemyType.SHOOTER,
+                weight: enemyConfigs[EnemyType.SHOOTER].spawnWeight,
+            }]
+            : []),
+        ...(difficulty >= 7
+            ? [{
+                type: EnemyType.TANK,
+                weight: enemyConfigs[EnemyType.TANK].spawnWeight,
+            }]
+            : []),
+        ...(difficulty >= 10
+            ? [{
+                type: EnemyType.ELITE,
+                weight: enemyConfigs[EnemyType.ELITE].spawnWeight,
+            }]
+            : []),
     ];
 
-    if (difficulty >= 3) {
-        // Increased from 2 to 3
-        availableTypes.push({
-            type: EnemyType.FAST,
-            weight: enemyTemplates[EnemyType.FAST].spawnWeight,
-        });
-    }
-    if (difficulty >= 5) {
-        // Increased from 3 to 5
-        availableTypes.push({
-            type: EnemyType.SHOOTER,
-            weight: enemyTemplates[EnemyType.SHOOTER].spawnWeight,
-        });
-    }
-    if (difficulty >= 7) {
-        // Increased from 4 to 7
-        availableTypes.push({
-            type: EnemyType.TANK,
-            weight: enemyTemplates[EnemyType.TANK].spawnWeight,
-        });
-    }
-    if (difficulty >= 10) {
-        // Increased from 6 to 10
-        availableTypes.push({
-            type: EnemyType.ELITE,
-            weight: enemyTemplates[EnemyType.ELITE].spawnWeight,
-        });
-    }
-
-    // Weighted random selection
     const totalWeight = availableTypes.reduce(
         (sum, enemy) => sum + enemy.weight,
         0,
@@ -181,24 +189,23 @@ export function selectEnemyType(difficulty: number): EnemyType {
 
     for (const enemyType of availableTypes) {
         random -= enemyType.weight;
-        if (random <= 0) {
-            return enemyType.type;
-        }
+        if (random <= 0) return enemyType.type;
     }
 
-    return EnemyType.BASIC; // Fallback
+    return EnemyType.BASIC;
 }
 
 /**
- * Get base XP value for different enemy types
+ * Get XP value for enemy types
  */
-export function getEnemyXpValue(enemyType: EnemyType): number {
-    const xpValues = {
+export const getEnemyXpValue = (enemyType: EnemyType) =>
+    ({
         [EnemyType.BASIC]: 10,
         [EnemyType.FAST]: 15,
         [EnemyType.SHOOTER]: 20,
         [EnemyType.TANK]: 25,
         [EnemyType.ELITE]: 40,
-    };
-    return xpValues[enemyType] || 10;
-}
+    })[enemyType] || 10;
+
+// Export configs for external use (rendering, etc.)
+export { enemyConfigs };

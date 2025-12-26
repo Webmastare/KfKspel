@@ -53,7 +53,7 @@
       <div class="weapon-section">
         <div class="weapon-name">{{ player.currentWeapon?.name || 'No Weapon' }}</div>
         <div class="weapon-stats">
-          Dmg: {{ player.currentWeapon?.bullet?.damage || 0 }} | Rate:
+          Dmg: {{ player.currentWeapon?.bulletDamage || 0 }} | Rate:
           {{ (player.currentWeapon?.fireRate || 0).toFixed(1) }}/s | Range:
           {{ player.currentWeapon?.range || 0 }}
         </div>
@@ -70,6 +70,11 @@
         @mousemove="handleCanvasMouseMove"
         tabindex="0"
       ></canvas>
+
+      <!-- Fire Mode Indicator -->
+      <div class="fire-mode-indicator" :class="{ manual: game.manualFireMode }">
+        {{ game.manualFireMode ? 'MANUAL' : 'AUTO' }}
+      </div>
 
       <div v-if="game.paused && game.running" class="overlay paused-overlay">
         <div class="overlay-content">
@@ -118,6 +123,25 @@
           </div>
         </div>
       </div>
+
+      <!-- Placement HUD - shows what's being previewed -->
+      <div v-if="placementMode.active && placementMode.template" class="placement-hud">
+        <div class="placement-info">
+          <div class="placement-icon" :class="placementMode.template.type">
+            {{ placementMode.template.type === 'turret' ? '🏗️' : '🧱' }}
+          </div>
+          <div class="placement-details">
+            <div class="placement-name">{{ placementMode.template.name }}</div>
+            <div class="placement-meta">
+              <span class="placement-cost">💰 {{ placementMode.template.cost }}</span>
+              <span class="placement-rotation" v-if="placementRotation > 0">
+                ↻ {{ placementRotation }}°
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="placement-help">Press R to rotate • ESC to cancel</div>
+      </div>
     </div>
 
     <!-- Bottom UI Bar -->
@@ -137,7 +161,8 @@
       </div>
 
       <div class="help-text">
-        WASD/Arrows: Move | Space: Switch Weapon | ESC: Pause<br />
+        WASD/Arrows: Move | 1/2: Switch Weapon | F: Toggle Fire Mode<br />
+        Space: Fire (Manual mode) | I: Shop | R: Rotate (Placement) | ESC: Pause<br />
         <small
           >Enemy Types:
           <span style="color: #ef4444">■ Basic</span>
@@ -190,10 +215,10 @@ import type {
 import { EnemyType, PowerupType, PlaceableType } from '@/components/defenseGame/defenseTypes'
 // Enemy-related imports
 import {
-  enemyTemplates,
+  enemyConfigs,
+  createEnemy,
   getDifficultyLevel,
   getWaveNumber,
-  scaleEnemyStats,
   selectEnemyType,
   getEnemyXpValue,
 } from '@/components/defenseGame/enemies'
@@ -218,7 +243,7 @@ import {
   createPowerup,
   getPowerupSpawnChance,
   getRandomPowerupSpawnPosition,
-  powerupTemplates,
+  powerupConfigs,
   shouldPowerupDespawn,
 } from '@/components/defenseGame/powerupSystem'
 // Animation system imports
@@ -274,51 +299,10 @@ const player: Player = reactive({
   angle: 0,
   health: 100,
   maxHealth: 100,
-  currentWeapon: basicGunTemplate
-    ? createWeaponCopy(basicGunTemplate)
-    : {
-        name: 'Basic Gun',
-        fireRate: 1,
-        penetration: 1,
-        lastShotTime: 0,
-        range: 350,
-        cost: 0,
-        levelRequired: 1,
-        weaponType: 'single',
-        bullet: {
-          speed: 700,
-          size: 4,
-          damage: 25,
-          particleCount: 1.0,
-          explosionRadius: 0.8,
-          color: '#FFD700',
-          trailLength: 1.0,
-        },
-      },
-  upgrades: {},
+  currentWeapon: createWeaponCopy(basicGunTemplate!),
   money: 10000, // Starting money
   ownedWeapons: {
-    'Basic Gun': basicGunTemplate
-      ? createWeaponCopy(basicGunTemplate)
-      : {
-          name: 'Basic Gun',
-          fireRate: 1,
-          penetration: 1,
-          lastShotTime: 0,
-          range: 350,
-          cost: 0,
-          levelRequired: 1,
-          weaponType: 'single',
-          bullet: {
-            speed: 700,
-            size: 4,
-            damage: 25,
-            particleCount: 1.0,
-            explosionRadius: 0.8,
-            color: '#FFD700',
-            trailLength: 1.0,
-          },
-        },
+    'Basic Gun': createWeaponCopy(basicGunTemplate!),
   },
   // XP System
   level: 10,
@@ -340,6 +324,7 @@ const placementMode = ref<{ active: boolean; template: PlaceableTemplate | null 
   template: null,
 })
 const placementPreview = ref<PlacementPreview | null>(null)
+const placementRotation = ref(0) // Track current rotation angle (0, 90, 180, 270)
 const game = reactive<GameState>({
   game_width: 900,
   game_height: 600,
@@ -360,7 +345,11 @@ const game = reactive<GameState>({
   lastKillTime: 0, // Timestamp of last enemy kill
 
   // Settings
-  autofireMode: false,
+  autofireMode: true, // Enable autofire by default
+  manualFireMode: false, // false = autofire, true = manual
+  mouseWorldX: 0,
+  mouseWorldY: 0,
+  isFireKeyPressed: false,
 })
 
 // Initialize collision system
@@ -430,14 +419,14 @@ function updatePowerups() {
 function collectPowerup(powerup: Powerup) {
   const now = Date.now()
 
-  if (powerup.effect.type === 'instant') {
+  if (powerup.effectType === 'instant') {
     // Apply instant effects immediately
     switch (powerup.type) {
       case PowerupType.HEALTH_PACK:
-        player.health = Math.min(player.maxHealth, player.health + powerup.effect.value)
+        player.health = Math.min(player.maxHealth, player.health + powerup.effectValue)
         break
       case PowerupType.CASH_BONUS:
-        player.money += powerup.effect.value
+        player.money += powerup.effectValue
         break
     }
     // Add to active powerups to display in HUD
@@ -445,24 +434,24 @@ function collectPowerup(powerup: Powerup) {
       type: powerup.type,
       effectType: 'instant',
       name: powerup.name,
-      value: powerup.effect.value,
+      value: powerup.effectValue,
       description: powerup.description,
       color: powerup.color,
       remainingTime: 3000,
       startTime: now,
     }
     activePowerups.push(activePowerup)
-  } else if (powerup.effect.type === 'duration') {
+  } else if (powerup.effectType === 'duration') {
     // Add or refresh duration-based effect
     const existingIndex = activePowerups.findIndex((ap) => ap.type === powerup.type)
 
     if (existingIndex >= 0 && activePowerups[existingIndex]) {
       // Refresh existing powerup
-      activePowerups[existingIndex].remainingTime = powerup.effect.duration!
+      activePowerups[existingIndex].remainingTime = powerup.effectDuration!
       activePowerups[existingIndex].startTime = now
       // Increase value if new value is higher (for stacking effects)
-      if (powerup.effect.value > activePowerups[existingIndex].value) {
-        activePowerups[existingIndex].value = powerup.effect.value
+      if (powerup.effectValue > activePowerups[existingIndex].value) {
+        activePowerups[existingIndex].value = powerup.effectValue
       }
     } else {
       // Add new active powerup
@@ -470,10 +459,10 @@ function collectPowerup(powerup: Powerup) {
         type: powerup.type,
         effectType: 'duration',
         name: powerup.name,
-        value: powerup.effect.value, // Slight randomization for variety
+        value: powerup.effectValue,
         description: powerup.description,
         color: powerup.color,
-        remainingTime: powerup.effect.duration!,
+        remainingTime: powerup.effectDuration!,
         startTime: now,
       }
       activePowerups.push(activePowerup)
@@ -516,7 +505,7 @@ function getEffectiveWeaponDamage(): number {
     }
   }
 
-  return (player.currentWeapon?.bullet?.damage || 25) * damageMultiplier
+  return (player.currentWeapon?.bulletDamage || 25) * damageMultiplier
 }
 
 function getEffectiveFireRate(): number {
@@ -688,23 +677,52 @@ function handleShooting(timestamp: number) {
   const effectiveFireRate = getEffectiveFireRate()
   const shotInterval = 1000 / effectiveFireRate // Convert to milliseconds
 
-  if (timeSinceLastShot >= shotInterval && enemies.length > 0 && game.autofireMode) {
-    // Find closest enemy within range
-    const closestEnemy = findClosestEnemyInRange()
-    if (closestEnemy) {
-      // Add muzzle flash animation
-      const angle = Math.atan2(closestEnemy.y - player.y, closestEnemy.x - player.x)
-      addMuzzleFlash(
-        animationState,
-        player.x,
-        player.y,
-        angle,
-        player.currentWeapon?.weaponType || 'single',
-      )
+  if (timeSinceLastShot >= shotInterval) {
+    if (game.manualFireMode) {
+      // Manual firing mode - only fire when space is pressed
+      if (game.isFireKeyPressed) {
+        // Fire towards mouse cursor
+        const angle = Math.atan2(game.mouseWorldY - player.y, game.mouseWorldX - player.x)
+        const range = player.currentWeapon?.range || 350
 
-      shootBullet(closestEnemy)
-      if (player.currentWeapon) {
-        player.currentWeapon.lastShotTime = timestamp
+        // Create a target point based on mouse direction
+        const targetX = player.x + Math.cos(angle) * range
+        const targetY = player.y + Math.sin(angle) * range
+
+        // Add muzzle flash animation
+        addMuzzleFlash(
+          animationState,
+          player.x,
+          player.y,
+          angle,
+          player.currentWeapon?.weaponType || 'single',
+        )
+
+        shootBulletTowardsPoint(targetX, targetY)
+        if (player.currentWeapon) {
+          player.currentWeapon.lastShotTime = timestamp
+        }
+      }
+    } else {
+      // Auto firing mode - target closest enemy automatically
+      if (enemies.length > 0 && game.autofireMode) {
+        const closestEnemy = findClosestEnemyInRange()
+        if (closestEnemy) {
+          // Add muzzle flash animation
+          const angle = Math.atan2(closestEnemy.y - player.y, closestEnemy.x - player.x)
+          addMuzzleFlash(
+            animationState,
+            player.x,
+            player.y,
+            angle,
+            player.currentWeapon?.weaponType || 'single',
+          )
+
+          shootBullet(closestEnemy)
+          if (player.currentWeapon) {
+            player.currentWeapon.lastShotTime = timestamp
+          }
+        }
       }
     }
   }
@@ -755,20 +773,20 @@ function shootBullet(target: Enemy) {
         id: Date.now() + Math.random() + i, // Ensure unique ID
         x: player.x,
         y: player.y,
-        width: weapon.bullet?.size || 4,
-        height: weapon.bullet?.size || 4,
-        speed: weapon.bullet?.speed || 700,
+        width: weapon.bulletSize,
+        height: weapon.bulletSize,
+        speed: weapon.bulletSpeed,
         angle: bulletAngle,
         damage: effectiveDamage,
         penetrationLeft: weapon.weaponType === 'shotgun' ? 0 : effectivePenetration, // Shotgun pellets don't penetrate, but multishot does
         targetX: target.x + Math.cos(bulletAngle) * 100, // Spread target
         targetY: target.y + Math.sin(bulletAngle) * 100,
         createdAt: Date.now(),
-        // Animation properties from bullet config
-        particleCount: weapon.bullet?.particleCount || 1.0,
-        explosionRadius: weapon.bullet?.explosionRadius || 0.8,
-        color: weapon.bullet?.color || '#FFD700',
-        trailLength: weapon.bullet?.trailLength || 1.0,
+        // Animation properties
+        particleCount: weapon.particleCount || 1.0,
+        explosionRadius: weapon.explosionRadius || 0.8,
+        color: weapon.bulletColor,
+        trailLength: weapon.trailLength || 1.0,
       }
 
       bullets.push(bullet)
@@ -779,20 +797,93 @@ function shootBullet(target: Enemy) {
       id: Date.now() + Math.random(),
       x: player.x,
       y: player.y,
-      width: weapon.bullet?.size || 4,
-      height: weapon.bullet?.size || 4,
-      speed: weapon.bullet?.speed || 700,
+      width: weapon.bulletSize,
+      height: weapon.bulletSize,
+      speed: weapon.bulletSpeed,
       angle: baseAngle,
       damage: effectiveDamage,
       penetrationLeft: effectivePenetration,
       targetX: target.x,
       targetY: target.y,
       createdAt: Date.now(),
-      // Animation properties from bullet config
-      particleCount: weapon.bullet?.particleCount || 1.0,
-      explosionRadius: weapon.bullet?.explosionRadius || 0.8,
-      color: weapon.bullet?.color || '#FFD700',
-      trailLength: weapon.bullet?.trailLength || 1.0,
+      // Animation properties
+      particleCount: weapon.particleCount || 1.0,
+      explosionRadius: weapon.explosionRadius || 0.8,
+      color: weapon.bulletColor,
+      trailLength: weapon.trailLength || 1.0,
+    }
+
+    bullets.push(bullet)
+  }
+}
+
+function shootBulletTowardsPoint(targetX: number, targetY: number) {
+  const baseAngle = Math.atan2(targetY - player.y, targetX - player.x)
+  const weapon = player.currentWeapon
+  if (!weapon) return
+
+  const effectiveDamage = getEffectiveWeaponDamage()
+  const effectivePenetration = getEffectivePenetration()
+  const effectiveBulletCount = getEffectiveBulletCount()
+
+  // Handle different weapon types or multishot powerup
+  if (
+    (weapon.weaponType === 'shotgun' && weapon.bulletCount && weapon.spread) ||
+    effectiveBulletCount > 1
+  ) {
+    // Shotgun or multishot - fire multiple bullets with spread
+    const spreadRadians = weapon.spread ? (weapon.spread * Math.PI) / 180 : Math.PI / 6 // Default 30° spread for multishot
+    const bulletCount =
+      weapon.weaponType === 'shotgun' ? weapon.bulletCount || 1 : effectiveBulletCount
+
+    for (let i = 0; i < bulletCount; i++) {
+      // Calculate spread angle for each bullet
+      const spreadRange = spreadRadians
+      const spreadStep = spreadRange / (bulletCount - 1)
+      const bulletAngle = baseAngle + i * spreadStep - spreadRange / 2
+
+      const bullet: Bullet = {
+        id: Date.now() + Math.random() + i, // Ensure unique ID
+        x: player.x,
+        y: player.y,
+        width: weapon.bulletSize,
+        height: weapon.bulletSize,
+        speed: weapon.bulletSpeed,
+        angle: bulletAngle,
+        damage: effectiveDamage,
+        penetrationLeft: weapon.weaponType === 'shotgun' ? 0 : effectivePenetration, // Shotgun pellets don't penetrate, but multishot does
+        targetX: targetX + Math.cos(bulletAngle) * 100, // Spread target
+        targetY: targetY + Math.sin(bulletAngle) * 100,
+        createdAt: Date.now(),
+        // Animation properties
+        particleCount: weapon.particleCount || 1.0,
+        explosionRadius: weapon.explosionRadius || 0.8,
+        color: weapon.bulletColor,
+        trailLength: weapon.trailLength || 1.0,
+      }
+
+      bullets.push(bullet)
+    }
+  } else {
+    // Single shot weapons (rifles, pistols, etc.)
+    const bullet: Bullet = {
+      id: Date.now() + Math.random(),
+      x: player.x,
+      y: player.y,
+      width: weapon.bulletSize,
+      height: weapon.bulletSize,
+      speed: weapon.bulletSpeed,
+      angle: baseAngle,
+      damage: effectiveDamage,
+      penetrationLeft: effectivePenetration,
+      targetX: targetX,
+      targetY: targetY,
+      createdAt: Date.now(),
+      // Animation properties
+      particleCount: weapon.particleCount || 1.0,
+      explosionRadius: weapon.explosionRadius || 0.8,
+      color: weapon.bulletColor,
+      trailLength: weapon.trailLength || 1.0,
     }
 
     bullets.push(bullet)
@@ -811,6 +902,7 @@ function updateBullets(deltaTime: number) {
     bullet.x += Math.cos(bullet.angle) * deltaSpeed
     bullet.y += Math.sin(bullet.angle) * deltaSpeed
 
+    /* For now, disable wall collisions to allow ally bullets to pass through walls
     // Check for wall collisions
     let hitWall = false
     for (const placeable of placeables) {
@@ -837,6 +929,7 @@ function updateBullets(deltaTime: number) {
       bullets.splice(i, 1)
       continue
     }
+    */
 
     // Check for enemy hits with generous detection
     let hitEnemy = false
@@ -862,13 +955,13 @@ function updateBullets(deltaTime: number) {
 
         if (enemy.health <= 0) {
           // Create enemy destruction animation
-          const enemyTemplate = enemyTemplates[enemy.type]
+          const enemyConfig = enemyConfigs[enemy.type]
           addEnemyDestroy(
             animationState,
             enemy.x,
             enemy.y,
             Math.max(enemy.width, enemy.height),
-            enemyTemplate.color,
+            enemyConfig.color,
           )
 
           enemies.splice(j, 1)
@@ -937,8 +1030,8 @@ function updateEnemyBullets(deltaTime: number) {
     bullet.x += Math.cos(bullet.angle) * deltaSpeed
     bullet.y += Math.sin(bullet.angle) * deltaSpeed
 
-    // Check for wall collisions
-    let hitWall = false
+    // Check for placeable collisions
+    let hitPlaceable = false
     for (const placeable of placeables) {
       if (placeable.type === PlaceableType.WALL) {
         const wall = placeable as Wall
@@ -957,14 +1050,26 @@ function updateEnemyBullets(deltaTime: number) {
               0.3,
               '#ef4444',
             )
-            hitWall = true
+            hitPlaceable = true
             break
           }
+        }
+      } else if (placeable.type === PlaceableType.TURRET) {
+        const turret = placeable as Turret
+        const distToTurret = Math.hypot(bullet.x - turret.x, bullet.y - turret.y)
+        if (distToTurret < (turret.width + bullet.width) / 2 + 10) {
+          // Hit turret - damage it
+          damagePlaceable(turret, bullet.damage)
+
+          // Add impact effect
+          addBulletImpact(animationState, turret.x, turret.y, 0.5, 0.3, '#ef4444')
+          hitPlaceable = true
+          break
         }
       }
     }
 
-    if (hitWall) {
+    if (hitPlaceable) {
       enemyBullets.splice(i, 1)
       continue
     }
@@ -1011,27 +1116,43 @@ function updateEnemies(deltaTime: number) {
     const enemy = enemies[i]
     if (!enemy) continue
 
+    // Find closest player or placeable to target
+    let targetX = player.x
+    let targetY = player.y
+    let distToTarget = Math.hypot(enemy.x - player.x, enemy.y - player.y)
+    let isTargetPlayer = true
+    for (const placeable of placeables) {
+      if (placeable.type !== PlaceableType.TURRET) {
+        continue
+      }
+      const distToPlaceable = Math.hypot(enemy.x - placeable.x, enemy.y - placeable.y)
+      if (distToPlaceable < distToTarget) {
+        targetX = placeable.x
+        targetY = placeable.y
+        distToTarget = distToPlaceable
+        isTargetPlayer = false
+      }
+    }
     // Enemies should move towards the player
-    const angleToPlayer = Math.atan2(player.y - enemy.y, player.x - enemy.x)
-    const distToPlayer = Math.hypot(player.x - enemy.x, player.y - enemy.y)
+    const angleToTarget = Math.atan2(targetY - enemy.y, targetX - enemy.x)
 
     // Different movement behavior for different enemy types
     if (enemy.type === EnemyType.SHOOTER || enemy.type === EnemyType.ELITE) {
       // Shooter enemies try to maintain distance and shoot
-      if (enemy.range && distToPlayer > enemy.range * 0.8) {
+      if (enemy.range && distToTarget > enemy.range * 0.8) {
         // Move closer if too far
-        const newX = enemy.x + enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
-        const newY = enemy.y + enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+        const newX = enemy.x + enemy.speed * Math.cos(angleToTarget) * (deltaTime / 16)
+        const newY = enemy.y + enemy.speed * Math.sin(angleToTarget) * (deltaTime / 16)
 
         // Check wall collision before moving
         if (!isPositionBlockedByWall(newX, newY, enemy.width, enemy.height)) {
           enemy.x = newX
           enemy.y = newY
         }
-      } else if (distToPlayer < enemy.range! * 0.6) {
+      } else if (distToTarget < enemy.range! * 0.6) {
         // Move away if too close
-        const newX = enemy.x - enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
-        const newY = enemy.y - enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+        const newX = enemy.x - enemy.speed * Math.cos(angleToTarget) * (deltaTime / 16)
+        const newY = enemy.y - enemy.speed * Math.sin(angleToTarget) * (deltaTime / 16)
 
         // Check wall collision before moving
         if (!isPositionBlockedByWall(newX, newY, enemy.width, enemy.height)) {
@@ -1041,11 +1162,11 @@ function updateEnemies(deltaTime: number) {
       }
 
       // Handle shooting
-      handleEnemyShooting(enemy, distToPlayer, angleToPlayer)
+      handleEnemyShooting(enemy, distToTarget, angleToTarget)
     } else {
       // Regular movement towards player for other enemy types
-      const newX = enemy.x + enemy.speed * Math.cos(angleToPlayer) * (deltaTime / 16)
-      const newY = enemy.y + enemy.speed * Math.sin(angleToPlayer) * (deltaTime / 16)
+      const newX = enemy.x + enemy.speed * Math.cos(angleToTarget) * (deltaTime / 16)
+      const newY = enemy.y + enemy.speed * Math.sin(angleToTarget) * (deltaTime / 16)
 
       // Check wall collision before moving
       if (!isPositionBlockedByWall(newX, newY, enemy.width, enemy.height)) {
@@ -1054,19 +1175,29 @@ function updateEnemies(deltaTime: number) {
       }
     }
 
-    // If enemy reaches player, reduce player health
-    if (distToPlayer < (player.width + enemy.width) / 2 + 5) {
-      if (hasShield()) {
-        consumeShieldHit()
+    if (distToTarget < (player.width + enemy.width) / 2 + 5) {
+      // If enemy reaches player, reduce player health
+      if (isTargetPlayer) {
+        if (hasShield()) {
+          consumeShieldHit()
+        } else {
+          player.health -= enemy.damage
+        }
       } else {
-        player.health -= enemy.damage
+        // Damage the placeable
+        const targetPlaceable = placeables.find(
+          (p) => p.x === targetX && p.y === targetY && p.type === PlaceableType.TURRET,
+        )
+        if (targetPlaceable) {
+          damagePlaceable(targetPlaceable, enemy.damage)
+        }
       }
       enemies.splice(i, 1)
     }
   }
 }
 
-function handleEnemyShooting(enemy: Enemy, distToPlayer: number, angleToPlayer: number) {
+function handleEnemyShooting(enemy: Enemy, distToTarget: number, angleToTarget: number) {
   if (!enemy.range || !enemy.fireRate || !enemy.bulletSpeed) {
     return // Enemy can't shoot if missing required properties
   }
@@ -1079,7 +1210,7 @@ function handleEnemyShooting(enemy: Enemy, distToPlayer: number, angleToPlayer: 
   const now = Date.now()
   const shotInterval = 1000 / enemy.fireRate
 
-  if (distToPlayer <= enemy.range && now - enemy.lastShotTime >= shotInterval) {
+  if (distToTarget <= enemy.range && now - enemy.lastShotTime >= shotInterval) {
     // Scale bullet damage based on difficulty for more challenging gameplay
     const difficultyDamageMultiplier = 1 + (game.difficulty - 1) * 0.15
     const bulletDamage = Math.floor(enemy.damage * 0.6 * difficultyDamageMultiplier)
@@ -1091,7 +1222,7 @@ function handleEnemyShooting(enemy: Enemy, distToPlayer: number, angleToPlayer: 
       width: 6,
       height: 6,
       speed: enemy.bulletSpeed,
-      angle: angleToPlayer,
+      angle: angleToTarget,
       damage: bulletDamage, // Scaled damage based on difficulty
       createdAt: now,
     }
@@ -1108,8 +1239,6 @@ function spawnEnemy() {
 
   // Select enemy type based on difficulty
   const enemyType = selectEnemyType(game.difficulty)
-  const template = enemyTemplates[enemyType]
-  const scaledStats = scaleEnemyStats(template, game.difficulty)
 
   // Spawn enemies at the edges of the world
   const side = Math.floor(Math.random() * 4) // 0: top, 1: right, 2: bottom, 3: left
@@ -1137,14 +1266,9 @@ function spawnEnemy() {
       y = 0
   }
 
-  const enemy: Enemy = {
-    id: Date.now() + Math.random(),
-    x,
-    y,
-    angle: 0,
-    ...scaledStats,
-  }
-
+  const enemy = createEnemy(enemyType, game.difficulty, Date.now() + Math.random())
+  enemy.x = x
+  enemy.y = y
   enemies.push(enemy)
 }
 
@@ -1172,19 +1296,19 @@ function updatePlaceables(deltaTime: number, timestamp: number) {
               id: Date.now() + Math.random() * 1000,
               x: turret.x,
               y: turret.y,
-              width: turret.weapon.bullet.size,
-              height: turret.weapon.bullet.size,
-              speed: turret.weapon.bullet.speed,
-              angle: turret.angle,
-              damage: turret.weapon.bullet.damage,
+              width: turret.weapon.bulletSize,
+              height: turret.weapon.bulletSize,
+              speed: turret.weapon.bulletSpeed,
+              angle: turret.barrelAngle,
+              damage: turret.weapon.bulletDamage,
               penetrationLeft: turret.weapon.penetration || 1,
               targetX: target.x,
               targetY: target.y,
               createdAt: Date.now(),
-              particleCount: turret.weapon.bullet.particleCount,
-              explosionRadius: turret.weapon.bullet.explosionRadius,
-              color: turret.weapon.bullet.color || '#FFD700',
-              trailLength: turret.weapon.bullet.trailLength || 1.0,
+              particleCount: turret.weapon.particleCount || 1.0,
+              explosionRadius: turret.weapon.explosionRadius || 0.8,
+              color: turret.weapon.bulletColor,
+              trailLength: turret.weapon.trailLength || 1.0,
             }
             bullets.push(bullet)
 
@@ -1193,7 +1317,7 @@ function updatePlaceables(deltaTime: number, timestamp: number) {
               animationState,
               turret.x,
               turret.y,
-              turret.angle,
+              turret.barrelAngle,
               turret.weapon.weaponType || 'single',
             )
             turret.lastShotTime = timestamp
@@ -1266,11 +1390,43 @@ function handleKeyPress(event: KeyboardEvent) {
   switch (key) {
     case ' ':
       event.preventDefault()
+      if (game.manualFireMode) {
+        // In manual mode, spacebar fires the weapon
+        game.isFireKeyPressed = true
+      }
+      // In auto mode, spacebar does nothing (no weapon switching)
+      break
+
+    case '1':
+      event.preventDefault()
+      // Cycle to next weapon
       const ownedWeaponNames = Object.keys(player.ownedWeapons)
-      const currentIndex = ownedWeaponNames.indexOf(player.currentWeapon.name)
-      const nextIndex = (currentIndex + 1) % ownedWeaponNames.length
-      const nextWeapon = ownedWeaponNames[nextIndex]
-      if (nextWeapon) handleSelectWeapon(nextWeapon)
+      if (ownedWeaponNames.length > 1) {
+        const currentIndex = ownedWeaponNames.indexOf(player.currentWeapon.name)
+        const nextIndex = (currentIndex + 1) % ownedWeaponNames.length
+        const nextWeapon = ownedWeaponNames[nextIndex]
+        if (nextWeapon) handleSelectWeapon(nextWeapon)
+      }
+      break
+
+    case '2':
+      event.preventDefault()
+      // Cycle to previous weapon
+      const ownedWeaponNames2 = Object.keys(player.ownedWeapons)
+      if (ownedWeaponNames2.length > 1) {
+        const currentIndex = ownedWeaponNames2.indexOf(player.currentWeapon.name)
+        const prevIndex = currentIndex === 0 ? ownedWeaponNames2.length - 1 : currentIndex - 1
+        const prevWeapon = ownedWeaponNames2[prevIndex]
+        if (prevWeapon) handleSelectWeapon(prevWeapon)
+      }
+      break
+
+    case 'f':
+      event.preventDefault()
+      // Toggle firing mode
+      game.manualFireMode = !game.manualFireMode
+      game.autofireMode = !game.manualFireMode // Keep autofireMode in sync
+      game.isFireKeyPressed = false // Reset fire key when switching modes
       break
 
     case 'i':
@@ -1281,6 +1437,14 @@ function handleKeyPress(event: KeyboardEvent) {
     case 'p':
       event.preventDefault()
       togglePause()
+      break
+
+    case 'r':
+      event.preventDefault()
+      // Rotate placeable during placement mode
+      if (placementMode.value.active) {
+        rotatePlaceable()
+      }
       break
 
     case 'escape':
@@ -1303,6 +1467,11 @@ function handleKeyUp(event: KeyboardEvent) {
   if (isMovementKey(key)) {
     activeKeys.delete(key)
   }
+
+  // Handle spacebar release for manual firing
+  if (key === ' ' && game.manualFireMode) {
+    game.isFireKeyPressed = false
+  }
 }
 
 function handleCanvasClick(event: MouseEvent) {
@@ -1317,8 +1486,15 @@ function handleCanvasClick(event: MouseEvent) {
     if (rect) {
       const mouseX = event.clientX - rect.left
       const mouseY = event.clientY - rect.top
-      const worldX = mouseX + game.camera.x
-      const worldY = mouseY + game.camera.y
+
+      // Account for canvas scaling
+      const scaleX = game.game_width / rect.width
+      const scaleY = game.game_height / rect.height
+      const scaledMouseX = mouseX * scaleX
+      const scaledMouseY = mouseY * scaleY
+
+      const worldX = scaledMouseX + game.camera.x
+      const worldY = scaledMouseY + game.camera.y
 
       if (placementPreview.value.isValid) {
         tryPlacePlaceable(worldX, worldY)
@@ -1328,13 +1504,28 @@ function handleCanvasClick(event: MouseEvent) {
 }
 
 function handleCanvasMouseMove(event: MouseEvent) {
-  if (!placementMode.value.active) return
-
   const rect = gameCanvas.value?.getBoundingClientRect()
   if (rect) {
+    // Get raw mouse coordinates relative to canvas
     const mouseX = event.clientX - rect.left
     const mouseY = event.clientY - rect.top
-    updatePlacementPreview(mouseX, mouseY)
+
+    // Account for canvas scaling by calculating the scale factors
+    const scaleX = game.game_width / rect.width
+    const scaleY = game.game_height / rect.height
+
+    // Apply scaling to get actual canvas coordinates
+    const scaledMouseX = mouseX * scaleX
+    const scaledMouseY = mouseY * scaleY
+
+    // Update mouse world coordinates for manual firing
+    game.mouseWorldX = scaledMouseX + game.camera.x
+    game.mouseWorldY = scaledMouseY + game.camera.y
+
+    // Handle placement mode preview (use scaled coordinates for placement)
+    if (placementMode.value.active) {
+      updatePlacementPreview(scaledMouseX, scaledMouseY)
+    }
   }
 }
 
@@ -1372,15 +1563,12 @@ function handleUpgradeWeapon(weaponName: string, stat: string, cost: number) {
   if (player.money >= cost && weapon) {
     player.money -= cost
 
-    // Apply upgrade based on stat using optimized multipliers
     const upgrades = {
-      damage: () => (weapon.bullet.damage = Math.floor(weapon.bullet.damage * 1.2)),
+      damage: () => (weapon.bulletDamage = Math.floor(weapon.bulletDamage * 1.2)),
       fireRate: () => (weapon.fireRate *= 1.15),
       range: () => (weapon.range = Math.floor(weapon.range * 1.1)),
       penetration: () => {
-        if (weapon.penetration !== undefined) {
-          weapon.penetration += 1
-        }
+        weapon.penetration += 1
       },
       bulletCount: () => {
         if (weapon.bulletCount !== undefined) {
@@ -1414,6 +1602,7 @@ function switchWeapon(weaponName: string) {
 function handleStartPlacement(template: PlaceableTemplate) {
   placementMode.value.active = true
   placementMode.value.template = template
+  placementRotation.value = 0 // Reset rotation when starting placement
   closeShop() // Close shop when starting placement
 }
 
@@ -1421,6 +1610,26 @@ function cancelPlacement() {
   placementMode.value.active = false
   placementMode.value.template = null
   placementPreview.value = null
+  placementRotation.value = 0 // Reset rotation
+}
+
+function rotatePlaceable() {
+  if (!placementMode.value.active) return
+
+  // Rotate by 90 degrees each time
+  placementRotation.value = (placementRotation.value + 90) % 360
+
+  // Force update the preview with the new rotation
+  if (placementPreview.value) {
+    const mouseX = placementPreview.value.x - game.camera.x
+    const mouseY = placementPreview.value.y - game.camera.y
+    updatePlacementPreview(mouseX, mouseY)
+  } else {
+    // If no preview exists, try to get mouse position from game state
+    const mouseX = game.mouseWorldX - game.camera.x
+    const mouseY = game.mouseWorldY - game.camera.y
+    updatePlacementPreview(mouseX, mouseY)
+  }
 }
 
 function tryPlacePlaceable(x: number, y: number) {
@@ -1428,8 +1637,8 @@ function tryPlacePlaceable(x: number, y: number) {
   if (!template || !placementPreview.value?.isValid) return false
 
   if (player.money >= template.cost) {
-    // Create and place the placeable
-    const newPlaceable = createPlaceable(template, x, y)
+    // Create and place the placeable with rotation
+    const newPlaceable = createPlaceable(template, x, y, placementRotation.value)
     placeables.push(newPlaceable)
 
     // Deduct money
@@ -1457,6 +1666,7 @@ function updatePlacementPreview(mouseX: number, mouseY: number) {
     game,
     placeables,
     player,
+    placementRotation.value,
   )
 }
 
@@ -1976,6 +2186,37 @@ onBeforeUnmount(() => {
   }
 }
 
+.fire-mode-indicator {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background-color: rgba(0, 200, 0, 0.9);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 14px;
+  font-family: Arial, sans-serif;
+  border: 2px solid #00aa00;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  transition: all 0.3s ease;
+
+  &.manual {
+    background-color: rgba(255, 165, 0, 0.9);
+    border-color: #ff8c00;
+    box-shadow: 0 2px 8px rgba(255, 140, 0, 0.3);
+  }
+
+  // Responsive sizing
+  @media (max-width: 600px) {
+    top: 10px;
+    left: 10px;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+}
+
 .powerups-hud {
   position: absolute;
   top: 120px;
@@ -2107,6 +2348,141 @@ onBeforeUnmount(() => {
 
   @media (max-width: 600px) {
     max-width: 200px;
+  }
+}
+
+// Placement HUD - shows what's being placed during preview
+.placement-hud {
+  position: absolute;
+  bottom: 0px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.3), rgba(30, 30, 30, 0.3));
+  border: 2px solid var(--theme-border-light);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(5px);
+  z-index: 150;
+  min-width: 280px;
+  animation: slideUpIn 0.3s ease-out;
+
+  .placement-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+
+    .placement-icon {
+      font-size: 24px;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--theme-accent), var(--theme-accent-secondary));
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(66, 165, 245, 0.3);
+
+      &.turret {
+        background: linear-gradient(135deg, #4fc3f7, #29b6f6);
+      }
+
+      &.wall {
+        background: linear-gradient(135deg, #81c784, #66bb6a);
+      }
+    }
+
+    .placement-details {
+      flex: 1;
+
+      .placement-name {
+        color: var(--theme-text-primary);
+        font-weight: bold;
+        font-size: 16px;
+        margin-bottom: 4px;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      .placement-meta {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+
+        .placement-cost {
+          color: #ffd700;
+          font-weight: 600;
+          font-size: 14px;
+          text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .placement-rotation {
+          color: var(--theme-accent);
+          font-weight: 600;
+          font-size: 14px;
+          background: rgba(66, 165, 245, 0.2);
+          padding: 2px 8px;
+          border-radius: 12px;
+          border: 1px solid rgba(66, 165, 245, 0.4);
+        }
+      }
+    }
+  }
+
+  .placement-help {
+    text-align: center;
+    color: var(--theme-text-secondary);
+    font-size: 12px;
+    opacity: 0.8;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  // Responsive placement HUD
+  @media (max-width: 900px) {
+    min-width: 240px;
+    padding: 12px 16px;
+    bottom: 100px;
+
+    .placement-info {
+      gap: 10px;
+
+      .placement-icon {
+        font-size: 20px;
+        width: 36px;
+        height: 36px;
+      }
+
+      .placement-details {
+        .placement-name {
+          font-size: 14px;
+        }
+
+        .placement-meta {
+          gap: 8px;
+
+          .placement-cost,
+          .placement-rotation {
+            font-size: 12px;
+          }
+        }
+      }
+    }
+
+    .placement-help {
+      font-size: 11px;
+    }
+  }
+}
+
+@keyframes slideUpIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
   }
 }
 

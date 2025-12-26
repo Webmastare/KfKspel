@@ -1,19 +1,6 @@
 import type { Weapon } from "./defenseTypes";
 
-// Interface for bullet configuration
-export interface BulletConfig {
-    speed: number; // Bullet travel speed
-    size: number; // Visual bullet size
-    damage: number; // Damage per bullet
-    // Animation properties (normalized 0.5-5, multiplied in animation functions)
-    particleCount: number; // Normalized particle count for impact explosion
-    explosionRadius: number; // Normalized explosion radius
-    // Visual properties
-    color?: string; // Bullet color (optional, defaults based on weapon)
-    trailLength?: number; // Bullet trail effect length (normalized)
-}
-
-// Base weapon templates with costs
+// Base weapon templates with simplified structure
 export const weaponTemplates: Record<string, Weapon> = {
     "Basic Gun": {
         name: "Basic Gun",
@@ -24,35 +11,32 @@ export const weaponTemplates: Record<string, Weapon> = {
         cost: 0,
         levelRequired: 1,
         weaponType: "single",
-        bullet: {
-            speed: 700,
-            size: 4,
-            damage: 25,
-            particleCount: 1.0,
-            explosionRadius: 0.8,
-            color: "#FFD700",
-            trailLength: 1.0,
-        },
+        bulletSpeed: 700,
+        bulletSize: 4,
+        bulletDamage: 25,
+        bulletColor: "#FFD700",
+        particleCount: 1.0,
+        explosionRadius: 0.8,
+        trailLength: 1.0,
     },
     Shotgun: {
         name: "Shotgun",
         fireRate: 1.2,
+        penetration: 0,
         lastShotTime: 0,
         range: 250,
         cost: 200,
         levelRequired: 2,
         weaponType: "shotgun",
         bulletCount: 5,
-        spread: 25, // 25 degree spread
-        bullet: {
-            speed: 600,
-            size: 3,
-            damage: 18,
-            particleCount: 0.7,
-            explosionRadius: 0.6,
-            color: "#FF8C00",
-            trailLength: 0.5,
-        },
+        spread: 25,
+        bulletSpeed: 600,
+        bulletSize: 3,
+        bulletDamage: 18,
+        bulletColor: "#FF8C00",
+        particleCount: 0.7,
+        explosionRadius: 0.6,
+        trailLength: 0.5,
     },
     "Rapid Fire": {
         name: "Rapid Fire",
@@ -63,15 +47,13 @@ export const weaponTemplates: Record<string, Weapon> = {
         cost: 150,
         levelRequired: 3,
         weaponType: "single",
-        bullet: {
-            speed: 900,
-            size: 3,
-            damage: 15,
-            particleCount: 0.8,
-            explosionRadius: 0.5,
-            color: "#00FF00",
-            trailLength: 1.2,
-        },
+        bulletSpeed: 900,
+        bulletSize: 3,
+        bulletDamage: 15,
+        bulletColor: "#00FF00",
+        particleCount: 0.8,
+        explosionRadius: 0.5,
+        trailLength: 1.2,
     },
     "Heavy Cannon": {
         name: "Heavy Cannon",
@@ -82,15 +64,13 @@ export const weaponTemplates: Record<string, Weapon> = {
         cost: 300,
         levelRequired: 5,
         weaponType: "single",
-        bullet: {
-            speed: 700,
-            size: 8,
-            damage: 75,
-            particleCount: 2.0,
-            explosionRadius: 1.5,
-            color: "#FF6600",
-            trailLength: 1.5,
-        },
+        bulletSpeed: 700,
+        bulletSize: 8,
+        bulletDamage: 75,
+        bulletColor: "#FF6600",
+        particleCount: 2.0,
+        explosionRadius: 1.5,
+        trailLength: 1.5,
     },
     "Sniper Rifle": {
         name: "Sniper Rifle",
@@ -101,15 +81,13 @@ export const weaponTemplates: Record<string, Weapon> = {
         cost: 500,
         levelRequired: 8,
         weaponType: "single",
-        bullet: {
-            speed: 1200,
-            size: 6,
-            damage: 150,
-            particleCount: 1.5,
-            explosionRadius: 1.0,
-            color: "#00FFFF",
-            trailLength: 2.0,
-        },
+        bulletSpeed: 1200,
+        bulletSize: 6,
+        bulletDamage: 150,
+        bulletColor: "#00FFFF",
+        particleCount: 1.5,
+        explosionRadius: 1.0,
+        trailLength: 2.0,
     },
     "Plasma Cannon": {
         name: "Plasma Cannon",
@@ -120,15 +98,13 @@ export const weaponTemplates: Record<string, Weapon> = {
         cost: 750,
         levelRequired: 12,
         weaponType: "single",
-        bullet: {
-            speed: 800,
-            size: 10,
-            damage: 100,
-            particleCount: 2.5,
-            explosionRadius: 2.0,
-            color: "#FF00FF",
-            trailLength: 1.8,
-        },
+        bulletSpeed: 800,
+        bulletSize: 10,
+        bulletDamage: 100,
+        bulletColor: "#FF00FF",
+        particleCount: 2.5,
+        explosionRadius: 2.0,
+        trailLength: 1.8,
     },
 };
 
@@ -136,7 +112,7 @@ export const weaponTemplates: Record<string, Weapon> = {
  * Create a copy of a weapon template to avoid shared references
  */
 export function createWeaponCopy(weaponTemplate: Weapon): Weapon {
-    return Object.assign({}, { ...weaponTemplate, lastShotTime: 0 });
+    return { ...weaponTemplate, lastShotTime: 0 };
 }
 
 /**
@@ -150,30 +126,43 @@ export function calculateUpgradeCost(
     let currentLevel = 0;
     switch (stat) {
         case "damage":
+            // For multiplicative upgrades, calculate level using logarithm
+            // Each upgrade: newValue = oldValue * 1.2, so after n upgrades: value = base * (1.2)^n
+            // Solve for n: n = log(current/base) / log(1.2)
             currentLevel = Math.floor(
-                (weapon.bullet.damage - baseWeapon.bullet.damage) /
-                    (baseWeapon.bullet.damage * 0.2),
+                Math.log(weapon.bulletDamage / baseWeapon.bulletDamage) /
+                    Math.log(1.2),
             );
             break;
         case "fireRate":
             currentLevel = Math.floor(
-                (weapon.fireRate - baseWeapon.fireRate) /
-                    (baseWeapon.fireRate * 0.15),
+                Math.log(weapon.fireRate / baseWeapon.fireRate) /
+                    Math.log(1.15),
             );
             break;
         case "range":
             currentLevel = Math.floor(
-                (weapon.range - baseWeapon.range) / (baseWeapon.range * 0.1),
+                Math.log(weapon.range / baseWeapon.range) / Math.log(1.1),
             );
             break;
         case "penetration":
-            // Only for single-shot weapons with penetration
-            if (
-                weapon.penetration !== undefined &&
-                baseWeapon.penetration !== undefined
-            ) {
-                currentLevel = weapon.penetration - baseWeapon.penetration;
-            }
+            currentLevel = weapon.penetration - baseWeapon.penetration;
+            break;
+        case "bulletCount":
+            currentLevel =
+                weapon.bulletCount !== undefined &&
+                    baseWeapon.bulletCount !== undefined
+                    ? weapon.bulletCount - baseWeapon.bulletCount
+                    : 0;
+            break;
+        case "spread":
+            currentLevel =
+                weapon.spread !== undefined && baseWeapon.spread !== undefined
+                    ? Math.floor((baseWeapon.spread - weapon.spread) / 2)
+                    : 0;
+            break;
+        default:
+            currentLevel = 0;
             break;
     }
 

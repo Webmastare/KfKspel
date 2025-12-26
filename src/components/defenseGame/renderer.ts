@@ -14,7 +14,7 @@ import {
 } from "./defenseTypes";
 
 import { renderDefenseAnimations } from "./animations";
-import { enemyTemplates } from "./enemies";
+import { enemyConfigs } from "./enemies";
 
 function clearCanvas(ctx: CanvasRenderingContext2D | null, game: GameState) {
     if (!ctx) return;
@@ -127,11 +127,11 @@ function drawEnemy(
     const screenY = enemy.y - game.camera.y;
     const halfWidth = enemy.width / 2;
     const halfHeight = enemy.height / 2;
-    const template = enemyTemplates[enemy.type];
+    const template = enemyConfigs[enemy.type];
 
     // Draw enemy with type-specific colors
-    ctx.fillStyle = template.color;
-    ctx.strokeStyle = template.borderColor;
+    ctx.fillStyle = enemy.color;
+    ctx.strokeStyle = enemy.borderColor;
     ctx.lineWidth = enemy.type === EnemyType.ELITE
         ? 3
         : enemy.type === EnemyType.TANK
@@ -340,14 +340,12 @@ function drawPowerup(
         ctx.stroke();
     }
 
-    // Draw powerup icon
-    if (powerup.icon) {
-        ctx.fillStyle = "white";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.font = "16px Arial";
-        ctx.fillText(powerup.icon, screenX, screenY);
-    }
+    // Draw powerup type indicator
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "12px Arial";
+    ctx.fillText(powerup.name.charAt(0), screenX, screenY);
 }
 
 function drawMinimap(
@@ -467,6 +465,15 @@ function drawPlaceable(
     const halfWidth = placeable.width / 2;
     const halfHeight = placeable.height / 2;
 
+    // Save the context state for rotation
+    ctx.save();
+
+    // Translate to the center of the placeable and apply rotation
+    ctx.translate(screenX, screenY);
+    if (placeable.angle !== 0) {
+        ctx.rotate((placeable.angle * Math.PI) / 180);
+    }
+
     if (placeable.type === PlaceableType.TURRET) {
         const turret = placeable as Turret;
 
@@ -475,22 +482,27 @@ function drawPlaceable(
         ctx.strokeStyle = "#2a4a6a";
         ctx.lineWidth = 2;
         ctx.fillRect(
-            screenX - halfWidth,
-            screenY - halfHeight,
+            -halfWidth,
+            -halfHeight,
             placeable.width,
             placeable.height,
         );
         ctx.strokeRect(
-            screenX - halfWidth,
-            screenY - halfHeight,
+            -halfWidth,
+            -halfHeight,
             placeable.width,
             placeable.height,
         );
 
-        // Draw turret gun barrel pointing at target
+        // Restore context before drawing barrel (barrel should point in world coordinates)
+        ctx.restore();
+
+        // Draw turret gun barrel pointing at target (in world coordinates)
         const barrelLength = 20;
-        const barrelEndX = screenX + Math.cos(turret.angle) * barrelLength;
-        const barrelEndY = screenY + Math.sin(turret.angle) * barrelLength;
+        const barrelEndX = screenX +
+            Math.cos(turret.barrelAngle) * barrelLength;
+        const barrelEndY = screenY +
+            Math.sin(turret.barrelAngle) * barrelLength;
 
         ctx.strokeStyle = "#666";
         ctx.lineWidth = 4;
@@ -499,17 +511,32 @@ function drawPlaceable(
         ctx.lineTo(barrelEndX, barrelEndY);
         ctx.stroke();
 
-        // Draw range indicator (faded circle)
+        // Draw range indicator (faded circle) - this should not be rotated
         ctx.strokeStyle = "rgba(74, 106, 166, 0.2)";
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.arc(screenX, screenY, turret.range, 0, Math.PI * 2);
         ctx.stroke();
+
+        // Save context again for health bar drawing
+        ctx.save();
+        ctx.translate(screenX, screenY);
+        if (placeable.angle !== 0) {
+            ctx.rotate((placeable.angle * Math.PI) / 180);
+        }
+        ctx.save();
+        ctx.translate(screenX, screenY);
+        if (placeable.angle !== 0) {
+            ctx.rotate((placeable.angle * Math.PI) / 180);
+        }
     } else if (placeable.type === PlaceableType.WALL) {
+        // For walls, exit rotation context and draw without canvas rotation
+        ctx.restore();
+
         const wall = placeable as Wall;
 
-        // Draw wall
-        ctx.fillStyle = wall.blocksBullets ? "#8B4513" : "#A0522D"; // Brown for bullet-blocking, lighter for movement-only
+        // Draw wall using actual dimensions (which are already swapped for rotation)
+        ctx.fillStyle = wall.blocksBullets ? "#8B4513" : "#A0522D";
         ctx.strokeStyle = "#654321";
         ctx.lineWidth = 2;
         ctx.fillRect(
@@ -525,24 +552,56 @@ function drawPlaceable(
             placeable.height,
         );
 
-        // Add texture lines for walls
+        // Add texture lines based on wall orientation
         ctx.strokeStyle = "#543A21";
         ctx.lineWidth = 1;
-        for (let i = 0; i < placeable.width; i += 10) {
-            ctx.beginPath();
-            ctx.moveTo(screenX - halfWidth + i, screenY - halfHeight);
-            ctx.lineTo(screenX - halfWidth + i, screenY + halfHeight);
-            ctx.stroke();
+        if (placeable.width >= placeable.height) {
+            // Horizontal wall - draw vertical texture lines
+            for (let i = 0; i < placeable.width; i += 10) {
+                ctx.beginPath();
+                ctx.moveTo(screenX - halfWidth + i, screenY - halfHeight);
+                ctx.lineTo(screenX - halfWidth + i, screenY + halfHeight);
+                ctx.stroke();
+            }
+        } else {
+            // Vertical wall - draw horizontal texture lines
+            for (let i = 0; i < placeable.height; i += 10) {
+                ctx.beginPath();
+                ctx.moveTo(screenX - halfWidth, screenY - halfHeight + i);
+                ctx.lineTo(screenX + halfWidth, screenY - halfHeight + i);
+                ctx.stroke();
+            }
         }
+
+        // Draw health bar for walls (no rotation)
+        const healthBarY = screenY - halfHeight - 10;
+        const healthPercent = placeable.health / placeable.maxHealth;
+
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+        ctx.fillRect(screenX - halfWidth, healthBarY, placeable.width, 6);
+
+        let healthColor = "#22c55e";
+        if (healthPercent <= 0.25) healthColor = "#ef4444";
+        else if (healthPercent <= 0.5) healthColor = "#eab308";
+
+        ctx.fillStyle = healthColor;
+        ctx.fillRect(
+            screenX - halfWidth,
+            healthBarY,
+            placeable.width * healthPercent,
+            6,
+        );
+
+        return; // Exit early for walls
     }
 
     // Draw health bar
-    const healthBarY = screenY - halfHeight - 10;
+    const healthBarY = -halfHeight - 10;
     const healthPercent = placeable.health / placeable.maxHealth;
 
     // Background
     ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-    ctx.fillRect(screenX - halfWidth, healthBarY, placeable.width, 6);
+    ctx.fillRect(-halfWidth, healthBarY, placeable.width, 6);
 
     // Foreground
     let healthColor = "#22c55e";
@@ -551,11 +610,14 @@ function drawPlaceable(
 
     ctx.fillStyle = healthColor;
     ctx.fillRect(
-        screenX - halfWidth,
+        -halfWidth,
         healthBarY,
         placeable.width * healthPercent,
         6,
     );
+
+    // Restore the context
+    ctx.restore();
 }
 
 function drawPlacementPreview(
@@ -570,6 +632,72 @@ function drawPlacementPreview(
     const halfWidth = preview.width / 2;
     const halfHeight = preview.height / 2;
 
+    if (preview.type === PlaceableType.WALL) {
+        // For walls, don't use canvas rotation - dimensions are already swapped
+        // Draw preview with transparency and color coding
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = preview.isValid
+            ? "rgba(0, 255, 0, 0.3)"
+            : "rgba(255, 0, 0, 0.3)";
+        ctx.strokeStyle = preview.isValid ? "#00ff00" : "#ff0000";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]); // Dashed outline
+
+        ctx.fillRect(
+            screenX - halfWidth,
+            screenY - halfHeight,
+            preview.width,
+            preview.height,
+        );
+        ctx.strokeRect(
+            screenX - halfWidth,
+            screenY - halfHeight,
+            preview.width,
+            preview.height,
+        );
+
+        // Add visual orientation indicator for walls
+        ctx.strokeStyle = preview.isValid
+            ? "rgba(255, 255, 255, 0.6)"
+            : "rgba(255, 255, 255, 0.4)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+
+        // Draw texture lines based on wall orientation
+        if (preview.width >= preview.height) {
+            // Horizontal wall - draw vertical texture lines
+            for (let i = 0; i < preview.width; i += 15) {
+                ctx.beginPath();
+                ctx.moveTo(screenX - halfWidth + i, screenY - halfHeight);
+                ctx.lineTo(screenX - halfWidth + i, screenY + halfHeight);
+                ctx.stroke();
+            }
+        } else {
+            // Vertical wall - draw horizontal texture lines
+            for (let i = 0; i < preview.height; i += 15) {
+                ctx.beginPath();
+                ctx.moveTo(screenX - halfWidth, screenY - halfHeight + i);
+                ctx.lineTo(screenX + halfWidth, screenY - halfHeight + i);
+                ctx.stroke();
+            }
+        }
+
+        // Reset canvas state
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]);
+        return;
+    }
+
+    // For turrets and other placeables, use rotation
+    // Save context for rotation
+    ctx.save();
+
+    // Translate to center and apply rotation
+    ctx.translate(screenX, screenY);
+    if (preview.angle !== 0) {
+        ctx.rotate((preview.angle * Math.PI) / 180);
+    }
+
     // Draw preview with transparency and color coding
     ctx.globalAlpha = 0.7;
     ctx.fillStyle = preview.isValid
@@ -580,17 +708,38 @@ function drawPlacementPreview(
     ctx.setLineDash([5, 5]); // Dashed outline
 
     ctx.fillRect(
-        screenX - halfWidth,
-        screenY - halfHeight,
+        -halfWidth,
+        -halfHeight,
         preview.width,
         preview.height,
     );
     ctx.strokeRect(
-        screenX - halfWidth,
-        screenY - halfHeight,
+        -halfWidth,
+        -halfHeight,
         preview.width,
         preview.height,
     );
+
+    // Add orientation indicator for turrets
+    if (preview.type === PlaceableType.TURRET) {
+        ctx.strokeStyle = preview.isValid
+            ? "rgba(255, 255, 255, 0.8)"
+            : "rgba(255, 0, 0, 0.8)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+
+        // Draw a direction line to show turret orientation
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(halfWidth * 0.7, 0); // Line pointing right (forward direction)
+        ctx.stroke();
+
+        // Reset dashed line for border
+        ctx.setLineDash([5, 5]);
+    }
+
+    // Restore context before drawing range indicator
+    ctx.restore();
 
     // Draw type-specific preview
     if (preview.type === PlaceableType.TURRET) {

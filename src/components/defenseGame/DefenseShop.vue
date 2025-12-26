@@ -61,7 +61,7 @@
                   <span v-else class="equipped">Equipped</span>
                 </div>
                 <div class="weapon-stats">
-                  <div>💥 Damage: {{ weapon.bullet.damage }}</div>
+                  <div>💥 Damage: {{ weapon.bulletDamage }}</div>
                   <div>⚡ Fire Rate: {{ weapon.fireRate.toFixed(1) }}/s</div>
                   <div>📏 Range: {{ weapon.range }}</div>
                   <template v-if="weapon.weaponType === 'shotgun'">
@@ -123,7 +123,7 @@
                         class="upgrade-btn"
                         :title="getUpgradePreview(weapon, 'spread')"
                       >
-                        -{{ getStatIncrease(weapon, 'spread') }} Spread
+                        -{{ getStatIncrease(weapon, 'spread') }}° Spread
                         <span class="cost">({{ getUpgradeCost(weapon, 'spread') }}💰)</span>
                       </button>
                     </template>
@@ -185,7 +185,7 @@
                 </div>
 
                 <div class="weapon-stats">
-                  <div>💥 Damage: {{ weapon.bullet.damage }}</div>
+                  <div>💥 Damage: {{ weapon.bulletDamage }}</div>
                   <div>⚡ Fire Rate: {{ weapon.fireRate.toFixed(1) }}/s</div>
                   <div>📏 Range: {{ weapon.range }}</div>
                   <template v-if="weapon.weaponType === 'shotgun'">
@@ -227,7 +227,7 @@
                 </div>
 
                 <div class="weapon-stats locked-stats">
-                  <div>💥 Damage: {{ weapon.bullet.damage }}</div>
+                  <div>💥 Damage: {{ weapon.bulletDamage }}</div>
                   <div>⚡ Fire Rate: {{ weapon.fireRate.toFixed(1) }}/s</div>
                   <div>📏 Range: {{ weapon.range }}</div>
                   <template v-if="weapon.weaponType === 'shotgun'">
@@ -473,45 +473,59 @@ function getStatIncrease(weapon: Weapon, stat: string): string {
 
   switch (stat) {
     case 'damage':
-      return Math.floor(baseWeapon.bullet.damage * 0.2).toString()
+      // Calculate actual increase: floor(current * 1.2) - current
+      return (Math.floor(weapon.bulletDamage * 1.2) - weapon.bulletDamage).toString()
     case 'fireRate':
-      return (baseWeapon.fireRate * 0.15).toFixed(1)
+      // Calculate actual increase: (current * 1.15) - current
+      return (weapon.fireRate * 1.15 - weapon.fireRate).toFixed(1)
     case 'range':
-      return Math.floor(baseWeapon.range * 0.1).toString()
+      // Calculate actual increase: floor(current * 1.1) - current
+      return (Math.floor(weapon.range * 1.1) - weapon.range).toString()
     case 'penetration':
       return '1'
     case 'bulletCount':
       return '1'
     case 'spread':
-      return '2°'
+      return '2'
     default:
       return '?'
   }
 }
 
 function getUpgradePreview(weapon: Weapon, stat: string): string {
-  const increase = getStatIncrease(weapon, stat)
+  const baseWeapon = props.weaponTemplates[weapon.name]
+  if (!baseWeapon) return 'Preview unavailable'
+
   const cost = getUpgradeCost(weapon, stat)
 
   switch (stat) {
-    case 'damage':
-      return `Increase damage by ${increase} (${weapon.bullet.damage} → ${weapon.bullet.damage + parseInt(increase)}) for ${cost} coins`
-    case 'fireRate':
-      return `Increase fire rate by ${increase}/s (${weapon.fireRate.toFixed(1)} → ${(weapon.fireRate + parseFloat(increase)).toFixed(1)}) for ${cost} coins`
-    case 'range':
-      return `Increase range by ${increase} (${weapon.range} → ${weapon.range + parseInt(increase)}) for ${cost} coins`
+    case 'damage': {
+      const newValue = Math.floor(weapon.bulletDamage * 1.2)
+      const increase = newValue - weapon.bulletDamage
+      return `Increase damage by ${increase} (${weapon.bulletDamage} → ${newValue}) for ${cost} coins`
+    }
+    case 'fireRate': {
+      const newValue = weapon.fireRate * 1.15
+      const increase = newValue - weapon.fireRate
+      return `Increase fire rate by ${increase.toFixed(1)}/s (${weapon.fireRate.toFixed(1)} → ${newValue.toFixed(1)}) for ${cost} coins`
+    }
+    case 'range': {
+      const newValue = Math.floor(weapon.range * 1.1)
+      const increase = newValue - weapon.range
+      return `Increase range by ${increase} (${weapon.range} → ${newValue}) for ${cost} coins`
+    }
     case 'penetration':
       return weapon.penetration !== undefined
-        ? `Increase penetration by ${increase} (${weapon.penetration} → ${weapon.penetration + 1}) for ${cost} coins`
-        : `Upgrade ${stat} for ${cost} coins`
+        ? `Increase penetration by 1 (${weapon.penetration} → ${weapon.penetration + 1}) for ${cost} coins`
+        : `Upgrade penetration for ${cost} coins`
     case 'bulletCount':
       return weapon.bulletCount !== undefined
-        ? `Add ${increase} bullet (${weapon.bulletCount} → ${weapon.bulletCount + 1}) for ${cost} coins`
-        : `Upgrade ${stat} for ${cost} coins`
+        ? `Add 1 bullet (${weapon.bulletCount} → ${weapon.bulletCount + 1}) for ${cost} coins`
+        : `Upgrade bullet count for ${cost} coins`
     case 'spread':
       return weapon.spread !== undefined
-        ? `Reduce spread by ${increase} (${weapon.spread}° → ${Math.max(5, weapon.spread - 2)}°) for ${cost} coins`
-        : `Upgrade ${stat} for ${cost} coins`
+        ? `Reduce spread by 2° (${weapon.spread}° → ${Math.max(5, weapon.spread - 2)}°) for ${cost} coins`
+        : `Upgrade spread for ${cost} coins`
     default:
       return `Upgrade ${stat} for ${cost} coins`
   }

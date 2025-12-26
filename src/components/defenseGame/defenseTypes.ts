@@ -1,24 +1,25 @@
-// Core GameObject interface - shared across all game objects
-export interface GameObject {
+// Core position and rendering data
+export interface Position {
     x: number;
     y: number;
+}
+
+export interface Size {
     width: number;
     height: number;
+}
+
+// Base object with position, size, movement
+export interface GameObject extends Position, Size {
     speed: number;
     angle: number;
 }
 
-// Camera interface - used in game state
-export interface Camera {
-    x: number;
-    y: number;
-}
-
-// Game state interface - main game controller state
+// Game state - main controller
 export interface GameState {
     game_width: number;
     game_height: number;
-    world_width: number; // Larger world size
+    world_width: number;
     world_height: number;
     running: boolean;
     paused: boolean;
@@ -27,68 +28,56 @@ export interface GameState {
     frameId: number | null;
     enemiesKilled: number;
     baseEnemySpawnInterval: number;
-    camera: Camera;
+    camera: Position;
     difficulty: number;
     waveNumber: number;
-    // XP Multiplier System
-    xpMultiplier: number; // Float value for precise multiplier
-    lastKillTime: number; // Timestamp of last enemy kill for multiplier decay
-    // Settings
+    xpMultiplier: number;
+    lastKillTime: number;
     autofireMode: boolean;
+    manualFireMode: boolean;
+    mouseWorldX: number;
+    mouseWorldY: number;
+    isFireKeyPressed: boolean;
 }
 
-// Bullet configuration interface
-export interface BulletConfig {
-    speed: number; // Bullet travel speed
-    size: number; // Visual bullet size
-    damage: number; // Damage per bullet
-    // Animation properties (normalized 0.5-5, multiplied in animation functions)
-    particleCount: number; // Normalized particle count for impact explosion
-    explosionRadius: number; // Normalized explosion radius
-    // Visual properties
-    color?: string; // Bullet color (optional, defaults based on weapon)
-    trailLength?: number; // Bullet trail effect length (normalized)
-}
-
-// Player upgrades interface
-export interface Upgrade {
-    name: string;
-    cost: number;
-    endsAt?: number;
-}
-
-// Player interface
+// Simplified Player interface
 export interface Player extends GameObject {
     health: number;
     maxHealth: number;
     currentWeapon: Weapon;
-    upgrades: Record<string, Upgrade>;
     money: number;
     ownedWeapons: Record<string, Weapon>;
-    // XP System
     level: number;
     xp: number;
     xpToNextLevel: number;
     totalXp: number;
 }
 
-// Weapon interface
+// Simplified Weapon interface - merged BulletConfig properties directly
 export interface Weapon {
     name: string;
     cost: number;
-    fireRate: number; // shots per second
-    penetration?: number; // Optional - for weapons that pierce through enemies
+    fireRate: number;
+    penetration: number;
     lastShotTime: number;
     range: number;
-    levelRequired?: number; // Level requirement to unlock this weapon
-    bullet: BulletConfig; // Bullet configuration
-    // Shotgun-specific properties
-    bulletCount?: number; // Number of bullets fired per shot (for shotguns)
-    spread?: number; // Spread angle in degrees (for shotguns)
-    weaponType?: "single" | "shotgun"; // Type of weapon for different firing logic
+    levelRequired: number;
+    weaponType: "single" | "shotgun";
+    // Bullet properties (merged from BulletConfig)
+    bulletSpeed: number;
+    bulletSize: number;
+    bulletDamage: number;
+    bulletColor: string;
+    // Optional shotgun properties
+    bulletCount?: number;
+    spread?: number;
+    // Animation properties
+    particleCount?: number;
+    explosionRadius?: number;
+    trailLength?: number;
 }
 
-// Bullet interface
+// Simplified Bullet interface - extends GameObject with bullet-specific data
 export interface Bullet extends GameObject {
     id: number;
     damage: number;
@@ -96,11 +85,10 @@ export interface Bullet extends GameObject {
     targetX: number;
     targetY: number;
     createdAt: number;
-    // Animation properties from bullet config
+    color: string;
     particleCount: number;
     explosionRadius: number;
-    color?: string;
-    trailLength?: number;
+    trailLength: number;
 }
 
 //######## ENEMIES ######################
@@ -112,18 +100,21 @@ export enum EnemyType {
     ELITE = "elite",
 }
 
-// Enemy interface
+// Simplified Enemy - merged template properties directly
 export interface Enemy extends GameObject {
     id: number;
+    type: EnemyType;
     health: number;
     maxHealth: number;
     damage: number;
-    type: EnemyType;
+    value: number;
+    color: string;
+    borderColor: string;
+    // Optional shooting properties
     lastShotTime?: number;
     range?: number;
     fireRate?: number;
     bulletSpeed?: number;
-    value: number; // Money reward when killed
 }
 
 // Enemy bullet interface
@@ -145,14 +136,7 @@ export enum PowerupType {
     CASH_BONUS = "cash_bonus",
 }
 
-// Powerup effect interface
-export interface PowerupEffect {
-    type: "instant" | "duration";
-    duration?: number; // For duration effects (ms)
-    value: number; // Effect strength
-}
-
-// Powerup interface
+// Powerup interface - simplified by merging effect properties
 export interface Powerup extends GameObject {
     id: number;
     type: PowerupType;
@@ -161,9 +145,10 @@ export interface Powerup extends GameObject {
     color: string;
     glowColor: string;
     spawnTime: number;
-    lifetime: number; // How long it stays on the map (ms)
-    effect: PowerupEffect;
-    icon?: string | undefined; // Optional icon
+    lifetime: number;
+    effectType: "instant" | "duration";
+    effectValue: number;
+    effectDuration?: number; // Only for duration effects
 }
 
 // Active powerup interface
@@ -174,7 +159,7 @@ export interface ActivePowerup {
     value: number;
     description: string[];
     color: string;
-    remainingTime: number; // Time left in ms
+    remainingTime: number;
     startTime: number;
 }
 
@@ -203,41 +188,36 @@ export interface Turret extends Placeable {
     lastShotTime: number;
     range: number;
     targetEnemyId: number | null;
+    barrelAngle: number; // Separate angle for barrel direction (targeting)
 }
 
 // Wall-specific interface
 export interface Wall extends Placeable {
     type: PlaceableType.WALL;
-    blocksBullets: boolean; // If false, only blocks movement
-    blocksPlayer: boolean; // If true, also blocks player movement
+    blocksBullets: boolean;
+    blocksPlayer: boolean;
 }
 
-// Placement preview interface for shop
-export interface PlacementPreview {
+// Simplified placement interfaces
+export interface PlacementPreview extends Size, Position {
     type: PlaceableType;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    isValid: boolean; // Whether the placement is valid
+    isValid: boolean;
     cost: number;
     template: PlaceableTemplate;
+    angle: number;
 }
 
-// Template interface for creating placeables
-export interface PlaceableTemplate {
+// Simplified template for creating placeables
+export interface PlaceableTemplate extends Size {
     name: string;
     type: PlaceableType;
     cost: number;
-    width: number;
-    height: number;
     health: number;
     levelRequired: number;
     description: string;
-    // Turret-specific template properties
-    weaponName?: string;
-    range?: number;
-    // Wall-specific template properties
-    blocksBullets?: boolean;
-    blocksPlayer?: boolean;
+    // Type-specific properties
+    weaponName?: string; // For turrets
+    range?: number; // For turrets
+    blocksBullets?: boolean; // For walls
+    blocksPlayer?: boolean; // For walls
 }

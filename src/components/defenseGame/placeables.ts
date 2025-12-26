@@ -96,6 +96,7 @@ export function createTurret(
     template: PlaceableTemplate,
     x: number,
     y: number,
+    angle: number = 0,
 ): Turret {
     if (template.type !== PlaceableType.TURRET) {
         throw new Error("Template is not a turret type");
@@ -110,15 +111,21 @@ export function createTurret(
         throw new Error(`Weapon template '${template.weaponName}' not found`);
     }
 
+    // Apply rotation to dimensions
+    // For 90° and 270° rotations, swap width and height
+    const isRotated90or270 = angle === 90 || angle === 270;
+    const width = isRotated90or270 ? template.height : template.width;
+    const height = isRotated90or270 ? template.width : template.height;
+
     return {
         id: placeableIdCounter++,
         type: PlaceableType.TURRET,
         x,
         y,
-        width: template.width,
-        height: template.height,
+        width,
+        height,
         speed: 0, // Turrets don't move
-        angle: 0,
+        angle,
         health: template.health,
         maxHealth: template.health,
         cost: template.cost,
@@ -129,6 +136,7 @@ export function createTurret(
         lastShotTime: 0,
         range: template.range,
         targetEnemyId: null,
+        barrelAngle: 0, // Initialize barrel angle
     };
 }
 
@@ -139,20 +147,27 @@ export function createWall(
     template: PlaceableTemplate,
     x: number,
     y: number,
+    angle: number = 0,
 ): Wall {
     if (template.type !== PlaceableType.WALL) {
         throw new Error("Template is not a wall type");
     }
+
+    // Apply rotation to dimensions
+    // For 90° and 270° rotations, swap width and height
+    const isRotated90or270 = angle === 90 || angle === 270;
+    const width = isRotated90or270 ? template.height : template.width;
+    const height = isRotated90or270 ? template.width : template.height;
 
     return {
         id: placeableIdCounter++,
         type: PlaceableType.WALL,
         x,
         y,
-        width: template.width,
-        height: template.height,
+        width,
+        height,
         speed: 0, // Walls don't move
-        angle: 0,
+        angle,
         health: template.health,
         maxHealth: template.health,
         cost: template.cost,
@@ -171,12 +186,16 @@ export function createPlaceable(
     template: PlaceableTemplate,
     x: number,
     y: number,
+    angle: number = 0,
 ): Placeable {
+    const gridSize = 20;
+    const snappedX = Math.round(x / gridSize) * gridSize;
+    const snappedY = Math.round(y / gridSize) * gridSize;
     switch (template.type) {
         case PlaceableType.TURRET:
-            return createTurret(template, x, y);
+            return createTurret(template, snappedX, snappedY, angle);
         case PlaceableType.WALL:
-            return createWall(template, x, y);
+            return createWall(template, snappedX, snappedY, angle);
         default:
             throw new Error(`Unknown placeable type: ${template.type}`);
     }
@@ -267,14 +286,24 @@ export function createPlacementPreview(
     gameState: GameState,
     existingPlaceables: Placeable[],
     player: { x: number; y: number; width: number; height: number },
+    angle: number = 0,
 ): PlacementPreview {
     // Snap to grid for better placement
     const gridSize = 20;
     const snappedX = Math.round(mouseX / gridSize) * gridSize;
     const snappedY = Math.round(mouseY / gridSize) * gridSize;
 
+    // Determine dimensions based on rotation
+    // For 90° and 270° rotations, swap width and height
+    const isRotated90or270 = angle === 90 || angle === 270;
+    const rotatedTemplate = {
+        ...template,
+        width: isRotated90or270 ? template.height : template.width,
+        height: isRotated90or270 ? template.width : template.height,
+    };
+
     const isValid = isValidPlacement(
-        template,
+        rotatedTemplate,
         snappedX,
         snappedY,
         gameState,
@@ -286,11 +315,12 @@ export function createPlacementPreview(
         type: template.type,
         x: snappedX,
         y: snappedY,
-        width: template.width,
-        height: template.height,
+        width: rotatedTemplate.width,
+        height: rotatedTemplate.height,
         isValid,
         cost: template.cost,
         template,
+        angle,
     };
 }
 
@@ -331,10 +361,10 @@ export function updateTurret(
     turret.targetEnemyId = target ? target.id : null;
 
     if (target) {
-        // Calculate angle to target
+        // Calculate angle to target for barrel direction
         const dx = target.x - turret.x;
         const dy = target.y - turret.y;
-        turret.angle = Math.atan2(dy, dx);
+        turret.barrelAngle = Math.atan2(dy, dx);
     }
 }
 

@@ -1,224 +1,171 @@
-import type { Powerup, PowerupEffect } from "./defenseTypes";
+import type { Powerup } from "./defenseTypes";
 import { PowerupType } from "./defenseTypes";
 
-// Powerup templates with effects and visual properties
-interface PowerupTemplate {
-    type: PowerupType;
-    name: string;
-    description: string[];
-    color: string;
-    glowColor: string;
-    lifetime: number; // How long it stays on map (ms)
-    rarity: number; // 0-1, higher = more rare
-    effect: PowerupEffect;
-    icon?: string; // Optional icon
-}
-
-const powerupTemplates: Record<PowerupType, PowerupTemplate> = {
+// Simplified powerup configs
+const powerupConfigs = {
     [PowerupType.HEALTH_PACK]: {
-        type: PowerupType.HEALTH_PACK,
         name: "Health Pack",
         description: ["Restore", "health"],
         color: "#10b981",
         glowColor: "#6ee7b7",
-        lifetime: 20000, // 20 seconds
-        rarity: 0.3, // Common
-        effect: {
-            type: "instant",
-            value: 40,
-        },
-        icon: "❤️",
+        lifetime: 20000,
+        rarity: 0.3,
+        effectType: "instant",
+        effectValue: 40,
     },
     [PowerupType.DAMAGE_BOOST]: {
-        type: PowerupType.DAMAGE_BOOST,
         name: "Damage Boost",
         description: ["+", "% damage for 15s"],
         color: "#ef4444",
         glowColor: "#fca5a5",
         lifetime: 15000,
         rarity: 0.2,
-        effect: {
-            type: "duration",
-            duration: 15000,
-            value: 50, // 50% boost (multiply by 1.5)
-        },
-        icon: "💥",
+        effectType: "duration",
+        effectValue: 50,
+        effectDuration: 15000,
     },
     [PowerupType.SPEED_BOOST]: {
-        type: PowerupType.SPEED_BOOST,
         name: "Speed Boost",
         description: ["+", "% movement speed for 12s"],
         color: "#3b82f6",
         glowColor: "#93c5fd",
         lifetime: 15000,
         rarity: 0.2,
-        effect: {
-            type: "duration",
-            duration: 12000,
-            value: 40,
-        },
-        icon: "⚡",
+        effectType: "duration",
+        effectValue: 40,
+        effectDuration: 12000,
     },
     [PowerupType.FIRE_RATE_BOOST]: {
-        type: PowerupType.FIRE_RATE_BOOST,
         name: "Rapid Fire",
         description: ["+", "% fire rate for 10s"],
         color: "#f59e0b",
         glowColor: "#fcd34d",
         lifetime: 15000,
         rarity: 0.15,
-        effect: {
-            type: "duration",
-            duration: 10000,
-            value: 100,
-        },
-        icon: "🔥",
+        effectType: "duration",
+        effectValue: 100,
+        effectDuration: 10000,
     },
     [PowerupType.SHIELD]: {
-        type: PowerupType.SHIELD,
         name: "Shield",
         description: ["Block next", "hits"],
         color: "#8b5cf6",
         glowColor: "#c4b5fd",
         lifetime: 18000,
         rarity: 0.1,
-        effect: {
-            type: "duration",
-            duration: 60000, // Long duration, but limited by hit count
-            value: 3, // Number of hits to block
-        },
-        icon: "🛡️",
+        effectType: "duration",
+        effectValue: 3,
+        effectDuration: 60000,
     },
     [PowerupType.MULTISHOT]: {
-        type: PowerupType.MULTISHOT,
         name: "Multishot",
         description: ["Shoot", "bullets for 20s"],
         color: "#06b6d4",
         glowColor: "#67e8f9",
         lifetime: 15000,
         rarity: 0.08,
-        effect: {
-            type: "duration",
-            duration: 20000,
-            value: 3,
-        },
-        icon: "⇶",
+        effectType: "duration",
+        effectValue: 3,
+        effectDuration: 20000,
     },
     [PowerupType.PENETRATION_BOOST]: {
-        type: PowerupType.PENETRATION_BOOST,
-        name: "Piercing Shots",
-        description: ["+", "penetration for 15s"],
-        color: "#ec4899",
-        glowColor: "#f9a8d4",
+        name: "Pierce Shot",
+        description: ["+", "penetration for 25s"],
+        color: "#a855f7",
+        glowColor: "#d8b4fe",
         lifetime: 15000,
-        rarity: 0.12,
-        effect: {
-            type: "duration",
-            duration: 15000,
-            value: 2,
-        },
-        icon: "𝌓", // or 🎯
+        rarity: 0.05,
+        effectType: "duration",
+        effectValue: 2,
+        effectDuration: 25000,
     },
     [PowerupType.CASH_BONUS]: {
-        type: PowerupType.CASH_BONUS,
         name: "Cash Bonus",
-        description: ["Gain $", "instantly"],
-        color: "#fbbf24",
-        glowColor: "#fde68a",
+        description: ["Gain", "coins"],
+        color: "#ffd700",
+        glowColor: "#fff59d",
         lifetime: 25000,
         rarity: 0.25,
-        effect: {
-            type: "instant",
-            value: 50,
-        },
-        icon: "💰",
+        effectType: "instant",
+        effectValue: 100,
     },
-};
-
-// === Powerup System Functions ===
+} as const;
 
 /**
- * Create a powerup at a specific location
+ * Create a powerup at the specified location
  */
-function createPowerup(x: number, y: number, type?: PowerupType): Powerup {
-    const powerupType = type || selectRandomPowerup();
-    const template = powerupTemplates[powerupType];
+export function createPowerup(x: number, y: number): Powerup {
+    // Select random powerup type based on rarity
+    const availableTypes = Object.keys(powerupConfigs) as PowerupType[];
+    const weights = availableTypes.map((type) =>
+        1 - powerupConfigs[type].rarity
+    );
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+
+    let random = Math.random() * totalWeight;
+    let selectedType = PowerupType.HEALTH_PACK;
+
+    for (let i = 0; i < availableTypes.length; i++) {
+        const weight = weights[i];
+        const type = availableTypes[i];
+        if (weight !== undefined && type !== undefined) {
+            random -= weight;
+            if (random <= 0) {
+                selectedType = type;
+                break;
+            }
+        }
+    }
+
+    const config = powerupConfigs[selectedType];
+    const spawnTime = Date.now();
 
     return {
         id: Date.now() + Math.random(),
         x,
         y,
-        width: 16,
-        height: 16,
+        width: 20,
+        height: 20,
         speed: 0,
         angle: 0,
-        type: powerupType,
-        name: template.name,
-        description: template.description,
-        color: template.color,
-        glowColor: template.glowColor,
-        spawnTime: Date.now(),
-        lifetime: template.lifetime,
-        effect: { ...template.effect },
-        icon: template.icon,
+        type: selectedType,
+        name: config.name,
+        description: [...config.description],
+        color: config.color,
+        glowColor: config.glowColor,
+        spawnTime,
+        lifetime: config.lifetime,
+        effectType: config.effectType as "instant" | "duration",
+        effectValue: config.effectValue,
+        ...("effectDuration" in config
+            ? { effectDuration: config.effectDuration }
+            : {}),
     };
-}
-
-/**
- * Select a random powerup type based on rarity weights
- */
-function selectRandomPowerup(): PowerupType {
-    const weightedTypes: Array<{ type: PowerupType; weight: number }> = [];
-
-    for (const [type, template] of Object.entries(powerupTemplates)) {
-        // Invert rarity so higher rarity = lower spawn chance
-        const weight = 1 - template.rarity;
-        weightedTypes.push({ type: type as PowerupType, weight });
-    }
-
-    const totalWeight = weightedTypes.reduce(
-        (sum, item) => sum + item.weight,
-        0,
-    );
-    let random = Math.random() * totalWeight;
-
-    for (const item of weightedTypes) {
-        random -= item.weight;
-        if (random <= 0) {
-            return item.type;
-        }
-    }
-
-    return PowerupType.HEALTH_PACK; // Fallback
 }
 
 /**
  * Check if a powerup should despawn
  */
-function shouldPowerupDespawn(powerup: Powerup): boolean {
+export function shouldPowerupDespawn(powerup: Powerup): boolean {
     return Date.now() - powerup.spawnTime > powerup.lifetime;
 }
 
 /**
  * Calculate powerup spawn probability based on game state
  */
-function getPowerupSpawnChance(
+export function getPowerupSpawnChance(
     enemiesKilled: number,
     difficulty: number,
 ): number {
-    // Base chance increases slightly with difficulty
-    const baseChance = 0.02 + (difficulty - 1) * 0.005; // 2-5% base chance
-
-    // Increase chance if player has killed many enemies
+    const baseChance = 0.02 + (difficulty - 1) * 0.005;
     const killBonus = Math.min(0.03, enemiesKilled * 0.001);
-
-    return Math.min(0.1, baseChance + killBonus); // Cap at 10%
+    return Math.min(0.1, baseChance + killBonus);
 }
 
 /**
  * Generate random spawn position for powerup (not too close to player)
  */
-function getRandomPowerupSpawnPosition(
+export function getRandomPowerupSpawnPosition(
     worldWidth: number,
     worldHeight: number,
     playerX: number,
@@ -234,14 +181,10 @@ function getRandomPowerupSpawnPosition(
         distance = Math.hypot(x - playerX, y - playerY);
         attempts++;
 
-        // Prevent infinite loop
         if (attempts > 20) {
-            // Place at edge of minimum distance circle
             const angle = Math.random() * Math.PI * 2;
             x = playerX + Math.cos(angle) * minDistanceFromPlayer;
             y = playerY + Math.sin(angle) * minDistanceFromPlayer;
-
-            // Clamp to world bounds
             x = Math.max(20, Math.min(worldWidth - 20, x));
             y = Math.max(20, Math.min(worldHeight - 20, y));
             break;
@@ -251,11 +194,5 @@ function getRandomPowerupSpawnPosition(
     return { x, y };
 }
 
-export {
-    createPowerup,
-    getPowerupSpawnChance,
-    getRandomPowerupSpawnPosition,
-    powerupTemplates,
-    selectRandomPowerup,
-    shouldPowerupDespawn,
-};
+// Export for external use
+export { powerupConfigs };
