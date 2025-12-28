@@ -353,4 +353,4 @@ onUnmounted(() => {
 })
 </script>
 
-<style src="../components/2048/game2048.scss" lang="scss"></style>
+<style src="@/components/2048/game2048.scss" lang="scss"></style>

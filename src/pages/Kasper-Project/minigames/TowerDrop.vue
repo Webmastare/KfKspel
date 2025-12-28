@@ -384,5 +384,5 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
-@use '@/pages/minigames/TowerDrop.scss';
+@use '@/pages/Kasper-Project/minigames/TowerDrop.scss';
 </style>
