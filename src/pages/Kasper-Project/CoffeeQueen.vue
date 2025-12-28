@@ -1,0 +1,698 @@
+<template>
+  <div class="coffee-queen-game">
+    <h1>Coffee Queen</h1>
+
+    <!-- Game Overlay with User Stats -->
+    <GameOverlay :user="user" :inventory="inventoryForDisplay" />
+
+    <!-- Controls -->
+    <div class="controls">
+      <button @click="showInventory = !showInventory">
+        {{ showInventory ? 'Close' : 'Open' }} Inventory
+      </button>
+      <button @click="displayLocalSaves">Load Game</button>
+    </div>
+
+    <!-- Machines Container -->
+    <div class="machines-container">
+      <div v-for="(group, type) in groupedMachines" :key="type" class="machine-row-container">
+        <h3 class="machine-type-header">{{ type }}</h3>
+        <div class="machine-row">
+          <MachineCard
+            v-for="machine in group"
+            :key="machine.key"
+            :machine="machine"
+            :user-money="user.money"
+            :user-level="user.level"
+            @upgrade-machine="handleUpgrade"
+            @buy-machine="buyMachine"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Inventory Modal -->
+    <Inventory
+      v-if="showInventory"
+      :inventory="inventoryForDisplay"
+      :user-money="user.money"
+      :multi-action="inventoryMultiAction"
+      :custom-percentage="customPercentage"
+      @buy-item="buyItem"
+      @sell-item="sellItem"
+      @close="showInventory = false"
+      @update-multi-action="updateInventoryMultiAction"
+      @update-custom-percentage="updateCustomPercentage"
+    />
+
+    <!-- Load Data Overlay -->
+    <LoadDataOverlay
+      v-if="showLoadDataOverlay"
+      :loaded-data="loadedData"
+      :storage-type="loadedDataStorageType"
+      @close="showLoadDataOverlay = false"
+      @load-data="loadGame"
+    />
+
+    <!-- Offline Progress Modal -->
+    <OfflineProgress
+      v-if="showOfflineProgress"
+      :summary="offlineProductionSummary"
+      :experience="offlineExperienceGained"
+      :item-data="itemData"
+      @close="showOfflineProgress = false"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import type {
+  User,
+  UserMachine,
+  MachineConfig,
+  ItemData,
+  InventoryItem,
+  MultiActionValue,
+  ItemKey,
+  MachineKey,
+  MachineType,
+  SavedGameData,
+} from '@/components/coffeequeen/types'
+import { machineDataList } from '@/components/coffeequeen/data-machines'
+import { itemDataList } from '@/components/coffeequeen/data-items'
+import MachineCard from '@/components/coffeequeen/MachineCard.vue'
+import GameOverlay from '@/components/coffeequeen/GameOverlay.vue'
+import Inventory from '@/components/coffeequeen/Inventory.vue'
+import LoadDataOverlay from '@/components/coffeequeen/LoadDataOverlay.vue'
+import OfflineProgress from '@/components/coffeequeen/OfflineProgress.vue'
+import {
+  calculateBatchSize,
+  calculateProductionTime,
+  calculateEfficiencyBonus,
+  calculateSpeedUpgradeCost,
+  calculateEfficiencyUpgradeCost,
+} from '@/components/coffeequeen/coffee-upgrade-calculations'
+import {
+  saveToLocalStorage,
+  loadFromLocalStorage,
+  displayLocalSaves,
+  createNewUser,
+} from '@/components/coffeequeen/coffee-save-load'
+
+let animationFrameId: number | null = null
+let lastTimestamp: number | null = null
+
+// Load machines and items data
+const machinesConfig = ref<Record<MachineKey, MachineConfig>>(machineDataList)
+const itemData = ref<Record<ItemKey, ItemData>>(itemDataList)
+
+// User state
+const user = ref<User>(createNewUser())
+
+// UI state
+const showInventory = ref<boolean>(false)
+const inventoryMultiAction = ref<MultiActionValue>(1)
+const customPercentage = ref<number>(25)
+
+// Data loading state
+const showLoadDataOverlay = ref<boolean>(false)
+const loadedData = ref<SavedGameData[]>([])
+const loadedDataStorageType = ref<string>('')
+
+// Offline progress state
+const showOfflineProgress = ref<boolean>(false)
+const offlineProductionSummary = ref<any>({})
+const offlineExperienceGained = ref<number>(0)
+
+// Save management
+const SAVE_INTERVALS = {
+  localStorage: 30000, // 30 seconds
+}
+let lastLocalStorageSave = 0
+let isPageVisible = true
+let saveTimeoutId: number | null = null
+let hasUnsavedChanges = false
+
+// Computed properties for display
+const allMachinesForDisplay = computed(() => {
+  const allMachines: UserMachine[] = []
+
+  for (const [key, config] of Object.entries(machinesConfig.value)) {
+    const machineKey = key as MachineKey
+    let machine: UserMachine
+
+    if (user.value.machines[machineKey]) {
+      machine = user.value.machines[machineKey]
+    } else {
+      // Create default machine state
+      machine = {
+        key: machineKey,
+        name: config.name,
+        type: config.type,
+        icon: config.icon,
+        cost: config.cost,
+        levelRequired: config.levelRequired,
+        baseBatchSize: config.baseBatchSize,
+        batchSize: config.baseBatchSize,
+        productionTime: config.productionTime,
+        uses: config.uses,
+        produces: config.produces,
+        isOwned: false,
+        isActive: false,
+        progressPercent: 0,
+        efficiencyProgress: 0,
+        speedUpgrade: 0,
+        efficiencyUpgrade: 0,
+        speedUpgradeCost: calculateSpeedUpgradeCost(config.cost, 0),
+        efficiencyUpgradeCost: calculateEfficiencyUpgradeCost(config.cost, 0),
+        lastUpdateTime: Date.now(),
+      }
+    }
+
+    allMachines.push(machine)
+  }
+
+  return allMachines
+})
+
+const groupedMachines = computed(() => {
+  const groups: Record<string, UserMachine[]> = {}
+
+  for (const machine of allMachinesForDisplay.value) {
+    const type = machine.type
+    if (!groups[type]) {
+      groups[type] = []
+    }
+    groups[type].push(machine)
+  }
+
+  return groups
+})
+
+const inventoryForDisplay = computed(() => {
+  const inventory: Record<string, InventoryItem> = {}
+
+  for (const [key, itemInfo] of Object.entries(itemData.value)) {
+    const itemKey = key as ItemKey
+
+    if (user.value.inventory[itemKey]) {
+      inventory[key] = user.value.inventory[itemKey]
+    } else {
+      inventory[key] = {
+        name: itemInfo.name,
+        icon: itemInfo.icon,
+        amount: 0,
+        cost: itemInfo.cost,
+        basePrice: itemInfo.basePrice,
+        sellMultiplier: itemInfo.sellMultiplier,
+        priceHistory: [...itemInfo.priceHistory],
+      }
+    }
+  }
+
+  return inventory
+})
+
+// Functions
+function buyItem({ itemKey, quantity = 1 }: { itemKey: string; quantity?: number }) {
+  const item = inventoryForDisplay.value[itemKey]
+  if (!item) return
+
+  const totalCost = item.cost * quantity
+  if (user.value.money >= totalCost) {
+    user.value.money -= totalCost
+
+    if (!user.value.inventory[itemKey as ItemKey]) {
+      user.value.inventory[itemKey as ItemKey] = {
+        ...item,
+        amount: 0,
+      }
+    }
+
+    const userInventoryItem = user.value.inventory[itemKey as ItemKey]
+    if (userInventoryItem) {
+      userInventoryItem.amount += quantity
+    }
+    markUnsavedChanges()
+  }
+}
+
+function sellItem({ itemKey, quantity = 1 }: { itemKey: string; quantity?: number }) {
+  const item = user.value.inventory[itemKey as ItemKey]
+  if (!item || item.amount < quantity) return
+
+  const sellPrice = item.cost * item.sellMultiplier
+  const totalValue = sellPrice * quantity
+
+  user.value.money += totalValue
+  item.amount -= quantity
+  markUnsavedChanges()
+}
+
+function updateInventoryMultiAction(newValue: MultiActionValue) {
+  inventoryMultiAction.value = newValue
+}
+
+function updateCustomPercentage(newValue: number) {
+  customPercentage.value = newValue
+}
+
+function buyMachine(machineKey: MachineKey) {
+  const config = machinesConfig.value[machineKey]
+  if (!config) return
+
+  if (user.value.money >= config.cost && user.value.level >= config.levelRequired) {
+    user.value.money -= config.cost
+
+    // Create the machine instance
+    user.value.machines[machineKey] = {
+      key: machineKey,
+      name: config.name,
+      type: config.type,
+      icon: config.icon,
+      cost: config.cost,
+      levelRequired: config.levelRequired,
+      baseBatchSize: config.baseBatchSize,
+      batchSize: config.baseBatchSize,
+      productionTime: config.productionTime,
+      uses: config.uses,
+      produces: config.produces,
+      isOwned: true,
+      isActive: true,
+      progressPercent: 0,
+      efficiencyProgress: 0,
+      speedUpgrade: 0,
+      efficiencyUpgrade: 0,
+      speedUpgradeCost: calculateSpeedUpgradeCost(config.cost, 0),
+      efficiencyUpgradeCost: calculateEfficiencyUpgradeCost(config.cost, 0),
+      lastUpdateTime: Date.now(),
+    }
+
+    markUnsavedChanges(true)
+  }
+}
+
+function handleUpgrade({
+  machineKey,
+  upgradeType,
+}: {
+  machineKey: MachineKey
+  upgradeType: string
+}) {
+  upgradeMachine(machineKey, upgradeType)
+}
+
+function upgradeMachine(machineKey: MachineKey, upgradeType: string) {
+  const machine = user.value.machines[machineKey]
+  if (!machine) return
+
+  let upgradeCost = 0
+
+  if (upgradeType === 'speed') {
+    upgradeCost = machine.speedUpgradeCost
+    if (user.value.money >= upgradeCost) {
+      user.value.money -= upgradeCost
+      machine.speedUpgrade++
+
+      // Recalculate machine properties
+      machine.batchSize = calculateBatchSize(machine.baseBatchSize, machine.speedUpgrade)
+      machine.productionTime = calculateProductionTime(
+        machine.baseBatchSize,
+        machine.speedUpgrade,
+        machinesConfig.value[machineKey].productionTime,
+      )
+      machine.speedUpgradeCost = calculateSpeedUpgradeCost(machine.cost, machine.speedUpgrade)
+
+      markUnsavedChanges(true)
+    }
+  } else if (upgradeType === 'efficiency') {
+    upgradeCost = machine.efficiencyUpgradeCost
+    if (user.value.money >= upgradeCost) {
+      user.value.money -= upgradeCost
+      machine.efficiencyUpgrade++
+      machine.efficiencyUpgradeCost = calculateEfficiencyUpgradeCost(
+        machine.cost,
+        machine.efficiencyUpgrade,
+      )
+
+      markUnsavedChanges(true)
+    }
+  }
+}
+
+// Save to localStorage
+function saveToLocalStorageNow() {
+  saveToLocalStorage(user.value, 'guest', 'Guest')
+}
+
+function displayLocalSavesFunc() {
+  const saves = displayLocalSaves()
+  if (saves.length > 0) {
+    loadedData.value = saves
+    loadedDataStorageType.value = 'localStorage'
+    showLoadDataOverlay.value = true
+  } else {
+    console.log('No saved games found')
+  }
+}
+
+function loadGame(itemKey: string) {
+  const result = loadFromLocalStorage(itemKey, machinesConfig.value, itemData.value)
+  if (result) {
+    // Load the game data
+    user.value = result.gameData
+
+    // Show offline progress if there was any
+    if (
+      Object.keys(result.offlineProductionSummary).length > 0 ||
+      result.offlineExperienceGained > 0
+    ) {
+      offlineProductionSummary.value = result.offlineProductionSummary
+      offlineExperienceGained.value = result.offlineExperienceGained
+      showOfflineProgress.value = true
+    }
+
+    showLoadDataOverlay.value = false
+    console.log('Game loaded successfully')
+  }
+}
+
+// Mark that changes have occurred
+function markUnsavedChanges(isSignificant = false) {
+  hasUnsavedChanges = true
+
+  if (isSignificant) {
+    // Save immediately for significant changes
+    saveToLocalStorageNow()
+  }
+}
+
+// Check if we should save to localStorage
+function shouldSaveToLocalStorage() {
+  return Date.now() - lastLocalStorageSave > SAVE_INTERVALS.localStorage
+}
+
+// Page visibility change handler
+function handleVisibilityChange() {
+  isPageVisible = !document.hidden
+  if (!isPageVisible && hasUnsavedChanges) {
+    // Save when page becomes hidden
+    saveToLocalStorageNow()
+  }
+}
+
+// Beforeunload handler for emergency saves
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (hasUnsavedChanges) {
+    saveToLocalStorageNow()
+    // Optional: Show warning dialog
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+
+// Enhanced game loop
+function updateGame(timestamp: number) {
+  if (!lastTimestamp) {
+    lastTimestamp = timestamp
+  }
+
+  const deltaTime = timestamp - lastTimestamp
+  lastTimestamp = timestamp
+
+  // Update all owned machines
+  for (const machineKey in user.value.machines) {
+    const machine = user.value.machines[machineKey]
+    if (!machine || !machine.isOwned || !machine.isActive) continue
+
+    // Update production progress
+    if (machine.progressPercent < 1) {
+      const progress = deltaTime / machine.productionTime
+      machine.progressPercent = Math.min(1, machine.progressPercent + progress)
+
+      // Update efficiency progress
+      if (machine.efficiencyUpgrade > 0) {
+        const efficiencyBonus = calculateEfficiencyBonus(machine.efficiencyUpgrade)
+        const efficiencyProgress = progress * efficiencyBonus
+        machine.efficiencyProgress = Math.min(1, machine.efficiencyProgress + efficiencyProgress)
+      }
+    }
+
+    // If production cycle is complete
+    if (machine.progressPercent >= 1) {
+      // Calculate actual production
+      let itemsProduced = machine.batchSize || 1
+
+      // Add efficiency bonus items
+      if (machine.efficiencyProgress >= 1) {
+        const efficiencyBonus = calculateEfficiencyBonus(machine.efficiencyUpgrade)
+        const bonusItems = Math.floor(itemsProduced * efficiencyBonus)
+        itemsProduced += bonusItems
+        machine.efficiencyProgress = 0 // Reset efficiency progress
+      }
+
+      // Check if we have input materials
+      const inputItem = machine.uses
+      let canProduce = true
+
+      if (inputItem) {
+        const userInventoryItem = user.value.inventory[inputItem as ItemKey]
+        if (userInventoryItem) {
+          const available = userInventoryItem.amount
+          const needed = itemsProduced
+
+          if (available >= needed) {
+            userInventoryItem.amount -= needed
+          } else {
+            canProduce = false
+          }
+        } else {
+          canProduce = false
+        }
+      }
+
+      if (canProduce) {
+        // Produce output items
+        const outputItem = machine.produces as ItemKey
+        if (!user.value.inventory[outputItem]) {
+          const itemInfo = itemData.value[outputItem]
+          user.value.inventory[outputItem] = {
+            name: itemInfo.name,
+            icon: itemInfo.icon,
+            amount: 0,
+            cost: itemInfo.cost,
+            basePrice: itemInfo.basePrice,
+            sellMultiplier: itemInfo.sellMultiplier,
+            priceHistory: [...itemInfo.priceHistory],
+          }
+        }
+
+        user.value.inventory[outputItem].amount += itemsProduced
+
+        // Gain experience
+        const experienceGain = itemsProduced * 10 // 10 XP per item
+        user.value.experience += experienceGain
+
+        // Check for level up
+        if (user.value.experience >= user.value.nextLevelExperience) {
+          user.value.level++
+          user.value.experience -= user.value.nextLevelExperience
+          user.value.nextLevelExperience = Math.ceil(user.value.nextLevelExperience * 1.2)
+        }
+
+        markUnsavedChanges()
+      }
+
+      // Reset production progress
+      machine.progressPercent = 0
+    }
+  }
+
+  // Periodic saves
+  if (hasUnsavedChanges && shouldSaveToLocalStorage()) {
+    saveToLocalStorageNow()
+    lastLocalStorageSave = Date.now()
+    hasUnsavedChanges = false
+  }
+
+  // Update market prices occasionally
+  if (Math.random() < 0.001) {
+    // Small chance each frame
+    for (const [itemKey, item] of Object.entries(itemData.value)) {
+      updateMarketPrice(item, itemKey as ItemKey)
+    }
+  }
+
+  animationFrameId = requestAnimationFrame(updateGame)
+}
+
+// Market price update function
+function updateMarketPrice(item: ItemData, itemKey: ItemKey) {
+  const timeDelta = Date.now() - item.timeSinceLastUpdate
+  if (timeDelta < 5000) return // Update at most every 5 seconds
+
+  const volatility = item.volatility
+  const trend = item.trend
+
+  // Random walk with trend
+  const randomFactor = (Math.random() - 0.5) * 2 * volatility
+  const trendFactor = trend * 0.1
+  const changeFactor = 1 + randomFactor + trendFactor
+
+  // Apply change
+  item.cost = Math.max(1, item.cost * changeFactor)
+  item.priceHistory.push(item.cost)
+
+  // Keep only last 20 prices
+  if (item.priceHistory.length > 20) {
+    item.priceHistory.shift()
+  }
+
+  // Update inventory display if needed
+  if (user.value.inventory[itemKey]) {
+    user.value.inventory[itemKey].cost = item.cost
+    user.value.inventory[itemKey].priceHistory = [...item.priceHistory]
+  }
+
+  item.timeSinceLastUpdate = Date.now()
+}
+
+// Lifecycle
+onMounted(async () => {
+  // Try to load existing save
+  const result = loadFromLocalStorage('coffeeQueen_guest', machinesConfig.value, itemData.value)
+  if (result) {
+    user.value = result.gameData
+
+    // Show offline progress if there was any
+    if (
+      Object.keys(result.offlineProductionSummary).length > 0 ||
+      result.offlineExperienceGained > 0
+    ) {
+      offlineProductionSummary.value = result.offlineProductionSummary
+      offlineExperienceGained.value = result.offlineExperienceGained
+      showOfflineProgress.value = true
+    }
+  }
+
+  // Setup event listeners
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('beforeunload', handleBeforeUnload)
+
+  // Start game loop
+  animationFrameId = requestAnimationFrame(updateGame)
+
+  console.log('Coffee Queen game initialized (TypeScript version)')
+})
+
+onUnmounted(() => {
+  // Save before unmounting
+  if (hasUnsavedChanges) {
+    saveToLocalStorageNow()
+  }
+
+  // Cleanup
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId)
+  }
+  if (saveTimeoutId !== null) {
+    clearTimeout(saveTimeoutId)
+  }
+
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+
+  animationFrameId = null
+  lastTimestamp = null
+})
+</script>
+
+<style scoped lang="scss">
+h1 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #6f4c3e;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 2.5rem;
+}
+
+.coffee-queen-game {
+  padding: 20px;
+  min-height: calc(100vh - 140px);
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 30px;
+
+  button {
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: bold;
+    background-color: #6f4c3e;
+    color: white;
+    border: 2px solid #452f26;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: 'Courier New', Courier, monospace;
+
+    &:hover {
+      background-color: #8f6c5e;
+      transform: translateY(-2px);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+}
+
+.machines-container {
+  margin-bottom: 100px; // Space for overlay
+}
+
+.machine-row-container {
+  margin-bottom: 30px;
+}
+
+.machine-type-header {
+  text-align: center;
+  font-size: 1.5rem;
+  margin-bottom: 15px;
+  color: #6f4c3e;
+}
+
+.machine-row {
+  display: flex;
+  overflow-x: auto;
+  padding: 10px 0;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Simple scrollbar styling */
+.machine-row::-webkit-scrollbar {
+  height: 8px;
+}
+
+.machine-row::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.machine-row::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+// Responsive adjustments
+@media (max-width: 900px) {
+  .machine-row {
+    justify-content: flex-start;
+  }
+}
+</style>
