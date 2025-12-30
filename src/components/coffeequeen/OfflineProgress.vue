@@ -72,28 +72,29 @@ onMounted(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1001;
+  background: rgba(0, 0, 0, 0.7);
 }
 
 .offline-progress-modal {
-  background: #f5e7de;
   padding: 30px;
   border-radius: 15px;
-  border: 3px solid #6f4c3e;
   text-align: center;
   max-width: 400px;
   width: 90%;
   font-family: 'Courier New', Courier, monospace;
-  color: #452f26;
+  background: var(--coffee-bg-card);
+  border: 1px solid var(--coffee-border-primary);
+  color: var(--coffee-text-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 
   h2 {
-    color: #6f4c3e;
     margin-top: 0;
     font-size: 1.8rem;
+    color: var(--coffee-text-secondary);
   }
 
   p {
@@ -126,17 +127,12 @@ onMounted(() => {
   button {
     padding: 12px 25px;
     font-size: 1rem;
-    background-color: #6f4c3e;
-    color: white;
-    border: 2px solid #452f26;
     border-radius: 8px;
     cursor: pointer;
-    transition: background-color 0.2s ease;
     margin-top: 10px;
-
-    &:hover {
-      background-color: #8f6c5e;
-    }
+    background: var(--coffee-button-bg);
+    color: var(--coffee-button-text);
+    border: 2px solid var(--coffee-button-border);
   }
 }
 </style>

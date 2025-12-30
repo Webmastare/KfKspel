@@ -47,18 +47,20 @@ const progressOffset = computed((): number => {
 
 <style scoped lang="scss">
 .game-overlay {
+  background: linear-gradient(180deg, var(--coffee-bg-secondary) 0%, var(--coffee-bg-primary) 100%);
+  border-top: 2px solid var(--coffee-border-primary);
+  color: var(--coffee-text-primary);
+  transition: all 0.3s ease;
   position: fixed;
   bottom: 0;
   left: 0;
   width: 100%;
   height: 80px;
-  background-color: rgba(111, 76, 62, 0.8);
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 20px;
   box-sizing: border-box;
-  color: white;
   font-family: 'Courier New', Courier, monospace;
   z-index: 100;
 }
@@ -69,6 +71,7 @@ const progressOffset = computed((): number => {
 }
 
 .money {
+  color: var(--coffee-text-primary);
   font-size: 20px;
   font-weight: bold;
   margin-right: 30px;
@@ -107,20 +110,21 @@ const progressOffset = computed((): number => {
 
   .bg {
     fill: none;
-    stroke: rgba(255, 255, 255, 0.2);
     stroke-width: 10;
+    stroke: var(--coffee-border-secondary);
   }
 
   .progress {
     fill: none;
-    stroke: #dd0000;
     stroke-width: 10;
     stroke-linecap: round;
     transition: stroke-dashoffset 0.3s ease;
+    stroke: #4caf50; // Keep green for progress
   }
 }
 
 .level-text {
+  color: var(--coffee-text-primary);
   font-size: 32px;
   font-weight: bold;
   z-index: 1;

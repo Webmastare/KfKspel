@@ -5,10 +5,6 @@ export interface ItemData {
     icon: string;
     cost: number;
     basePrice: number;
-    volatility: number;
-    trend: number;
-    timeSinceLastUpdate: number;
-    priceHistory: number[];
     sellMultiplier: number;
 }
 
@@ -19,7 +15,6 @@ export interface InventoryItem {
     cost: number;
     basePrice: number;
     sellMultiplier: number;
-    priceHistory: number[];
 }
 
 export interface MachineConfig {
@@ -47,6 +42,8 @@ export interface UserMachine {
     productionTime: number;
     uses: string | null;
     produces: string;
+
+    // State
     isOwned: boolean;
     isActive: boolean;
     progressPercent: number;
@@ -56,6 +53,10 @@ export interface UserMachine {
     speedUpgradeCost: number;
     efficiencyUpgradeCost: number;
     lastUpdateTime: number;
+
+    // Trackers
+    itemsProduced: number; // Property to track items produced
+    bonusItems: number; // Property to track bonus items produced
 }
 
 export interface User {

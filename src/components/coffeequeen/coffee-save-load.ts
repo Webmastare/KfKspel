@@ -133,7 +133,6 @@ function simulateOfflineProgress(
                             cost: itemInfo.cost,
                             basePrice: itemInfo.basePrice,
                             sellMultiplier: itemInfo.sellMultiplier,
-                            priceHistory: [...itemInfo.priceHistory],
                         };
                     }
 

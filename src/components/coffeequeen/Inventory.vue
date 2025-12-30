@@ -46,12 +46,6 @@
               </div>
             </div>
           </div>
-          <!-- Display graph over price history -->
-          <PriceChart
-            v-if="item.priceHistory && item.priceHistory.length > 0"
-            :priceHistory="item.priceHistory"
-            :currentPrice="item.cost"
-          />
         </div>
       </div>
       <button class="close-button" @click="emitClose">Close</button>
@@ -62,7 +56,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import type { InventoryItem, MultiActionValue } from '@/components/coffeequeen/types'
-import PriceChart from './PriceChart.vue'
 
 interface Props {
   inventory: Record<string, InventoryItem>
@@ -208,24 +201,25 @@ const emitClose = (): void => {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 200;
   font-family: 'Courier New', Courier, monospace;
+  background: rgba(0, 0, 0, 0.7);
 }
 
 .shop-modal {
   position: relative;
-  background-color: rgb(207, 174, 158);
   padding: 20px;
   border-radius: 10px;
-  border: 3px solid #452f26;
   width: 500px;
   max-height: 80vh;
   overflow-y: auto;
-  color: #452f26;
+  background: var(--coffee-bg-card);
+  border: 1px solid var(--coffee-border-primary);
+  color: var(--coffee-text-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .multi-action {
@@ -274,21 +268,20 @@ const emitClose = (): void => {
     text-align: center;
     font-family: inherit;
     font-size: 12px;
-    background-color: white;
+    color: var(--coffee-text-primary);
 
     &:focus {
       outline: none;
       border-color: rgb(208, 114, 56);
     }
 
-    /* Hide spinner arrows in Chrome, Safari, Edge */
+    /* Hide spinner arrows */
     &::-webkit-outer-spin-button,
     &::-webkit-inner-spin-button {
       -webkit-appearance: none;
       margin: 0;
     }
 
-    /* Hide spinner arrows in Firefox */
     &[type='number'] {
       -moz-appearance: textfield;
       appearance: textfield;
@@ -311,10 +304,10 @@ h2 {
 .shop-item {
   display: flex;
   align-items: center;
-  background-color: #8f6c5e;
   padding: 10px;
   border-radius: 8px;
-  color: white;
+  background: var(--coffee-bg-secondary);
+  color: var(--coffee-text-primary);
 }
 
 .item-icon {
@@ -357,23 +350,25 @@ h2 {
 
 button {
   padding: 3px 10px;
-  background-color: #4caf50;
-  color: #ffffff;
-  border: none;
   border-radius: 5px;
   cursor: pointer;
   font-family: inherit;
   font-weight: bold;
+  background-color: #4caf50;
+  color: white;
+  border: 2px solid #45a049;
 
   &:hover {
     background-color: #45a049;
   }
+
   &:active {
-    background-color: #3e8e41;
+    background-color: #3d8b40;
   }
 
   &:disabled {
-    background-color: #555;
+    background-color: #a0a0a0;
+    border-color: #666;
     cursor: not-allowed;
   }
 }
@@ -382,5 +377,10 @@ button {
   display: block;
   margin: 20px auto 0;
   background-color: #f44336;
+  border-color: #d32f2f;
+
+  &:hover {
+    background-color: #d32f2f;
+  }
 }
 </style>

@@ -95,22 +95,23 @@ const emitLoadData = (item: SavedGameData): void => {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 200;
   font-family: 'Courier New', Courier, monospace;
+  background: rgba(0, 0, 0, 0.7);
 
   .data-modal {
-    background-color: #cfae9e;
     padding: 20px;
     border-radius: 10px;
-    border: 3px solid #452f26;
     width: 500px;
     max-height: 80vh;
     overflow-y: auto;
-    color: #452f26;
+    background: var(--coffee-bg-card);
+    border: 1px solid var(--coffee-border-primary);
+    color: var(--coffee-text-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 
     h2 {
       text-align: center;
@@ -125,11 +126,11 @@ const emitLoadData = (item: SavedGameData): void => {
     gap: 10px;
     align-items: center;
     justify-content: center;
-
-    background-color: rgb(189, 189, 189);
     padding: 20px;
     border-radius: 10px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    background: var(--coffee-bg-primary);
+    color: var(--coffee-text-primary);
 
     .data-item {
       position: relative;
@@ -138,25 +139,30 @@ const emitLoadData = (item: SavedGameData): void => {
       justify-content: center;
       flex-direction: column;
       width: 100%;
-      background-color: #8f6c5e;
       padding: 10px;
       border-radius: 8px;
-      color: white;
+      background: var(--coffee-bg-secondary);
+      color: var(--coffee-text-primary);
     }
   }
 
   button {
     padding: 10px 20px;
-    background-color: #4caf50;
-    color: white;
-    border: none;
     border-radius: 5px;
     cursor: pointer;
     font-family: inherit;
     font-weight: bold;
+    background-color: #4caf50;
+    color: white;
+    border: 2px solid #45a049;
+
+    &:hover {
+      background-color: #45a049;
+    }
 
     &:disabled {
-      background-color: #555;
+      background-color: #a0a0a0;
+      border-color: #666;
       cursor: not-allowed;
     }
   }
@@ -165,6 +171,11 @@ const emitLoadData = (item: SavedGameData): void => {
     display: block;
     margin: 20px auto 0;
     background-color: #f44336;
+    border-color: #d32f2f;
+
+    &:hover {
+      background-color: #d32f2f;
+    }
   }
 }
 
@@ -186,16 +197,16 @@ const emitLoadData = (item: SavedGameData): void => {
 
     .bg {
       fill: none;
-      stroke: rgba(255, 255, 255, 0.2);
       stroke-width: 10;
+      stroke: var(--coffee-border-secondary);
     }
 
     .progress {
       fill: none;
-      stroke: #dd0000;
       stroke-width: 10;
       stroke-linecap: round;
       transition: stroke-dashoffset 0.3s ease;
+      stroke: #4caf50; // Keep green for progress
     }
   }
 

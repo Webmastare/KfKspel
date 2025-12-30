@@ -16,7 +16,7 @@
     <!-- Machines Container -->
     <div class="machines-container">
       <div v-for="(group, type) in groupedMachines" :key="type" class="machine-row-container">
-        <h3 class="machine-type-header">{{ type }}</h3>
+        <h3 class="machine-type-header">{{ type.charAt(0).toUpperCase() + type.slice(1) }}</h3>
         <div class="machine-row">
           <MachineCard
             v-for="machine in group"
@@ -99,6 +99,11 @@ import {
   displayLocalSaves,
   createNewUser,
 } from '@/components/coffeequeen/coffee-save-load'
+import { useThemeStore } from '@/stores/theme'
+
+// Initialize theme store
+const themeStore = useThemeStore()
+themeStore.init()
 
 let animationFrameId: number | null = null
 let lastTimestamp: number | null = null
@@ -167,6 +172,9 @@ const allMachinesForDisplay = computed(() => {
         speedUpgradeCost: calculateSpeedUpgradeCost(config.cost, 0),
         efficiencyUpgradeCost: calculateEfficiencyUpgradeCost(config.cost, 0),
         lastUpdateTime: Date.now(),
+
+        itemsProduced: 0,
+        bonusItems: 0,
       }
     }
 
@@ -206,7 +214,6 @@ const inventoryForDisplay = computed(() => {
         cost: itemInfo.cost,
         basePrice: itemInfo.basePrice,
         sellMultiplier: itemInfo.sellMultiplier,
-        priceHistory: [...itemInfo.priceHistory],
       }
     }
   }
@@ -278,6 +285,7 @@ function buyMachine(machineKey: MachineKey) {
       productionTime: config.productionTime,
       uses: config.uses,
       produces: config.produces,
+      // Initial state
       isOwned: true,
       isActive: true,
       progressPercent: 0,
@@ -287,6 +295,9 @@ function buyMachine(machineKey: MachineKey) {
       speedUpgradeCost: calculateSpeedUpgradeCost(config.cost, 0),
       efficiencyUpgradeCost: calculateEfficiencyUpgradeCost(config.cost, 0),
       lastUpdateTime: Date.now(),
+
+      itemsProduced: 0, // Property to track items produced
+      bonusItems: 0, // Property to track bonus items produced
     }
 
     markUnsavedChanges(true)
@@ -344,17 +355,6 @@ function upgradeMachine(machineKey: MachineKey, upgradeType: string) {
 // Save to localStorage
 function saveToLocalStorageNow() {
   saveToLocalStorage(user.value, 'guest', 'Guest')
-}
-
-function displayLocalSavesFunc() {
-  const saves = displayLocalSaves()
-  if (saves.length > 0) {
-    loadedData.value = saves
-    loadedDataStorageType.value = 'localStorage'
-    showLoadDataOverlay.value = true
-  } else {
-    console.log('No saved games found')
-  }
 }
 
 function loadGame(itemKey: string) {
@@ -449,6 +449,7 @@ function updateGame(timestamp: number) {
         const efficiencyBonus = calculateEfficiencyBonus(machine.efficiencyUpgrade)
         const bonusItems = Math.floor(itemsProduced * efficiencyBonus)
         itemsProduced += bonusItems
+        machine.bonusItems += bonusItems
         machine.efficiencyProgress = 0 // Reset efficiency progress
       }
 
@@ -484,11 +485,11 @@ function updateGame(timestamp: number) {
             cost: itemInfo.cost,
             basePrice: itemInfo.basePrice,
             sellMultiplier: itemInfo.sellMultiplier,
-            priceHistory: [...itemInfo.priceHistory],
           }
         }
 
         user.value.inventory[outputItem].amount += itemsProduced
+        machine.itemsProduced += itemsProduced
 
         // Gain experience
         const experienceGain = itemsProduced * 10 // 10 XP per item
@@ -516,46 +517,7 @@ function updateGame(timestamp: number) {
     hasUnsavedChanges = false
   }
 
-  // Update market prices occasionally
-  if (Math.random() < 0.001) {
-    // Small chance each frame
-    for (const [itemKey, item] of Object.entries(itemData.value)) {
-      updateMarketPrice(item, itemKey as ItemKey)
-    }
-  }
-
   animationFrameId = requestAnimationFrame(updateGame)
-}
-
-// Market price update function
-function updateMarketPrice(item: ItemData, itemKey: ItemKey) {
-  const timeDelta = Date.now() - item.timeSinceLastUpdate
-  if (timeDelta < 5000) return // Update at most every 5 seconds
-
-  const volatility = item.volatility
-  const trend = item.trend
-
-  // Random walk with trend
-  const randomFactor = (Math.random() - 0.5) * 2 * volatility
-  const trendFactor = trend * 0.1
-  const changeFactor = 1 + randomFactor + trendFactor
-
-  // Apply change
-  item.cost = Math.max(1, item.cost * changeFactor)
-  item.priceHistory.push(item.cost)
-
-  // Keep only last 20 prices
-  if (item.priceHistory.length > 20) {
-    item.priceHistory.shift()
-  }
-
-  // Update inventory display if needed
-  if (user.value.inventory[itemKey]) {
-    user.value.inventory[itemKey].cost = item.cost
-    user.value.inventory[itemKey].priceHistory = [...item.priceHistory]
-  }
-
-  item.timeSinceLastUpdate = Date.now()
 }
 
 // Lifecycle
@@ -612,12 +574,16 @@ onUnmounted(() => {
 h1 {
   text-align: center;
   margin-bottom: 20px;
-  color: #6f4c3e;
   font-family: 'Courier New', Courier, monospace;
   font-size: 2.5rem;
+  color: var(--coffee-text-secondary);
+  transition: all 0.3s ease;
 }
 
 .coffee-queen-game {
+  background: linear-gradient(135deg, var(--coffee-bg-primary) 0%, var(--coffee-bg-secondary) 100%);
+  color: var(--coffee-text-primary);
+  transition: all 0.3s ease;
   padding: 20px;
   min-height: calc(100vh - 140px);
 }
@@ -629,19 +595,18 @@ h1 {
   margin-bottom: 30px;
 
   button {
+    background: var(--coffee-button-bg);
+    color: var(--coffee-button-text);
+    border: 2px solid var(--coffee-button-border);
+    transition: all 0.3s ease;
     padding: 12px 24px;
     font-size: 16px;
     font-weight: bold;
-    background-color: #6f4c3e;
-    color: white;
-    border: 2px solid #452f26;
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s ease;
     font-family: 'Courier New', Courier, monospace;
 
     &:hover {
-      background-color: #8f6c5e;
       transform: translateY(-2px);
     }
 
@@ -660,33 +625,33 @@ h1 {
 }
 
 .machine-type-header {
+  color: var(--coffee-text-secondary);
+  transition: all 0.3s ease;
   text-align: center;
   font-size: 1.5rem;
   margin-bottom: 15px;
-  color: #6f4c3e;
 }
 
 .machine-row {
   display: flex;
   overflow-x: auto;
+
+  &::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--coffee-border-secondary);
+    border-radius: 4px;
+  }
   padding: 10px 0;
   gap: 10px;
   justify-content: center;
   flex-wrap: wrap;
-}
-
-/* Simple scrollbar styling */
-.machine-row::-webkit-scrollbar {
-  height: 8px;
-}
-
-.machine-row::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.machine-row::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
 }
 
 // Responsive adjustments
