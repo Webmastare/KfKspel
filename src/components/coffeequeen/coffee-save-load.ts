@@ -210,6 +210,7 @@ export function saveToLocalStorage(
             nextLevelExperience: user.nextLevelExperience,
             machines: user.machines,
             inventory: user.inventory,
+            upgrades: user.upgrades,
             lastSaved: new Date().toISOString(),
         };
         localStorage.setItem(`coffeeQueen_${userId}`, JSON.stringify(gameData));
@@ -231,6 +232,13 @@ export function loadFromLocalStorage(
         const savedData = localStorage.getItem(key);
         if (savedData) {
             const gameData: SavedGameData = JSON.parse(savedData);
+
+            // Ensure upgrades exist for backward compatibility
+            if (!gameData.upgrades) {
+                gameData.upgrades = {
+                    managers: {},
+                };
+            }
 
             // Calculate offline progress
             const now = new Date();
@@ -307,5 +315,8 @@ export function createNewUser(): User {
         nextLevelExperience: 100,
         machines: {},
         inventory: {},
+        upgrades: {
+            managers: {},
+        },
     };
 }

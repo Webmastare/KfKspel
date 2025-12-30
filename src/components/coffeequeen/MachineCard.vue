@@ -9,7 +9,6 @@
         <div class="stats-dropdown" :class="{ show: showStats }">
           <span>Production: {{ getMachineProductionRate() }} u/s</span>
           <span>Efficiency: {{ getMachineEfficiencyRate() }} u/s</span>
-          <span>Batch Size: {{ machine.batchSize }}</span>
           <span>Items Produced: {{ machine.itemsProduced }}</span>
           <span>Bonus Items: {{ machine.bonusItems }}</span>
         </div>
@@ -23,9 +22,23 @@
           <p>Batch Size: {{ machine.batchSize }}</p>
         </div>
 
+        <!-- Manual start button for manual machines -->
+        <div v-if="machine.isManual" class="manual-start-container">
+          <button
+            @click="emitStart"
+            :disabled="!canStart"
+            class="manual-start-button"
+            :class="{ 'button-pulse': canStart }"
+          >
+            {{ machine.isRunning ? 'Running...' : 'Start' }}
+          </button>
+        </div>
+
         <div class="progress-bars-container">
           <div class="progress-bar">
-            <p>Progress:</p>
+            <p>
+              Progress: <span>{{ (calculateProductionTimeLeft() / 1000).toFixed(1) }}s</span>
+            </p>
             <div
               class="progress-bar-fill"
               :class="{ 'high-speed': isHighSpeedMode }"
@@ -103,6 +116,7 @@ interface Props {
 interface Emits {
   (e: 'upgrade-machine', payload: { machineKey: MachineKey; upgradeType: string }): void
   (e: 'buy-machine', machineKey: MachineKey): void
+  (e: 'start-machine', machineKey: MachineKey): void
 }
 
 const props = defineProps<Props>()
@@ -120,6 +134,14 @@ const progressBarWidth = computed(() => {
   const progress = Math.max(0, Math.min(1, props.machine.progressPercent || 0))
   return `${progress * 100}%`
 })
+
+const calculateProductionTimeLeft = () => {
+  if (!props.machine.isOwned) return 0
+
+  const prodTime = props.machine.productionTime
+  const progress = Math.max(0, Math.min(1, props.machine.progressPercent || 0))
+  return prodTime * (1 - progress)
+}
 
 const efficiencyProgressBarWidth = computed(() => {
   if (!props.machine.isOwned) return '0%'
@@ -181,12 +203,21 @@ const canAffordEfficiencyUpgrade = computed(
 const canAffordMachine = computed(() => props.userMoney >= props.machine.cost)
 const levelMet = computed(() => props.userLevel >= props.machine.levelRequired)
 
+// For manual start button
+const canStart = computed(() => {
+  return props.machine.isOwned && props.machine.isManual && !props.machine.isRunning
+})
+
 function emitUpgrade(type: string) {
   emit('upgrade-machine', { machineKey: props.machine.key as MachineKey, upgradeType: type })
 }
 
 function emitBuy() {
   emit('buy-machine', props.machine.key as MachineKey)
+}
+
+function emitStart() {
+  emit('start-machine', props.machine.key as MachineKey)
 }
 </script>
 
@@ -198,7 +229,7 @@ function emitBuy() {
   transition: all 0.3s ease;
   position: relative;
   width: 200px;
-  height: 200px;
+  /*height: 200px;*/
   border-radius: 8px;
   padding: 10px;
   font-family: 'Courier New', Courier, monospace;
@@ -371,7 +402,7 @@ function emitBuy() {
 
   p {
     position: absolute;
-    top: 50%;
+    top: 60%;
     left: 5%;
     transform: translate(0%, -50%);
     display: inline-block;
@@ -487,6 +518,55 @@ function emitBuy() {
   &:hover .tooltip {
     visibility: visible;
     opacity: 1;
+  }
+}
+
+.manual-start-container {
+  margin: 8px 0;
+  text-align: center;
+}
+
+.manual-start-button {
+  background: var(--coffee-button-bg);
+  color: var(--coffee-button-text);
+  border: 2px solid var(--coffee-button-border);
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 80px;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.2);
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    filter: grayscale(50%);
+  }
+
+  &.button-pulse {
+    animation: pulse 2s infinite;
+  }
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(76, 175, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
   }
 }
 </style>

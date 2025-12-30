@@ -10,7 +10,8 @@
       <button @click="showInventory = !showInventory">
         {{ showInventory ? 'Close' : 'Open' }} Inventory
       </button>
-      <button @click="displayLocalSaves">Load Game</button>
+      <button @click="showShop = !showShop">{{ showShop ? 'Close' : 'Open' }} Shop</button>
+      <button @click="openLoadDataOverlay">Load Game</button>
     </div>
 
     <!-- Machines Container -->
@@ -26,6 +27,7 @@
             :user-level="user.level"
             @upgrade-machine="handleUpgrade"
             @buy-machine="buyMachine"
+            @start-machine="startMachine"
           />
         </div>
       </div>
@@ -43,6 +45,16 @@
       @close="showInventory = false"
       @update-multi-action="updateInventoryMultiAction"
       @update-custom-percentage="updateCustomPercentage"
+    />
+
+    <!-- Shop Modal -->
+    <Shop
+      v-if="showShop"
+      :user-money="user.money"
+      :user-level="user.level"
+      :upgrades="user.upgrades"
+      @buy-upgrade="buyUpgrade"
+      @close="showShop = false"
     />
 
     <!-- Load Data Overlay -->
@@ -81,9 +93,11 @@ import type {
 } from '@/components/coffeequeen/types'
 import { machineDataList } from '@/components/coffeequeen/data-machines'
 import { itemDataList } from '@/components/coffeequeen/data-items'
+import { managerUpgrades, getManagerForMachine } from '@/components/coffeequeen/data-upgrades'
 import MachineCard from '@/components/coffeequeen/MachineCard.vue'
 import GameOverlay from '@/components/coffeequeen/GameOverlay.vue'
 import Inventory from '@/components/coffeequeen/Inventory.vue'
+import Shop from '@/components/coffeequeen/Shop.vue'
 import LoadDataOverlay from '@/components/coffeequeen/LoadDataOverlay.vue'
 import OfflineProgress from '@/components/coffeequeen/OfflineProgress.vue'
 import {
@@ -117,6 +131,7 @@ const user = ref<User>(createNewUser())
 
 // UI state
 const showInventory = ref<boolean>(false)
+const showShop = ref<boolean>(false)
 const inventoryMultiAction = ref<MultiActionValue>(1)
 const customPercentage = ref<number>(25)
 
@@ -165,6 +180,8 @@ const allMachinesForDisplay = computed(() => {
         produces: config.produces,
         isOwned: false,
         isActive: false,
+        isManual: true,
+        isRunning: false,
         progressPercent: 0,
         efficiencyProgress: 0,
         speedUpgrade: 0,
@@ -176,6 +193,12 @@ const allMachinesForDisplay = computed(() => {
         itemsProduced: 0,
         bonusItems: 0,
       }
+    }
+
+    // Check if automation manager is purchased for this machine
+    const manager = getManagerForMachine(machineKey)
+    if (manager && user.value.upgrades.managers[manager.id] && machine.isOwned) {
+      machine.isManual = false
     }
 
     allMachines.push(machine)
@@ -287,7 +310,9 @@ function buyMachine(machineKey: MachineKey) {
       produces: config.produces,
       // Initial state
       isOwned: true,
-      isActive: true,
+      isActive: false, // Start as inactive (red status) for manual machines
+      isManual: true, // All machines start as manual
+      isRunning: false, // Not currently producing
       progressPercent: 0,
       efficiencyProgress: 0,
       speedUpgrade: 0,
@@ -302,6 +327,60 @@ function buyMachine(machineKey: MachineKey) {
 
     markUnsavedChanges(true)
   }
+}
+
+function startMachine(machineKey: MachineKey) {
+  const machine = user.value.machines[machineKey]
+  if (!machine || !machine.isManual || machine.isRunning) return
+
+  // Check if we have required inputs (if machine uses something)
+  if (machine.uses) {
+    const requiredItem = user.value.inventory[machine.uses as ItemKey]
+    if (!requiredItem || requiredItem.amount < machine.batchSize) {
+      console.log(`Not enough ${machine.uses} to start ${machine.name}`)
+      return
+    }
+  }
+
+  // Start the machine
+  machine.isRunning = true
+  machine.isActive = true
+  machine.progressPercent = 0
+  machine.lastUpdateTime = Date.now()
+
+  markUnsavedChanges(true)
+}
+
+function buyUpgrade(upgradeId: string) {
+  // Find the upgrade
+  const upgrade = managerUpgrades.find((u) => u.id === upgradeId)
+  if (!upgrade) return
+
+  // Check if user can afford and meets requirements
+  if (user.value.money < upgrade.cost || user.value.level < upgrade.levelRequired) return
+
+  // Check if already purchased
+  if (user.value.upgrades.managers[upgradeId]) return
+
+  // Purchase the upgrade
+  user.value.money -= upgrade.cost
+  user.value.upgrades.managers[upgradeId] = true
+
+  // Apply the automation to the machine
+  const machine = user.value.machines[upgrade.machineKey]
+  if (machine && machine.isOwned) {
+    machine.isManual = false
+    machine.isActive = true // Auto-start if it has resources
+    machine.isRunning = false // Reset running state
+  }
+
+  markUnsavedChanges(true)
+}
+
+function openLoadDataOverlay() {
+  loadedData.value = displayLocalSaves()
+  loadedDataStorageType.value = 'localStorage'
+  showLoadDataOverlay.value = true
 }
 
 function handleUpgrade({
@@ -362,6 +441,19 @@ function loadGame(itemKey: string) {
   if (result) {
     // Load the game data
     user.value = result.gameData
+
+    // Migrate old save data - add missing properties to machines
+    for (const machineKey in user.value.machines) {
+      const machine = user.value.machines[machineKey]
+      if (machine) {
+        if (machine.isManual === undefined) {
+          machine.isManual = true // Default to manual for old saves
+        }
+        if (machine.isRunning === undefined) {
+          machine.isRunning = false
+        }
+      }
+    }
 
     // Show offline progress if there was any
     if (
@@ -424,7 +516,10 @@ function updateGame(timestamp: number) {
   // Update all owned machines
   for (const machineKey in user.value.machines) {
     const machine = user.value.machines[machineKey]
-    if (!machine || !machine.isOwned || !machine.isActive) continue
+    if (!machine || !machine.isOwned) continue
+
+    // Skip inactive machines or manual machines that aren't running
+    if (!machine.isActive || (machine.isManual && !machine.isRunning)) continue
 
     // Update production progress
     if (machine.progressPercent < 1) {
@@ -505,8 +600,24 @@ function updateGame(timestamp: number) {
         markUnsavedChanges()
       }
 
-      // Reset production progress
+      // Reset production progress and handle manual vs automated
       machine.progressPercent = 0
+
+      if (machine.isManual) {
+        // Manual machines stop after one batch
+        machine.isRunning = false
+        machine.isActive = false
+      } else {
+        // Automated machines continue if they have resources
+        if (
+          !canProduce ||
+          (inputItem &&
+            (!user.value.inventory[inputItem as ItemKey] ||
+              (user.value.inventory[inputItem as ItemKey]?.amount || 0) < machine.batchSize))
+        ) {
+          machine.isActive = false
+        }
+      }
     }
   }
 

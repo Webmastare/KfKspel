@@ -46,6 +46,8 @@ export interface UserMachine {
     // State
     isOwned: boolean;
     isActive: boolean;
+    isManual: boolean; // Whether machine requires manual start
+    isRunning: boolean; // Whether currently producing
     progressPercent: number;
     efficiencyProgress: number;
     speedUpgrade: number;
@@ -66,6 +68,7 @@ export interface User {
     nextLevelExperience: number;
     machines: Record<string, UserMachine>;
     inventory: Record<string, InventoryItem>;
+    upgrades: UserUpgrades;
     lastSaved?: string;
 }
 
@@ -118,12 +121,28 @@ export interface SavedGameData {
     nextLevelExperience: number;
     machines: Record<string, UserMachine>;
     inventory: Record<string, InventoryItem>;
+    upgrades: UserUpgrades;
     lastSaved: string;
     itemKey?: string;
 }
 
 // Multi-action types for inventory operations
 export type MultiActionValue = number | "10%" | "Custom%" | "Max";
+
+// Upgrade system interfaces
+export interface ManagerUpgrade {
+    id: string;
+    name: string;
+    description: string;
+    cost: number;
+    levelRequired: number;
+    machineKey: MachineKey;
+    category: "automation";
+}
+
+export interface UserUpgrades {
+    managers: Record<string, boolean>; // upgradeid -> purchased
+}
 
 // Machine type categories
 export type MachineType =
