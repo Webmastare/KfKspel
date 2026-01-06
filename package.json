@@ -18,6 +18,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.56.0",
+    "@types/d3": "^7.4.3",
+    "d3": "^7.9.0",
     "matter-js": "^0.20.0",
     "pinia": "^3.0.3",
     "supabase": "^2.39.2",

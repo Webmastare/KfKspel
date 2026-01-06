@@ -70,6 +70,7 @@ export interface User {
     inventory: Record<string, InventoryItem>;
     upgrades: UserUpgrades;
     lastSaved?: string;
+    productionStats?: any; // Production statistics data
 }
 
 export interface GameSettings {
@@ -124,6 +125,7 @@ export interface SavedGameData {
     upgrades: UserUpgrades;
     lastSaved: string;
     itemKey?: string;
+    productionStats?: any; // Production statistics data
 }
 
 // Multi-action types for inventory operations

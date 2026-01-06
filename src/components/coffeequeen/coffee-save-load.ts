@@ -13,6 +13,24 @@ import {
     calculateEfficiencyBonus,
 } from "./coffee-upgrade-calculations";
 
+import { normalizeBucketsForAllTimeScales } from "@/composables/coffeequeen/statsManager";
+
+// Get stats manager instance for saving/loading
+let statsManagerRef: any = null;
+
+export function setStatsManagerReference(statsManager: any) {
+    statsManagerRef = statsManager;
+    console.log('🔗 Stats manager reference set in save/load module');
+    console.log('Stats manager ref check:', {
+        exists: !!statsManagerRef,
+        hasValue: !!(statsManagerRef && statsManagerRef.value),
+        currentBuckets: statsManagerRef && statsManagerRef.value ? {
+            tenSeconds: statsManagerRef.value.tenSeconds?.length || 0,
+            oneMinute: statsManagerRef.value.oneMinute?.length || 0
+        } : 'no value'
+    });
+}
+
 // --- OFFLINE PROGRESS CALCULATION ---
 
 /**
@@ -202,6 +220,15 @@ export function saveToLocalStorage(
     userName: string = "Guest",
 ): void {
     try {
+        // Get current production stats from the stats manager
+        let productionStats = null;
+        if (statsManagerRef && statsManagerRef.value) {
+            productionStats = {
+                statsManager: statsManagerRef.value,
+                timestamp: Date.now()
+            };
+        }
+
         const gameData: SavedGameData = {
             userName: userName,
             money: user.money,
@@ -211,10 +238,22 @@ export function saveToLocalStorage(
             machines: user.machines,
             inventory: user.inventory,
             upgrades: user.upgrades,
+            productionStats: productionStats,
             lastSaved: new Date().toISOString(),
         };
         localStorage.setItem(`coffeeQueen_${userId}`, JSON.stringify(gameData));
-        console.log("Data saved to localStorage");
+        console.log("Data saved to localStorage with production stats:", {
+            statsExists: !!productionStats,
+            bucketCounts: productionStats ? {
+                tenSeconds: productionStats.statsManager.tenSeconds?.length || 0,
+                oneMinute: productionStats.statsManager.oneMinute?.length || 0,
+                tenMinutes: productionStats.statsManager.tenMinutes?.length || 0,
+                oneHour: productionStats.statsManager.oneHour?.length || 0,
+                tenHours: productionStats.statsManager.tenHours?.length || 0,
+                hundredHours: productionStats.statsManager.hundredHours?.length || 0,
+                allTime: productionStats.statsManager.allTime?.length || 0
+            } : {}
+        });
     } catch (error) {
         console.error("Failed to save to localStorage:", error);
     }
@@ -238,6 +277,94 @@ export function loadFromLocalStorage(
                 gameData.upgrades = {
                     managers: {},
                 };
+            }
+
+            // Restore production stats to stats manager if available
+            if (gameData.productionStats && statsManagerRef && statsManagerRef.value) {
+                try {
+                    if (gameData.productionStats.statsManager) {
+                        const savedStats = gameData.productionStats.statsManager;
+                        console.log('Statmanager from localStorage:', {...savedStats});
+                        
+                        // Update the stats manager properties individually to maintain reactivity
+                        statsManagerRef.value.gameTimeMs = savedStats.gameTimeMs || Date.now();
+                        statsManagerRef.value.currentBucketIndex = savedStats.currentBucketIndex || 0;
+                        statsManagerRef.value.tenSeconds = savedStats.tenSeconds || [];
+                        statsManagerRef.value.oneMinute = savedStats.oneMinute || [];
+                        statsManagerRef.value.tenMinutes = savedStats.tenMinutes || [];
+                        statsManagerRef.value.oneHour = savedStats.oneHour || [];
+                        statsManagerRef.value.tenHours = savedStats.tenHours || [];
+                        statsManagerRef.value.hundredHours = savedStats.hundredHours || [];
+                        statsManagerRef.value.allTime = savedStats.allTime || [];
+                        statsManagerRef.value.lastSaveTime = savedStats.lastSaveTime || Date.now();
+                        
+                        console.log('📈 Production stats restored from localStorage:', {
+                            bucketCounts: {
+                                tenSeconds: statsManagerRef.value.tenSeconds?.length || 'none',
+                                oneMinute: statsManagerRef.value.oneMinute?.length || 'none',
+                                tenMinutes: statsManagerRef.value.tenMinutes?.length || 'none',
+                                oneHour: statsManagerRef.value.oneHour?.length || 'none',
+                                tenHours: statsManagerRef.value.tenHours?.length || 'none',
+                                hundredHours: statsManagerRef.value.hundredHours?.length || 'none',
+                                allTime: statsManagerRef.value.allTime?.length || 'none'
+                            }
+                        });
+                        console.log('Restored stats manager tenSeconds sample:', statsManagerRef.value.tenSeconds.slice(0, 3));
+                        
+                        // Normalize buckets to ensure complete intervals for smooth charts
+                        normalizeBucketsForAllTimeScales(statsManagerRef.value.gameTimeMs);
+                        
+                        console.log('🔧 Buckets normalized, final counts:', {
+                            bucketCounts: {
+                                tenSeconds: statsManagerRef.value.tenSeconds?.length || 'none',
+                                oneMinute: statsManagerRef.value.oneMinute?.length || 'none',
+                                tenMinutes: statsManagerRef.value.tenMinutes?.length || 'none',
+                                oneHour: statsManagerRef.value.oneHour?.length || 'none',
+                                tenHours: statsManagerRef.value.tenHours?.length || 'none',
+                                hundredHours: statsManagerRef.value.hundredHours?.length || 'none',
+                                allTime: statsManagerRef.value.allTime?.length || 'none'
+                            }
+                        });
+                    }
+                } catch (statsError) {
+                    console.error('Failed to restore production stats, initializing fresh:', statsError);
+                    // Initialize fresh stats in the statsManagerRef if restoration fails
+                    if (statsManagerRef && statsManagerRef.value) {
+                        const gameTime = Date.now();
+                        statsManagerRef.value.gameTimeMs = gameTime;
+                        statsManagerRef.value.currentBucketIndex = 0;
+                        statsManagerRef.value.tenSeconds = [];
+                        statsManagerRef.value.oneMinute = [];
+                        statsManagerRef.value.tenMinutes = [];
+                        statsManagerRef.value.oneHour = [];
+                        statsManagerRef.value.tenHours = [];
+                        statsManagerRef.value.hundredHours = [];
+                        statsManagerRef.value.allTime = [];
+                        statsManagerRef.value.lastSaveTime = gameTime;
+                        
+                        // Initialize with proper bucket structure
+                        normalizeBucketsForAllTimeScales(gameTime);
+                    }
+                }
+            } else {
+                console.log('📈 No production stats found in save data or stats manager not available');
+                // Initialize fresh stats in the statsManagerRef if no data found
+                if (statsManagerRef && statsManagerRef.value) {
+                    const gameTime = Date.now();
+                    statsManagerRef.value.gameTimeMs = gameTime;
+                    statsManagerRef.value.currentBucketIndex = 0;
+                    statsManagerRef.value.tenSeconds = [];
+                    statsManagerRef.value.oneMinute = [];
+                    statsManagerRef.value.tenMinutes = [];
+                    statsManagerRef.value.oneHour = [];
+                    statsManagerRef.value.tenHours = [];
+                    statsManagerRef.value.hundredHours = [];
+                    statsManagerRef.value.allTime = [];
+                    statsManagerRef.value.lastSaveTime = gameTime;
+                    
+                    // Initialize with proper bucket structure  
+                    normalizeBucketsForAllTimeScales(gameTime);
+                }
             }
 
             // Calculate offline progress
@@ -309,7 +436,7 @@ export function displayLocalSaves(): SavedGameData[] {
  */
 export function createNewUser(): User {
     return {
-        money: 100,
+        money: 10000,
         level: 1,
         experience: 0,
         nextLevelExperience: 100,
@@ -318,5 +445,29 @@ export function createNewUser(): User {
         upgrades: {
             managers: {},
         },
+        productionStats: null,
     };
+}
+
+/**
+ * Debug function to test stats manager save/load
+ */
+export function debugStatsManager() {
+    console.log('🧪 Debug Stats Manager:', {
+        statsManagerRefExists: !!statsManagerRef,
+        statsManagerValueExists: !!(statsManagerRef && statsManagerRef.value),
+        currentData: statsManagerRef && statsManagerRef.value ? {
+            gameTimeMs: statsManagerRef.value.gameTimeMs,
+            buckets: {
+                tenSeconds: statsManagerRef.value.tenSeconds?.length || 0,
+                oneMinute: statsManagerRef.value.oneMinute?.length || 0,
+                tenMinutes: statsManagerRef.value.tenMinutes?.length || 0,
+                oneHour: statsManagerRef.value.oneHour?.length || 0,
+                tenHours: statsManagerRef.value.tenHours?.length || 0,
+                hundredHours: statsManagerRef.value.hundredHours?.length || 0,
+                allTime: statsManagerRef.value.allTime?.length || 0
+            },
+            sampleBucket: statsManagerRef.value.tenSeconds?.[0] || 'none'
+        } : 'no data'
+    });
 }

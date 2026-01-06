@@ -11,6 +11,7 @@
         {{ showInventory ? 'Close' : 'Open' }} Inventory
       </button>
       <button @click="showShop = !showShop">{{ showShop ? 'Close' : 'Open' }} Shop</button>
+      <button @click="showStats = !showStats">{{ showStats ? 'Close' : 'Open' }} Statistics</button>
       <button @click="openLoadDataOverlay">Load Game</button>
     </div>
 
@@ -74,6 +75,9 @@
       :item-data="itemData"
       @close="showOfflineProgress = false"
     />
+
+    <!-- Production Statistics Modal -->
+    <ProductionStats v-if="showStats" :item-data="itemData" @close="showStats = false" />
   </div>
 </template>
 
@@ -100,6 +104,7 @@ import Inventory from '@/components/coffeequeen/Inventory.vue'
 import Shop from '@/components/coffeequeen/Shop.vue'
 import LoadDataOverlay from '@/components/coffeequeen/LoadDataOverlay.vue'
 import OfflineProgress from '@/components/coffeequeen/OfflineProgress.vue'
+import ProductionStats from '@/components/coffeequeen/ProductionStats.vue'
 import {
   calculateBatchSize,
   calculateProductionTime,
@@ -112,12 +117,35 @@ import {
   loadFromLocalStorage,
   displayLocalSaves,
   createNewUser,
+  setStatsManagerReference,
+  debugStatsManager,
 } from '@/components/coffeequeen/coffee-save-load'
 import { useThemeStore } from '@/stores/theme'
+import {
+  useProductionStats,
+  recordProduction,
+  recordBonusProduction,
+  setUserReference,
+  updateProductionBuckets,
+} from '@/composables/coffeequeen/statsManager'
 
-// Initialize theme store
+// Initialize theme store and stats
 const themeStore = useThemeStore()
 themeStore.init()
+
+// Initialize production stats
+const productionStats = useProductionStats()
+const { normalizeBucketsForAllTimeScales } = productionStats
+
+// Set up stats manager reference for save/load integration
+setStatsManagerReference(productionStats.statsManager)
+
+// Debug stats manager setup
+debugStatsManager()
+
+// Test normalization function
+normalizeBucketsForAllTimeScales()
+debugStatsManager()
 
 let animationFrameId: number | null = null
 let lastTimestamp: number | null = null
@@ -132,6 +160,7 @@ const user = ref<User>(createNewUser())
 // UI state
 const showInventory = ref<boolean>(false)
 const showShop = ref<boolean>(false)
+const showStats = ref<boolean>(false)
 const inventoryMultiAction = ref<MultiActionValue>(1)
 const customPercentage = ref<number>(25)
 
@@ -153,6 +182,8 @@ let lastLocalStorageSave = 0
 let isPageVisible = true
 let saveTimeoutId: number | null = null
 let hasUnsavedChanges = false
+let hasSignificantChanges = false // Track important changes like purchases, upgrades
+let lastBucketUpdate = 0 // OPTIMIZATION: Track when we last updated buckets
 
 // Computed properties for display
 const allMachinesForDisplay = computed(() => {
@@ -433,7 +464,12 @@ function upgradeMachine(machineKey: MachineKey, upgradeType: string) {
 
 // Save to localStorage
 function saveToLocalStorageNow() {
+  console.log('💾 Saving game state...')
+  debugStatsManager() // Debug before save
   saveToLocalStorage(user.value, 'guest', 'Guest')
+  // Reset significant changes flag after saving
+  hasSignificantChanges = false
+  // Production stats are now automatically included in the save
 }
 
 function loadGame(itemKey: string) {
@@ -475,6 +511,7 @@ function markUnsavedChanges(isSignificant = false) {
   hasUnsavedChanges = true
 
   if (isSignificant) {
+    hasSignificantChanges = true
     // Save immediately for significant changes
     saveToLocalStorageNow()
   }
@@ -483,6 +520,16 @@ function markUnsavedChanges(isSignificant = false) {
 // Check if we should save to localStorage
 function shouldSaveToLocalStorage() {
   return Date.now() - lastLocalStorageSave > SAVE_INTERVALS.localStorage
+}
+
+// Check if there are significant unsaved changes (not just production data)
+function hasSignificantUnsavedChanges(): boolean {
+  // Show warning if there are significant changes (purchases, upgrades, etc.)
+  // that haven't been saved yet, OR if it's been a very long time since last save
+  const timeSinceLastSave = Date.now() - lastLocalStorageSave
+  const veryLongTime = 10 * 60 * 1000 // 10 minutes
+
+  return hasSignificantChanges || (hasUnsavedChanges && timeSinceLastSave > veryLongTime)
 }
 
 // Page visibility change handler
@@ -496,15 +543,20 @@ function handleVisibilityChange() {
 
 // Beforeunload handler for emergency saves
 function handleBeforeUnload(event: BeforeUnloadEvent) {
+  // Always save any pending changes
   if (hasUnsavedChanges) {
     saveToLocalStorageNow()
-    // Optional: Show warning dialog
+  }
+
+  // Only show warning for significant unsaved changes
+  // (Don't warn users about minor production data that auto-saves every 30 seconds)
+  if (hasSignificantUnsavedChanges()) {
     event.preventDefault()
     event.returnValue = ''
   }
 }
 
-// Enhanced game loop
+// Enhanced game loop with separate efficiency progress
 function updateGame(timestamp: number) {
   if (!lastTimestamp) {
     lastTimestamp = timestamp
@@ -512,68 +564,87 @@ function updateGame(timestamp: number) {
 
   const deltaTime = timestamp - lastTimestamp
   lastTimestamp = timestamp
+  const elapsedMS = deltaTime
 
   // Update all owned machines
   for (const machineKey in user.value.machines) {
     const machine = user.value.machines[machineKey]
-    if (!machine || !machine.isOwned) continue
+    const machineConf = machinesConfig.value[machineKey as MachineKey]
 
-    // Skip inactive machines or manual machines that aren't running
-    if (!machine.isActive || (machine.isManual && !machine.isRunning)) continue
+    if (!machine || !machine.isOwned || !machineConf || (machine.isManual && !machine.isRunning))
+      continue
 
-    // Update production progress
-    if (machine.progressPercent < 1) {
-      const progress = deltaTime / machine.productionTime
-      machine.progressPercent = Math.min(1, machine.progressPercent + progress)
+    // Check if the machine is active
+    if (!machine.isActive) {
+      const batchSize =
+        machine.batchSize || calculateBatchSize(machineConf.baseBatchSize, machine.speedUpgrade)
+      const usesItemKey = machineConf.uses as ItemKey
+      const usesInventory = usesItemKey ? user.value.inventory[usesItemKey] : null
+      const availableAmount = usesInventory?.amount || 0
 
-      // Update efficiency progress
-      if (machine.efficiencyUpgrade > 0) {
-        const efficiencyBonus = calculateEfficiencyBonus(machine.efficiencyUpgrade)
-        const efficiencyProgress = progress * efficiencyBonus
-        machine.efficiencyProgress = Math.min(1, machine.efficiencyProgress + efficiencyProgress)
+      if (availableAmount >= batchSize) {
+        machine.isActive = true // Reactivate if resources are available
+        if (usesInventory) {
+          usesInventory.amount -= batchSize // Consume batch amount
+        }
+        machine.progressPercent = 0 // Start new production cycle
+      } else {
+        continue // Skip to next machine if not active
       }
     }
 
-    // If production cycle is complete
-    if (machine.progressPercent >= 1) {
-      // Calculate actual production
-      let itemsProduced = machine.batchSize || 1
+    if (machine.progressPercent < 1) {
+      // Calculate progress per millisecond based on current production time
+      const progressPerMS = 1 / machine.productionTime // Progress per millisecond
+      const progressThisFrame = elapsedMS * progressPerMS
 
-      // Add efficiency bonus items
-      if (machine.efficiencyProgress >= 1) {
-        const efficiencyBonus = calculateEfficiencyBonus(machine.efficiencyUpgrade)
-        const bonusItems = Math.floor(itemsProduced * efficiencyBonus)
-        itemsProduced += bonusItems
-        machine.bonusItems += bonusItems
-        machine.efficiencyProgress = 0 // Reset efficiency progress
-      }
+      // Update progress
+      machine.progressPercent += progressThisFrame
 
-      // Check if we have input materials
-      const inputItem = machine.uses
-      let canProduce = true
+      // Update efficiency progress gradually during production (separate from normal production)
+      if (machine.efficiencyUpgrade > 0) {
+        const totalEfficiencyBonus = calculateEfficiencyBonus(machine.efficiencyUpgrade)
+        const efficiencyGainThisFrame = totalEfficiencyBonus * progressThisFrame
+        machine.efficiencyProgress += efficiencyGainThisFrame
 
-      if (inputItem) {
-        const userInventoryItem = user.value.inventory[inputItem as ItemKey]
-        if (userInventoryItem) {
-          const available = userInventoryItem.amount
-          const needed = itemsProduced
+        // Check if we've accumulated enough for bonus items (can produce at any time)
+        if (machine.efficiencyProgress >= 1) {
+          const numberOfBonusItems = Math.floor(machine.efficiencyProgress) * machine.batchSize
+          const producesItemKey = machineConf.produces as ItemKey
 
-          if (available >= needed) {
-            userInventoryItem.amount -= needed
-          } else {
-            canProduce = false
+          // Ensure inventory item exists
+          if (!user.value.inventory[producesItemKey]) {
+            const itemInfo = itemData.value[producesItemKey]
+            user.value.inventory[producesItemKey] = {
+              name: itemInfo.name,
+              icon: itemInfo.icon,
+              amount: 0,
+              cost: itemInfo.cost,
+              basePrice: itemInfo.basePrice,
+              sellMultiplier: itemInfo.sellMultiplier,
+            }
           }
-        } else {
-          canProduce = false
+
+          user.value.inventory[producesItemKey].amount += numberOfBonusItems
+          machine.itemsProduced += numberOfBonusItems // Track total items produced
+          machine.bonusItems += numberOfBonusItems // Track bonus items separately
+
+          // Record bonus production in stats
+          recordBonusProduction(producesItemKey, numberOfBonusItems)
+
+          machine.efficiencyProgress -= Math.floor(machine.efficiencyProgress) // Reset efficiency progress for next cycle
         }
       }
 
-      if (canProduce) {
-        // Produce output items
-        const outputItem = machine.produces as ItemKey
-        if (!user.value.inventory[outputItem]) {
-          const itemInfo = itemData.value[outputItem]
-          user.value.inventory[outputItem] = {
+      if (machine.progressPercent >= 1) {
+        // Production complete - produce main items based on batch size
+        const batchSize = machine.batchSize || 1
+        const producesItemKey = machineConf.produces as ItemKey
+
+        // Ensure inventory item exists
+        if (!user.value.inventory[producesItemKey]) {
+          const itemInfo = itemData.value[producesItemKey]
+          user.value.inventory[producesItemKey] = {
             name: itemInfo.name,
             icon: itemInfo.icon,
             amount: 0,
@@ -583,12 +654,13 @@ function updateGame(timestamp: number) {
           }
         }
 
-        user.value.inventory[outputItem].amount += itemsProduced
-        machine.itemsProduced += itemsProduced
+        user.value.inventory[producesItemKey].amount += batchSize
+        machine.itemsProduced += batchSize // Track items produced
 
-        // Gain experience
-        const experienceGain = itemsProduced * 10 // 10 XP per item
-        user.value.experience += experienceGain
+        // Record regular production in stats
+        recordProduction(producesItemKey, batchSize)
+
+        user.value.experience += batchSize // Experience based on batch size
 
         // Check for level up
         if (user.value.experience >= user.value.nextLevelExperience) {
@@ -597,26 +669,37 @@ function updateGame(timestamp: number) {
           user.value.nextLevelExperience = Math.ceil(user.value.nextLevelExperience * 1.2)
         }
 
-        markUnsavedChanges()
-      }
+        // Reset for next production cycle and consume resources
+        machine.progressPercent = 0 // Reset progress immediately
 
-      // Reset production progress and handle manual vs automated
-      machine.progressPercent = 0
+        const usesItemKey = machineConf.uses as ItemKey
+        const usesInventory = usesItemKey ? user.value.inventory[usesItemKey] : null
+        const availableAmount = usesInventory?.amount || 0
+        let canProduce = true
 
-      if (machine.isManual) {
-        // Manual machines stop after one batch
-        machine.isRunning = false
-        machine.isActive = false
-      } else {
-        // Automated machines continue if they have resources
-        if (
-          !canProduce ||
-          (inputItem &&
-            (!user.value.inventory[inputItem as ItemKey] ||
-              (user.value.inventory[inputItem as ItemKey]?.amount || 0) < machine.batchSize))
-        ) {
-          machine.isActive = false
+        if (availableAmount >= batchSize) {
+          if (usesInventory) {
+            usesInventory.amount -= batchSize // Consume batch amount
+          }
+          // Machine can continue running with fresh cycle
+        } else if (machineConf.uses != null && machineConf.uses !== '') {
+          console.log(`Not enough ${machineConf.uses} to produce ${machineConf.produces}.`)
+          canProduce = false
         }
+
+        // Reset production progress and handle manual vs automated
+        if (machine.isManual) {
+          // Manual machines stop after one batch of normal production
+          machine.isRunning = false
+          machine.isActive = false
+        } else {
+          // Automated machines continue if they have resources
+          if (!canProduce) {
+            machine.isActive = false
+          }
+        }
+
+        markUnsavedChanges()
       }
     }
   }
@@ -626,6 +709,16 @@ function updateGame(timestamp: number) {
     saveToLocalStorageNow()
     lastLocalStorageSave = Date.now()
     hasUnsavedChanges = false
+    hasSignificantChanges = false
+  }
+
+  // This prevents massive performance issues from bucket operations on every frame
+  const now = Date.now()
+  const timeSinceLastBucketUpdate = now - (lastBucketUpdate || 0)
+  if (timeSinceLastBucketUpdate > 500) {
+    // Only update once per second max
+    updateProductionBuckets(now)
+    lastBucketUpdate = now
   }
 
   animationFrameId = requestAnimationFrame(updateGame)
@@ -633,10 +726,18 @@ function updateGame(timestamp: number) {
 
 // Lifecycle
 onMounted(async () => {
+  // Set up user reference for stats integration
+  setUserReference(user.value)
+
   // Try to load existing save
   const result = loadFromLocalStorage('coffeeQueen_guest', machinesConfig.value, itemData.value)
   if (result) {
     user.value = result.gameData
+
+    // Production stats are automatically restored in loadFromLocalStorage
+    // No need to call loadStats() again as the stats manager is already updated
+    console.log('📈 Game loaded, checking stats manager state:')
+    debugStatsManager() // Debug after load
 
     // Show offline progress if there was any
     if (
@@ -647,6 +748,9 @@ onMounted(async () => {
       offlineExperienceGained.value = result.offlineExperienceGained
       showOfflineProgress.value = true
     }
+  } else {
+    // If no save data exists, stats manager will initialize itself with fresh data
+    console.log('No save data found, stats manager initialized with fresh data')
   }
 
   // Setup event listeners
@@ -655,8 +759,6 @@ onMounted(async () => {
 
   // Start game loop
   animationFrameId = requestAnimationFrame(updateGame)
-
-  console.log('Coffee Queen game initialized (TypeScript version)')
 })
 
 onUnmounted(() => {

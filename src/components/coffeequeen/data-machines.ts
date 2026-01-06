@@ -70,7 +70,7 @@ export const machineDataList: Record<MachineKey, MachineConfig> = {
     "coffeeBrewer1": {
         "name": "Coffee Brewer",
         "type": "brewer",
-        "icon": "/assets/coffeeQ/brewer1.png",
+        "icon": "/assets/coffeeQ/coffeeBrewer1.png",
         "cost": 3000,
         "levelRequired": 4,
         "productionTime": 60000,
