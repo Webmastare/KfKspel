@@ -7,6 +7,7 @@ export const itemDataList: Record<ItemKey, ItemData> = {
         "cost": 10,
         "basePrice": 10,
         "sellMultiplier": 0.85,
+        "defaultCapacity": 100,
     },
     "roastedCoffeeBeans": {
         "name": "Roasted Coffee Beans",
@@ -14,6 +15,7 @@ export const itemDataList: Record<ItemKey, ItemData> = {
         "cost": 20,
         "basePrice": 20,
         "sellMultiplier": 0.8,
+        "defaultCapacity": 100,
     },
     "groundCoffee": {
         "name": "Ground Coffee",
@@ -21,6 +23,7 @@ export const itemDataList: Record<ItemKey, ItemData> = {
         "cost": 30,
         "basePrice": 30,
         "sellMultiplier": 0.75,
+        "defaultCapacity": 100,
     },
     "brewedCoffee": {
         "name": "Brewed Coffee",
@@ -28,6 +31,7 @@ export const itemDataList: Record<ItemKey, ItemData> = {
         "cost": 35,
         "basePrice": 35,
         "sellMultiplier": 0.75,
+        "defaultCapacity": 80,
     },
     "espresso": {
         "name": "Espresso",
@@ -35,6 +39,7 @@ export const itemDataList: Record<ItemKey, ItemData> = {
         "cost": 40,
         "basePrice": 40,
         "sellMultiplier": 0.75,
+        "defaultCapacity": 60,
     },
     "latte": {
         "name": "Latte",
@@ -42,5 +47,6 @@ export const itemDataList: Record<ItemKey, ItemData> = {
         "cost": 55,
         "basePrice": 55,
         "sellMultiplier": 0.7,
+        "defaultCapacity": 50,
     },
 };

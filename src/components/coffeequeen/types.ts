@@ -6,6 +6,7 @@ export interface ItemData {
     cost: number;
     basePrice: number;
     sellMultiplier: number;
+    defaultCapacity: number;
 }
 
 export interface InventoryItem {
@@ -15,6 +16,7 @@ export interface InventoryItem {
     cost: number;
     basePrice: number;
     sellMultiplier: number;
+    capacity: number; // Current capacity limit for this item
 }
 
 export interface MachineConfig {
@@ -103,8 +105,10 @@ export interface ProductionCalculation {
 export interface OfflineProductionSummary {
     [itemKey: string]: {
         amount: number;
+        bonusAmount: number;
         name?: string;
         icon?: string;
+        itemsLostToCapacity?: number; // Items that couldn't be added due to inventory limits
     };
 }
 
@@ -142,8 +146,19 @@ export interface ManagerUpgrade {
     category: "automation";
 }
 
+export interface InventoryUpgrade {
+    id: string;
+    name: string;
+    description: string;
+    cost: number;
+    levelRequired: number;
+    multiplier: number; // How much to multiply capacity by (e.g., 2.0 = double capacity)
+    category: "inventory";
+}
+
 export interface UserUpgrades {
     managers: Record<string, boolean>; // upgradeid -> purchased
+    inventory: Record<string, boolean>; // inventory upgrade id -> purchased
 }
 
 // Machine type categories

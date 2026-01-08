@@ -97,7 +97,12 @@ import type {
 } from '@/components/coffeequeen/types'
 import { machineDataList } from '@/components/coffeequeen/data-machines'
 import { itemDataList } from '@/components/coffeequeen/data-items'
-import { managerUpgrades, getManagerForMachine } from '@/components/coffeequeen/data-upgrades'
+import {
+  managerUpgrades,
+  getManagerForMachine,
+  inventoryUpgrades,
+  calculateInventoryMultiplier,
+} from '@/components/coffeequeen/data-upgrades'
 import MachineCard from '@/components/coffeequeen/MachineCard.vue'
 import GameOverlay from '@/components/coffeequeen/GameOverlay.vue'
 import Inventory from '@/components/coffeequeen/Inventory.vue'
@@ -118,7 +123,6 @@ import {
   displayLocalSaves,
   createNewUser,
   setStatsManagerReference,
-  debugStatsManager,
 } from '@/components/coffeequeen/coffee-save-load'
 import { useThemeStore } from '@/stores/theme'
 import {
@@ -140,12 +144,8 @@ const { normalizeBucketsForAllTimeScales } = productionStats
 // Set up stats manager reference for save/load integration
 setStatsManagerReference(productionStats.statsManager)
 
-// Debug stats manager setup
-debugStatsManager()
-
 // Test normalization function
 normalizeBucketsForAllTimeScales()
-debugStatsManager()
 
 let animationFrameId: number | null = null
 let lastTimestamp: number | null = null
@@ -268,6 +268,7 @@ const inventoryForDisplay = computed(() => {
         cost: itemInfo.cost,
         basePrice: itemInfo.basePrice,
         sellMultiplier: itemInfo.sellMultiplier,
+        capacity: calculateItemCapacity(itemKey),
       }
     }
   }
@@ -280,22 +281,36 @@ function buyItem({ itemKey, quantity = 1 }: { itemKey: string; quantity?: number
   const item = inventoryForDisplay.value[itemKey]
   if (!item) return
 
-  const totalCost = item.cost * quantity
+  // Check if inventory item exists and has capacity
+  if (!user.value.inventory[itemKey as ItemKey]) {
+    user.value.inventory[itemKey as ItemKey] = {
+      ...item,
+      amount: 0,
+      capacity: calculateItemCapacity(itemKey as ItemKey),
+    }
+  }
+
+  const userInventoryItem = user.value.inventory[itemKey as ItemKey]
+  if (!userInventoryItem) return
+
+  // Check capacity limit
+  const availableSpace = userInventoryItem.capacity - userInventoryItem.amount
+  const actualQuantity = Math.min(quantity, availableSpace)
+
+  if (actualQuantity <= 0) {
+    console.log(`Cannot buy ${itemKey}: inventory is full`)
+    return
+  }
+
+  const totalCost = item.cost * actualQuantity
   if (user.value.money >= totalCost) {
     user.value.money -= totalCost
-
-    if (!user.value.inventory[itemKey as ItemKey]) {
-      user.value.inventory[itemKey as ItemKey] = {
-        ...item,
-        amount: 0,
-      }
-    }
-
-    const userInventoryItem = user.value.inventory[itemKey as ItemKey]
-    if (userInventoryItem) {
-      userInventoryItem.amount += quantity
-    }
+    userInventoryItem.amount += actualQuantity
     markUnsavedChanges()
+
+    if (actualQuantity < quantity) {
+      console.log(`Only bought ${actualQuantity}/${quantity} ${itemKey} due to capacity limit`)
+    }
   }
 }
 
@@ -383,29 +398,74 @@ function startMachine(machineKey: MachineKey) {
 }
 
 function buyUpgrade(upgradeId: string) {
-  // Find the upgrade
-  const upgrade = managerUpgrades.find((u) => u.id === upgradeId)
-  if (!upgrade) return
+  // Try to find manager upgrade first
+  const managerUpgrade = managerUpgrades.find((u) => u.id === upgradeId)
+  if (managerUpgrade) {
+    // Check if user can afford and meets requirements
+    if (user.value.money < managerUpgrade.cost || user.value.level < managerUpgrade.levelRequired)
+      return
 
-  // Check if user can afford and meets requirements
-  if (user.value.money < upgrade.cost || user.value.level < upgrade.levelRequired) return
+    // Check if already purchased
+    if (user.value.upgrades.managers[upgradeId]) return
 
-  // Check if already purchased
-  if (user.value.upgrades.managers[upgradeId]) return
+    // Purchase the upgrade
+    user.value.money -= managerUpgrade.cost
+    user.value.upgrades.managers[upgradeId] = true
 
-  // Purchase the upgrade
-  user.value.money -= upgrade.cost
-  user.value.upgrades.managers[upgradeId] = true
+    // Apply the automation to the machine
+    const machine = user.value.machines[managerUpgrade.machineKey]
+    if (machine && machine.isOwned) {
+      machine.isManual = false
+      machine.isActive = true // Auto-start if it has resources
+      machine.isRunning = false // Reset running state
+    }
 
-  // Apply the automation to the machine
-  const machine = user.value.machines[upgrade.machineKey]
-  if (machine && machine.isOwned) {
-    machine.isManual = false
-    machine.isActive = true // Auto-start if it has resources
-    machine.isRunning = false // Reset running state
+    markUnsavedChanges(true)
+    return
   }
 
-  markUnsavedChanges(true)
+  // Try to find inventory upgrade
+  const inventoryUpgrade = inventoryUpgrades.find((u) => u.id === upgradeId)
+  if (inventoryUpgrade) {
+    // Check if user can afford and meets requirements
+    if (
+      user.value.money < inventoryUpgrade.cost ||
+      user.value.level < inventoryUpgrade.levelRequired
+    )
+      return
+
+    // Check if already purchased
+    if (user.value.upgrades.inventory[upgradeId]) return
+
+    // Purchase the upgrade
+    user.value.money -= inventoryUpgrade.cost
+    user.value.upgrades.inventory[upgradeId] = true
+
+    // Update inventory capacities for all items
+    updateInventoryCapacities()
+
+    markUnsavedChanges(true)
+    return
+  }
+}
+
+// Helper function to update all inventory capacities based on purchased upgrades
+function updateInventoryCapacities() {
+  const multiplier = calculateInventoryMultiplier(user.value.upgrades.inventory)
+
+  for (const itemKey in user.value.inventory) {
+    const itemInfo = itemDataList[itemKey as ItemKey]
+    if (itemInfo && user.value.inventory[itemKey]) {
+      user.value.inventory[itemKey]!.capacity = Math.floor(itemInfo.defaultCapacity * multiplier)
+    }
+  }
+}
+
+// Helper function to calculate capacity for a new inventory item
+function calculateItemCapacity(itemKey: ItemKey): number {
+  const itemInfo = itemDataList[itemKey]
+  const multiplier = calculateInventoryMultiplier(user.value.upgrades.inventory)
+  return Math.floor(itemInfo.defaultCapacity * multiplier)
 }
 
 function openLoadDataOverlay() {
@@ -465,7 +525,6 @@ function upgradeMachine(machineKey: MachineKey, upgradeType: string) {
 // Save to localStorage
 function saveToLocalStorageNow() {
   console.log('💾 Saving game state...')
-  debugStatsManager() // Debug before save
   saveToLocalStorage(user.value, 'guest', 'Guest')
   // Reset significant changes flag after saving
   hasSignificantChanges = false
@@ -474,6 +533,7 @@ function saveToLocalStorageNow() {
 
 function loadGame(itemKey: string) {
   const result = loadFromLocalStorage(itemKey, machinesConfig.value, itemData.value)
+  console.log('Result of load:', result)
   if (result) {
     // Load the game data
     user.value = result.gameData
@@ -491,15 +551,27 @@ function loadGame(itemKey: string) {
       }
     }
 
-    // Show offline progress if there was any
-    if (
-      Object.keys(result.offlineProductionSummary).length > 0 ||
-      result.offlineExperienceGained > 0
-    ) {
-      offlineProductionSummary.value = result.offlineProductionSummary
-      offlineExperienceGained.value = result.offlineExperienceGained
-      showOfflineProgress.value = true
+    // Migrate inventory items - ensure they have capacity
+    for (const itemKey in user.value.inventory) {
+      const item = user.value.inventory[itemKey]
+      if (item && item.capacity === undefined) {
+        // Old save without capacity - calculate it
+        item.capacity = calculateItemCapacity(itemKey as ItemKey)
+      }
     }
+
+    // Ensure inventory upgrades exist for backward compatibility
+    if (!user.value.upgrades.inventory) {
+      user.value.upgrades.inventory = {}
+    }
+
+    // Update all inventory capacities in case new upgrades were added
+    updateInventoryCapacities()
+
+    // Show offline progress if there was any
+    offlineProductionSummary.value = result.offlineProductionSummary
+    offlineExperienceGained.value = result.offlineExperienceGained
+    showOfflineProgress.value = true
 
     showLoadDataOverlay.value = false
     console.log('Game loaded successfully')
@@ -582,12 +654,35 @@ function updateGame(timestamp: number) {
       const usesInventory = usesItemKey ? user.value.inventory[usesItemKey] : null
       const availableAmount = usesInventory?.amount || 0
 
-      if (availableAmount >= batchSize) {
-        machine.isActive = true // Reactivate if resources are available
-        if (usesInventory) {
-          usesInventory.amount -= batchSize // Consume batch amount
+      // Check if we have enough input materials
+      const hasEnoughInputs = usesInventory ? availableAmount >= batchSize : true // No inputs needed
+
+      // Check if there's enough space in output inventory
+      const producesItemKey = machineConf.produces as ItemKey
+      let outputInventory = user.value.inventory[producesItemKey]
+
+      // If output inventory doesn't exist, create it with proper capacity
+      if (!outputInventory) {
+        const itemInfo = itemData.value[producesItemKey]
+        user.value.inventory[producesItemKey] = {
+          name: itemInfo.name,
+          icon: itemInfo.icon,
+          amount: 0,
+          cost: itemInfo.cost,
+          basePrice: itemInfo.basePrice,
+          sellMultiplier: itemInfo.sellMultiplier,
+          capacity: calculateItemCapacity(producesItemKey),
         }
-        machine.progressPercent = 0 // Start new production cycle
+        outputInventory = user.value.inventory[producesItemKey]
+      }
+
+      const hasInventorySpace = outputInventory.amount + batchSize <= outputInventory.capacity
+
+      // Reactivate machine if all conditions are met
+      if (hasEnoughInputs && hasInventorySpace) {
+        machine.isActive = true
+        // Item consumption will occur when production completes
+        // Progress percent is set to 0 when production is completed
       } else {
         continue // Skip to next machine if not active
       }
@@ -622,15 +717,31 @@ function updateGame(timestamp: number) {
               cost: itemInfo.cost,
               basePrice: itemInfo.basePrice,
               sellMultiplier: itemInfo.sellMultiplier,
+              capacity: calculateItemCapacity(producesItemKey),
             }
           }
 
-          user.value.inventory[producesItemKey].amount += numberOfBonusItems
-          machine.itemsProduced += numberOfBonusItems // Track total items produced
-          machine.bonusItems += numberOfBonusItems // Track bonus items separately
+          // Check if adding bonus items would exceed capacity
+          const inventoryItem = user.value.inventory[producesItemKey]!
+          const availableSpace = inventoryItem.capacity - inventoryItem.amount
+          const itemsToAdd = Math.min(numberOfBonusItems, availableSpace)
 
-          // Record bonus production in stats
-          recordBonusProduction(producesItemKey, numberOfBonusItems)
+          if (itemsToAdd > 0) {
+            inventoryItem.amount += itemsToAdd
+            machine.itemsProduced += itemsToAdd // Track total items produced
+            machine.bonusItems += itemsToAdd // Track bonus items separately
+
+            // Record bonus production in stats
+            recordBonusProduction(producesItemKey, itemsToAdd)
+          }
+
+          // If we couldn't add all bonus items due to capacity, pause the machine
+          if (itemsToAdd < numberOfBonusItems) {
+            machine.isActive = false
+            machine.isRunning = false
+            // Don't reset efficiency progress - it will be consumed when space is available
+            continue // Skip to next machine
+          }
 
           machine.efficiencyProgress -= Math.floor(machine.efficiencyProgress) // Reset efficiency progress for next cycle
         }
@@ -651,14 +762,28 @@ function updateGame(timestamp: number) {
             cost: itemInfo.cost,
             basePrice: itemInfo.basePrice,
             sellMultiplier: itemInfo.sellMultiplier,
+            capacity: calculateItemCapacity(producesItemKey),
           }
         }
 
-        user.value.inventory[producesItemKey].amount += batchSize
-        machine.itemsProduced += batchSize // Track items produced
+        // Check if adding batch would exceed capacity
+        const inventoryItem = user.value.inventory[producesItemKey]!
+        const availableSpace = inventoryItem.capacity - inventoryItem.amount
+        const itemsToAdd = Math.min(batchSize, availableSpace)
 
-        // Record regular production in stats
-        recordProduction(producesItemKey, batchSize)
+        if (itemsToAdd > 0) {
+          inventoryItem.amount += itemsToAdd
+          machine.itemsProduced += itemsToAdd // Track items produced
+
+          // Record regular production in stats
+          recordProduction(producesItemKey, itemsToAdd)
+        }
+
+        // If we couldn't add all items due to capacity, pause the machine
+        if (itemsToAdd < batchSize) {
+          machine.isActive = false
+          machine.isRunning = false
+        }
 
         user.value.experience += batchSize // Experience based on batch size
 
@@ -730,28 +855,7 @@ onMounted(async () => {
   setUserReference(user.value)
 
   // Try to load existing save
-  const result = loadFromLocalStorage('coffeeQueen_guest', machinesConfig.value, itemData.value)
-  if (result) {
-    user.value = result.gameData
-
-    // Production stats are automatically restored in loadFromLocalStorage
-    // No need to call loadStats() again as the stats manager is already updated
-    console.log('📈 Game loaded, checking stats manager state:')
-    debugStatsManager() // Debug after load
-
-    // Show offline progress if there was any
-    if (
-      Object.keys(result.offlineProductionSummary).length > 0 ||
-      result.offlineExperienceGained > 0
-    ) {
-      offlineProductionSummary.value = result.offlineProductionSummary
-      offlineExperienceGained.value = result.offlineExperienceGained
-      showOfflineProgress.value = true
-    }
-  } else {
-    // If no save data exists, stats manager will initialize itself with fresh data
-    console.log('No save data found, stats manager initialized with fresh data')
-  }
+  loadGame('coffeeQueen_guest')
 
   // Setup event listeners
   document.addEventListener('visibilitychange', handleVisibilityChange)

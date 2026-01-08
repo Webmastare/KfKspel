@@ -26,9 +26,8 @@
           <div class="item-details">
             <h3>{{ item.name }}</h3>
             <p>
-              Amount: {{ item.amount }} || Buy: ${{ item.cost.toFixed(2) }} | Sell: ${{
-                getSellPrice(item)
-              }}
+              Amount: {{ item.amount }}/{{ item.capacity }} || Buy: ${{ item.cost.toFixed(2) }} |
+              Sell: ${{ getSellPrice(item) }}
             </p>
 
             <div class="item-actions">
@@ -91,15 +90,17 @@ const getBuyQuantity = (key: string): number => {
   if (!item) return 0
 
   const maxAffordable = Math.floor(props.userMoney / item.cost)
+  const availableCapacity = item.capacity - item.amount
+  const maxPossible = Math.min(maxAffordable, availableCapacity)
 
   if (props.multiAction === 'Max') {
-    return maxAffordable
+    return maxPossible
   } else if (props.multiAction === '10%') {
-    return Math.floor(maxAffordable * 0.1)
+    return Math.floor(maxPossible * 0.1)
   } else if (props.multiAction === 'Custom%') {
-    return Math.floor(maxAffordable * (props.customPercentage / 100))
+    return Math.floor(maxPossible * (props.customPercentage / 100))
   }
-  return Math.min(props.multiAction as number, maxAffordable)
+  return Math.min(props.multiAction as number, maxPossible)
 }
 
 const getSellQuantity = (key: string): number => {

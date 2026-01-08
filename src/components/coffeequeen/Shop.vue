@@ -1,14 +1,33 @@
 <template>
   <div class="shop-modal-overlay" @click.self="emitClose">
     <div class="shop-modal">
-      <h2>Automation Managers</h2>
+      <h2>Upgrades Shop</h2>
 
-      <div class="shop-items">
+      <!-- Category Tabs -->
+      <div class="category-tabs">
+        <button
+          class="tab-button"
+          :class="{ active: activeTab === 'managers' }"
+          @click="activeTab = 'managers'"
+        >
+          Automation Managers
+        </button>
+        <button
+          class="tab-button"
+          :class="{ active: activeTab === 'inventory' }"
+          @click="activeTab = 'inventory'"
+        >
+          Storage Upgrades
+        </button>
+      </div>
+
+      <!-- Manager Upgrades Tab -->
+      <div v-if="activeTab === 'managers'" class="shop-items">
         <div
-          v-for="upgrade in availableUpgrades"
+          v-for="upgrade in availableManagerUpgrades"
           :key="upgrade.id"
           class="shop-item"
-          :class="{ purchased: isUpgradePurchased(upgrade.id) }"
+          :class="{ purchased: isManagerUpgradePurchased(upgrade.id) }"
         >
           <div class="upgrade-details">
             <div class="upgrade-header">
@@ -25,9 +44,42 @@
             </div>
             <button
               @click="emitBuyUpgrade(upgrade.id)"
-              :disabled="!canAffordUpgrade(upgrade) || isUpgradePurchased(upgrade.id)"
+              :disabled="!canAffordManagerUpgrade(upgrade) || isManagerUpgradePurchased(upgrade.id)"
             >
-              {{ isUpgradePurchased(upgrade.id) ? 'Purchased' : 'Buy Manager' }}
+              {{ isManagerUpgradePurchased(upgrade.id) ? 'Purchased' : 'Buy Manager' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inventory Upgrades Tab -->
+      <div v-if="activeTab === 'inventory'" class="shop-items">
+        <div
+          v-for="upgrade in availableInventoryUpgrades"
+          :key="upgrade.id"
+          class="shop-item"
+          :class="{ purchased: isInventoryUpgradePurchased(upgrade.id) }"
+        >
+          <div class="upgrade-details">
+            <div class="upgrade-header">
+              <h3>{{ upgrade.name }}</h3>
+              <span class="level-requirement">Level {{ upgrade.levelRequired }}</span>
+            </div>
+            <p class="description">{{ upgrade.description }}</p>
+            <p class="multiplier-info">Multiplier: {{ upgrade.multiplier }}x</p>
+          </div>
+
+          <div class="upgrade-actions">
+            <div class="price-display">
+              <span>${{ upgrade.cost.toLocaleString() }}</span>
+            </div>
+            <button
+              @click="emitBuyUpgrade(upgrade.id)"
+              :disabled="
+                !canAffordInventoryUpgrade(upgrade) || isInventoryUpgradePurchased(upgrade.id)
+              "
+            >
+              {{ isInventoryUpgradePurchased(upgrade.id) ? 'Purchased' : 'Buy Upgrade' }}
             </button>
           </div>
         </div>
@@ -39,9 +91,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { ManagerUpgrade, UserUpgrades, MachineKey } from '@/components/coffeequeen/types'
-import { getAvailableUpgrades } from '@/components/coffeequeen/data-upgrades'
+import { computed, ref } from 'vue'
+import type {
+  ManagerUpgrade,
+  InventoryUpgrade,
+  UserUpgrades,
+  MachineKey,
+} from '@/components/coffeequeen/types'
+import {
+  getAvailableUpgrades,
+  getAvailableInventoryUpgrades,
+} from '@/components/coffeequeen/data-upgrades'
 import { machineDataList } from '@/components/coffeequeen/data-machines'
 
 interface Props {
@@ -58,16 +118,33 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const availableUpgrades = computed(() => {
+// Active tab state
+const activeTab = ref<'managers' | 'inventory'>('managers')
+
+// Manager upgrades
+const availableManagerUpgrades = computed(() => {
   return getAvailableUpgrades()
 })
 
-const canAffordUpgrade = (upgrade: ManagerUpgrade): boolean => {
+const canAffordManagerUpgrade = (upgrade: ManagerUpgrade): boolean => {
   return props.userMoney >= upgrade.cost && props.userLevel >= upgrade.levelRequired
 }
 
-const isUpgradePurchased = (upgradeId: string): boolean => {
+const isManagerUpgradePurchased = (upgradeId: string): boolean => {
   return props.upgrades.managers[upgradeId] || false
+}
+
+// Inventory upgrades
+const availableInventoryUpgrades = computed(() => {
+  return getAvailableInventoryUpgrades()
+})
+
+const canAffordInventoryUpgrade = (upgrade: InventoryUpgrade): boolean => {
+  return props.userMoney >= upgrade.cost && props.userLevel >= upgrade.levelRequired
+}
+
+const isInventoryUpgradePurchased = (upgradeId: string): boolean => {
+  return props.upgrades.inventory?.[upgradeId] || false
 }
 
 const getMachineName = (machineKey: MachineKey): string => {
@@ -116,6 +193,40 @@ h2 {
   margin-top: 0;
   margin-bottom: 20px;
   color: var(--coffee-text-secondary);
+}
+
+.category-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  justify-content: center;
+}
+
+.tab-button {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--coffee-border-primary);
+  background: var(--coffee-button-bg);
+  color: var(--coffee-button-text);
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: var(--coffee-button-hover);
+    transform: translateY(-1px);
+  }
+
+  &.active {
+    background: var(--coffee-accent);
+    color: var(--coffee-text-light);
+    border-color: var(--coffee-accent);
+  }
+}
+
+.multiplier-info {
+  color: var(--coffee-text-secondary);
+  font-style: italic;
+  font-size: 0.9rem;
 }
 
 .shop-items {

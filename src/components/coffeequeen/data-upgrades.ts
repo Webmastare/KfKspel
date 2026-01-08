@@ -1,4 +1,4 @@
-import type { ManagerUpgrade } from "./types";
+import type { ManagerUpgrade, InventoryUpgrade } from "./types";
 
 export const managerUpgrades: ManagerUpgrade[] = [
     {
@@ -111,6 +111,37 @@ export const managerUpgrades: ManagerUpgrade[] = [
     },
 ];
 
+// Inventory capacity upgrades
+export const inventoryUpgrades: InventoryUpgrade[] = [
+    {
+        id: "inventory_upgrade_1",
+        name: "Storage Expansion I",
+        description: "Doubles the storage capacity for all items",
+        cost: 5000,
+        levelRequired: 3,
+        multiplier: 2.0,
+        category: "inventory",
+    },
+    {
+        id: "inventory_upgrade_2", 
+        name: "Storage Expansion II",
+        description: "Triples the storage capacity for all items (stacks with previous)",
+        cost: 50000,
+        levelRequired: 10,
+        multiplier: 3.0,
+        category: "inventory",
+    },
+    {
+        id: "inventory_upgrade_3",
+        name: "Mega Storage Complex",
+        description: "Quintuples the storage capacity for all items (stacks with previous)",
+        cost: 500000,
+        levelRequired: 20,
+        multiplier: 5.0,
+        category: "inventory",
+    },
+];
+
 // Helper function to get all available upgrades sorted by level requirement
 export function getAvailableUpgrades(): ManagerUpgrade[] {
     return [...managerUpgrades].sort((a, b) =>
@@ -123,4 +154,24 @@ export function getManagerForMachine(
     machineKey: string,
 ): ManagerUpgrade | undefined {
     return managerUpgrades.find((upgrade) => upgrade.machineKey === machineKey);
+}
+
+// Helper function to get all available inventory upgrades sorted by level requirement
+export function getAvailableInventoryUpgrades(): InventoryUpgrade[] {
+    return [...inventoryUpgrades].sort((a, b) =>
+        a.levelRequired - b.levelRequired
+    );
+}
+
+// Helper function to calculate total inventory capacity multiplier
+export function calculateInventoryMultiplier(purchasedUpgrades: Record<string, boolean>): number {
+    let multiplier = 1.0;
+    
+    for (const upgrade of inventoryUpgrades) {
+        if (purchasedUpgrades[upgrade.id]) {
+            multiplier *= upgrade.multiplier;
+        }
+    }
+    
+    return multiplier;
 }
