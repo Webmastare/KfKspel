@@ -735,12 +735,10 @@ function updateGame(timestamp: number) {
             recordBonusProduction(producesItemKey, itemsToAdd)
           }
 
-          // If we couldn't add all bonus items due to capacity, pause the machine
-          if (itemsToAdd < numberOfBonusItems) {
+          // If we couldn't add all bonus items due to capacity or that the inventory is full after production, pause the machine
+          if (itemsToAdd < numberOfBonusItems || inventoryItem.amount >= inventoryItem.capacity) {
             machine.isActive = false
             machine.isRunning = false
-            // Don't reset efficiency progress - it will be consumed when space is available
-            continue // Skip to next machine
           }
 
           machine.efficiencyProgress -= Math.floor(machine.efficiencyProgress) // Reset efficiency progress for next cycle
@@ -779,8 +777,8 @@ function updateGame(timestamp: number) {
           recordProduction(producesItemKey, itemsToAdd)
         }
 
-        // If we couldn't add all items due to capacity, pause the machine
-        if (itemsToAdd < batchSize) {
+        // If we couldn't add all items due to capacity or that the inventory is full after production, pause the machine
+        if (itemsToAdd < batchSize || inventoryItem.amount >= inventoryItem.capacity) {
           machine.isActive = false
           machine.isRunning = false
         }
