@@ -71,7 +71,7 @@ export interface User {
     machines: Record<string, UserMachine>;
     inventory: Record<string, InventoryItem>;
     upgrades: UserUpgrades;
-    lastSaved?: string;
+    lastSaved: string;
     productionStats?: any; // Production statistics data
 }
 
@@ -109,6 +109,8 @@ export interface OfflineProductionSummary {
         name?: string;
         icon?: string;
         itemsLostToCapacity?: number; // Items that couldn't be added due to inventory limits
+        itemsSold?: number; // Items sold by sales managers
+        itemsBought?: number; // Items bought by sales managers
     };
 }
 
@@ -159,6 +161,32 @@ export interface InventoryUpgrade {
 export interface UserUpgrades {
     managers: Record<string, boolean>; // upgradeid -> purchased
     inventory: Record<string, boolean>; // inventory upgrade id -> purchased
+    salesManagers: Record<string, SalesManager>; // itemKey -> sales manager
+}
+
+export interface SalesManager {
+    id: string;
+    itemKey: ItemKey;
+    level: number; // 0 = not owned, 1-3 = levels
+    settings: {
+        buyThreshold?: number;
+        sellThreshold?: number;
+        sellRate?: 1 | 3 | number; // items per second
+        autoBuyEnabled?: boolean;
+        autoSellEnabled?: boolean;
+        offlineWork: boolean;
+    };
+    statistics: {
+        totalItemsBought: number;
+        totalItemsSold: number;
+        totalMoneyEarned: number;
+        totalMoneySpent: number;
+        lastActionTime: number;
+        timeseries?: {}; // For future chart data
+    };
+    // Accumulator for smooth rate limiting
+    partialItemsToSell: number; // Tracks fractional items to sell
+    partialItemsToBuy: number;  // Tracks fractional items to buy
 }
 
 // Machine type categories

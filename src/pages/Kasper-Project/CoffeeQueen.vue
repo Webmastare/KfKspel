@@ -41,11 +41,13 @@
       :user-money="user.money"
       :multi-action="inventoryMultiAction"
       :custom-percentage="customPercentage"
+      :sales-managers="user.upgrades.salesManagers || {}"
       @buy-item="buyItem"
       @sell-item="sellItem"
       @close="showInventory = false"
       @update-multi-action="updateInventoryMultiAction"
       @update-custom-percentage="updateCustomPercentage"
+      @update-manager-settings="updateManagerSettings"
     />
 
     <!-- Shop Modal -->
@@ -55,6 +57,7 @@
       :user-level="user.level"
       :upgrades="user.upgrades"
       @buy-upgrade="buyUpgrade"
+      @buy-sales-manager="buySalesManager"
       @close="showShop = false"
     />
 
@@ -70,6 +73,7 @@
     <!-- Offline Progress Modal -->
     <OfflineProgress
       v-if="showOfflineProgress"
+      :offlineTime="offlineTime"
       :summary="offlineProductionSummary"
       :experience="offlineExperienceGained"
       :item-data="itemData"
@@ -102,6 +106,9 @@ import {
   getManagerForMachine,
   inventoryUpgrades,
   calculateInventoryMultiplier,
+  createSalesManager,
+  getSalesManagerUpgradeCost,
+  getSalesManagerLevelConfig,
 } from '@/components/coffeequeen/data-upgrades'
 import MachineCard from '@/components/coffeequeen/MachineCard.vue'
 import GameOverlay from '@/components/coffeequeen/GameOverlay.vue'
@@ -132,6 +139,7 @@ import {
   setUserReference,
   updateProductionBuckets,
 } from '@/composables/coffeequeen/statsManager'
+import { it } from 'node:test'
 
 // Initialize theme store and stats
 const themeStore = useThemeStore()
@@ -171,6 +179,7 @@ const loadedDataStorageType = ref<string>('')
 
 // Offline progress state
 const showOfflineProgress = ref<boolean>(false)
+const offlineTime = ref<number>(0)
 const offlineProductionSummary = ref<any>({})
 const offlineExperienceGained = ref<number>(0)
 
@@ -334,6 +343,35 @@ function updateCustomPercentage(newValue: number) {
   customPercentage.value = newValue
 }
 
+function updateManagerSettings(payload: {
+  itemKey: string
+  settings: {
+    sellThreshold?: number
+    buyThreshold?: number
+    autoSellEnabled?: boolean
+    autoBuyEnabled?: boolean
+  }
+}) {
+  const { itemKey, settings } = payload
+  const manager = user.value.upgrades.salesManagers?.[itemKey as ItemKey]
+  if (!manager) return
+
+  if (settings.sellThreshold !== undefined) {
+    manager.settings.sellThreshold = settings.sellThreshold
+  }
+  if (settings.buyThreshold !== undefined) {
+    manager.settings.buyThreshold = settings.buyThreshold
+  }
+  if (settings.autoSellEnabled !== undefined) {
+    manager.settings.autoSellEnabled = settings.autoSellEnabled
+  }
+  if (settings.autoBuyEnabled !== undefined) {
+    manager.settings.autoBuyEnabled = settings.autoBuyEnabled
+  }
+
+  markUnsavedChanges()
+}
+
 function buyMachine(machineKey: MachineKey) {
   const config = machinesConfig.value[machineKey]
   if (!config) return
@@ -449,6 +487,70 @@ function buyUpgrade(upgradeId: string) {
   }
 }
 
+function buySalesManager(itemKey: ItemKey, targetLevel: number) {
+  // Get current sales manager for this item
+  const currentManager = user.value.upgrades.salesManagers[itemKey]
+  const currentLevel = currentManager?.level || 0
+
+  // Check if we can upgrade to target level
+  if (currentLevel >= targetLevel) return
+
+  const cost = getSalesManagerUpgradeCost(currentLevel, targetLevel)
+  const levelConfig = getSalesManagerLevelConfig(targetLevel)
+
+  if (!levelConfig) return
+
+  // Check if user can afford and meets requirements
+  if (user.value.money < cost || user.value.level < levelConfig.levelRequired) return
+
+  // Purchase/upgrade the sales manager
+  user.value.money -= cost
+
+  if (!user.value.upgrades.salesManagers[itemKey]) {
+    // Create new sales manager with smart defaults
+    user.value.upgrades.salesManagers[itemKey] = createSalesManager(itemKey, targetLevel)
+    // Enable auto-sell by default for all levels (they bought it to use it!)
+    user.value.upgrades.salesManagers[itemKey].settings.autoSellEnabled = true
+  } else {
+    // Upgrade existing sales manager
+    user.value.upgrades.salesManagers[itemKey].level = targetLevel
+    const newConfig = getSalesManagerLevelConfig(targetLevel)
+    if (newConfig) {
+      // Update settings based on new level capabilities
+      user.value.upgrades.salesManagers[itemKey].settings.sellRate = newConfig.sellRate
+      user.value.upgrades.salesManagers[itemKey].settings.offlineWork =
+        newConfig.features.offlineWork
+
+      // Set default thresholds if this level supports threshold control
+      if (newConfig.features.canSetThresholds) {
+        // Only set defaults if not already configured
+        if (!user.value.upgrades.salesManagers[itemKey].settings.sellThreshold) {
+          user.value.upgrades.salesManagers[itemKey].settings.sellThreshold = 80
+        }
+        if (!user.value.upgrades.salesManagers[itemKey].settings.buyThreshold) {
+          user.value.upgrades.salesManagers[itemKey].settings.buyThreshold = 10
+        }
+      } else if (targetLevel === 1) {
+        // Level 1 has fixed 90% threshold
+        user.value.upgrades.salesManagers[itemKey].settings.sellThreshold = 90
+      }
+
+      // Auto-buy stays disabled by default (more conservative)
+      if (newConfig.features.canBuy) {
+        // Keep existing setting or default to false
+        if (user.value.upgrades.salesManagers[itemKey].settings.autoBuyEnabled === undefined) {
+          user.value.upgrades.salesManagers[itemKey].settings.autoBuyEnabled = false
+        }
+      }
+
+      // Auto-sell should be enabled when they upgrade (they want to use the feature!)
+      user.value.upgrades.salesManagers[itemKey].settings.autoSellEnabled = true
+    }
+  }
+
+  markUnsavedChanges(true)
+}
+
 // Helper function to update all inventory capacities based on purchased upgrades
 function updateInventoryCapacities() {
   const multiplier = calculateInventoryMultiplier(user.value.upgrades.inventory)
@@ -538,6 +640,13 @@ function loadGame(itemKey: string) {
     // Load the game data
     user.value = result.gameData
 
+    // Time offline
+    const currentTime = Date.now()
+    const timeOffline = currentTime - Date.parse(result.gameData.lastSaved)
+    console.log(
+      `You were offline for ${timeOffline / 1000} seconds, ${currentTime}, ${Date.parse(result.gameData.lastSaved)}`,
+    )
+
     // Migrate old save data - add missing properties to machines
     for (const machineKey in user.value.machines) {
       const machine = user.value.machines[machineKey]
@@ -569,6 +678,7 @@ function loadGame(itemKey: string) {
     updateInventoryCapacities()
 
     // Show offline progress if there was any
+    offlineTime.value = timeOffline
     offlineProductionSummary.value = result.offlineProductionSummary
     offlineExperienceGained.value = result.offlineExperienceGained
     showOfflineProgress.value = true
@@ -625,6 +735,124 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
   if (hasSignificantUnsavedChanges()) {
     event.preventDefault()
     event.returnValue = ''
+  }
+}
+
+// Sales Manager Processing
+function processSalesManagers(deltaTimeMS: number) {
+  if (!user.value.upgrades.salesManagers) return
+
+  for (const itemKey in user.value.upgrades.salesManagers) {
+    const manager = user.value.upgrades.salesManagers[itemKey as ItemKey]
+    if (!manager || manager.level === 0) continue
+
+    const inventoryItem = user.value.inventory[itemKey as ItemKey]
+    if (!inventoryItem) continue
+
+    const levelConfig = getSalesManagerLevelConfig(manager.level)
+    if (!levelConfig) continue
+
+    // Handle auto-sell
+    if (manager.settings.autoSellEnabled && levelConfig.features.canSell) {
+      const sellThreshold = manager.settings.sellThreshold || (manager.level === 1 ? 90 : 80)
+      const currentPercentage = (inventoryItem.amount / inventoryItem.capacity) * 100
+
+      if (currentPercentage >= sellThreshold && inventoryItem.amount > 0) {
+        const itemsAboveThreshold =
+          inventoryItem.amount - Math.floor((sellThreshold / 100) * inventoryItem.capacity)
+
+        // Add to accumulator based on sell rate and time elapsed
+        if (levelConfig.sellRate === -1) {
+          manager.partialItemsToSell += itemsAboveThreshold // Unlimited rate - sell all above threshold
+        } else {
+          manager.partialItemsToSell += (levelConfig.sellRate * deltaTimeMS) / 1000
+        }
+
+        // Only process when we have at least 1 full item to sell
+        const itemsToSell = Math.floor(manager.partialItemsToSell)
+        if (itemsToSell > 0) {
+          const actualItemsToSell = Math.min(itemsToSell, itemsAboveThreshold, inventoryItem.amount)
+
+          if (actualItemsToSell > 0) {
+            const sellPrice = inventoryItem.basePrice * inventoryItem.sellMultiplier
+            const totalEarned = actualItemsToSell * sellPrice
+
+            // Execute the sale
+            inventoryItem.amount -= actualItemsToSell
+            user.value.money += totalEarned
+
+            // Update statistics
+            manager.statistics.totalItemsSold += actualItemsToSell
+            manager.statistics.totalMoneyEarned += totalEarned
+            manager.statistics.lastActionTime = Date.now()
+
+            // Subtract sold items from accumulator (keep remainder)
+            manager.partialItemsToSell = Math.max(
+              0,
+              Math.min(1, manager.partialItemsToSell - actualItemsToSell),
+            )
+
+            // Mark for save
+            markUnsavedChanges()
+          }
+        }
+      }
+    }
+
+    // Handle auto-buy
+    if (manager.settings.autoBuyEnabled && levelConfig.features.canBuy && manager.level >= 3) {
+      const buyThreshold = manager.settings.buyThreshold || 10
+      const currentPercentage = (inventoryItem.amount / inventoryItem.capacity) * 100
+
+      if (currentPercentage <= buyThreshold && inventoryItem.amount < inventoryItem.capacity) {
+        const buyPrice = inventoryItem.cost
+        const availableSpace = inventoryItem.capacity - inventoryItem.amount
+
+        // Add to accumulator based on buy rate and time elapsed
+        if (levelConfig.sellRate === -1) {
+          // Unlimited rate - use a high rate for accumulation
+          manager.partialItemsToBuy += (1000 * deltaTimeMS) / 1000 // 1000 items/second for "unlimited"
+        } else {
+          manager.partialItemsToBuy += (levelConfig.sellRate * deltaTimeMS) / 1000
+        }
+
+        // Only process when we have at least 1 full item to buy
+        const itemsToBuy = Math.floor(manager.partialItemsToBuy)
+
+        if (itemsToBuy > 0) {
+          const maxAffordable = Math.floor(user.value.money / buyPrice)
+          const spaceBelowThreshold = Math.max(
+            0,
+            Math.floor((buyThreshold / 100) * inventoryItem.capacity) - inventoryItem.amount,
+          )
+          const actualItemsToBuy = Math.min(
+            itemsToBuy,
+            maxAffordable,
+            availableSpace,
+            spaceBelowThreshold,
+          )
+
+          if (actualItemsToBuy > 0 && user.value.money >= buyPrice * actualItemsToBuy) {
+            const totalCost = actualItemsToBuy * buyPrice
+
+            // Execute the purchase
+            inventoryItem.amount += actualItemsToBuy
+            user.value.money -= totalCost
+
+            // Update statistics
+            manager.statistics.totalItemsBought += actualItemsToBuy
+            manager.statistics.totalMoneySpent += totalCost
+            manager.statistics.lastActionTime = Date.now()
+
+            // Subtract bought items from accumulator (keep remainder)
+            manager.partialItemsToBuy -= actualItemsToBuy
+
+            // Mark for save
+            markUnsavedChanges()
+          }
+        }
+      }
+    }
   }
 }
 
@@ -826,6 +1054,9 @@ function updateGame(timestamp: number) {
       }
     }
   }
+
+  // Process Sales Managers
+  processSalesManagers(elapsedMS)
 
   // Periodic saves
   if (hasUnsavedChanges && shouldSaveToLocalStorage()) {

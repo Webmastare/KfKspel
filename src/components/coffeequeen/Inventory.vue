@@ -30,6 +30,85 @@
               Sell: ${{ getSellPrice(item) }}
             </p>
 
+            <!-- Manager Status Indicator -->
+            <div v-if="hasManager(key)" class="manager-status">
+              Manager L{{ getManagerLevel(key) }}
+            </div>
+
+            <!-- Manager Settings (only shown if manager is owned) -->
+            <div v-if="hasManager(key)" class="manager-settings">
+              <div class="thresholds-row">
+                <!-- Sell Threshold (always shown for level 1+, editable for level 2+) -->
+                <div class="threshold-group">
+                  <button
+                    class="threshold-toggle"
+                    :class="{
+                      disabled: !canAdjustSellThreshold(key),
+                      active: getSellEnabled(key),
+                    }"
+                    :disabled="!canAdjustSellThreshold(key)"
+                    @click="toggleSellEnabled(key)"
+                    :title="canAdjustSellThreshold(key) ? 'Toggle auto-sell' : 'Level 2+ required'"
+                  >
+                    Sell:
+                  </button>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    :value="getPendingSellThreshold(key) || ''"
+                    :disabled="!canAdjustSellThreshold(key)"
+                    :class="{ disabled: !canAdjustSellThreshold(key) }"
+                    @input="
+                      (e) => updatePendingSellThreshold(key, (e.target as HTMLInputElement).value)
+                    "
+                    @blur="(e) => validateSellThresholdInput(key, e)"
+                    class="threshold-input"
+                    placeholder="80"
+                  />%
+                  <span v-if="!canAdjustSellThreshold(key)" class="setting-note">(L2+)</span>
+                </div>
+
+                <!-- Buy Threshold (only shown for level 3+) -->
+                <div v-if="getManagerLevel(key) >= 3" class="threshold-group">
+                  <button
+                    class="threshold-toggle"
+                    :class="{
+                      active: getBuyEnabled(key),
+                    }"
+                    @click="toggleBuyEnabled(key)"
+                    title="Toggle auto-buy"
+                  >
+                    Buy:
+                  </button>
+                  <input
+                    type="number"
+                    min="0"
+                    max="90"
+                    step="1"
+                    :value="getPendingBuyThreshold(key) || ''"
+                    :disabled="!canAdjustBuyThreshold(key)"
+                    @input="
+                      (e) => updatePendingBuyThreshold(key, (e.target as HTMLInputElement).value)
+                    "
+                    @blur="(e) => validateBuyThresholdInput(key, e)"
+                    class="threshold-input"
+                    placeholder="10"
+                  />%
+                </div>
+              </div>
+
+              <!-- Save Button (only show if there are pending changes) -->
+              <button
+                v-if="hasPendingChanges(key)"
+                @click="saveManagerSettings(key)"
+                class="save-settings-btn"
+              >
+                Save Settings
+              </button>
+            </div>
+
             <div class="item-actions">
               <div class="action-group">
                 <button @click="emitBuy(key)" :disabled="!canAffordQuantity(key)">
@@ -54,13 +133,19 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import type { InventoryItem, MultiActionValue } from '@/components/coffeequeen/types'
+import type {
+  InventoryItem,
+  MultiActionValue,
+  SalesManager,
+  ItemKey,
+} from '@/components/coffeequeen/types'
 
 interface Props {
   inventory: Record<string, InventoryItem>
   userMoney: number
   multiAction: MultiActionValue
   customPercentage: number
+  salesManagers?: Record<string, SalesManager> | null
 }
 
 interface Emits {
@@ -69,6 +154,7 @@ interface Emits {
   (e: 'close'): void
   (e: 'update-multi-action', value: MultiActionValue): void
   (e: 'update-custom-percentage', value: number): void
+  (e: 'update-manager-settings', payload: { itemKey: string; settings: any }): void
 }
 
 const props = defineProps<Props>()
@@ -76,6 +162,19 @@ const emit = defineEmits<Emits>()
 
 // Create local custom percentage state since props is read-only
 const localPercentage = ref(props.customPercentage /* initial */)
+
+// Manager settings pending changes
+const pendingManagerSettings = ref<
+  Record<
+    string,
+    {
+      sellThreshold: number | null
+      buyThreshold: number | null
+      autoSellEnabled?: boolean
+      autoBuyEnabled?: boolean
+    }
+  >
+>({})
 
 watch(
   () => props.customPercentage,
@@ -192,6 +291,205 @@ const emitSell = (key: string): void => {
 
 const emitClose = (): void => {
   emit('close')
+}
+
+// Manager-related helper functions
+const getManagerForItem = (itemKey: string): SalesManager | null => {
+  return props.salesManagers?.[itemKey] || null
+}
+
+const hasManager = (itemKey: string): boolean => {
+  const manager = getManagerForItem(itemKey)
+  return manager ? manager.level > 0 : false
+}
+
+const getManagerLevel = (itemKey: string): number => {
+  const manager = getManagerForItem(itemKey)
+  return manager?.level || 0
+}
+
+const canAdjustSellThreshold = (itemKey: string): boolean => {
+  return getManagerLevel(itemKey) >= 2
+}
+
+const canAdjustBuyThreshold = (itemKey: string): boolean => {
+  return getManagerLevel(itemKey) >= 3
+}
+
+const updateManagerSetting = (itemKey: string, settingKey: string, value: number): void => {
+  const manager = getManagerForItem(itemKey)
+  if (manager) {
+    const newSettings = { ...manager.settings, [settingKey]: value }
+    emit('update-manager-settings', { itemKey, settings: newSettings })
+  }
+}
+
+// Pending manager settings functions
+const initializePendingSettings = (itemKey: string): void => {
+  if (!pendingManagerSettings.value[itemKey]) {
+    const manager = getManagerForItem(itemKey)
+    pendingManagerSettings.value[itemKey] = {
+      sellThreshold: manager?.settings.sellThreshold || 80,
+      buyThreshold: manager?.settings.buyThreshold || 10,
+      autoSellEnabled: manager?.settings.autoSellEnabled ?? true,
+      autoBuyEnabled: manager?.settings.autoBuyEnabled ?? false,
+    }
+  }
+}
+
+const getPendingSellThreshold = (itemKey: string): number | null => {
+  initializePendingSettings(itemKey)
+  return pendingManagerSettings.value[itemKey]!.sellThreshold
+}
+
+const getPendingBuyThreshold = (itemKey: string): number | null => {
+  initializePendingSettings(itemKey)
+  return pendingManagerSettings.value[itemKey]!.buyThreshold
+}
+
+const getSellEnabled = (itemKey: string): boolean => {
+  initializePendingSettings(itemKey)
+  return pendingManagerSettings.value[itemKey]!.autoSellEnabled ?? true
+}
+
+const getBuyEnabled = (itemKey: string): boolean => {
+  initializePendingSettings(itemKey)
+  return pendingManagerSettings.value[itemKey]!.autoBuyEnabled ?? false
+}
+
+const updatePendingSellThreshold = (itemKey: string, value: string): void => {
+  initializePendingSettings(itemKey)
+  const numValue = value === '' ? null : Number(value)
+  pendingManagerSettings.value[itemKey]!.sellThreshold =
+    numValue === null || isNaN(numValue) ? null : Math.max(0, Math.min(100, numValue))
+}
+
+const updatePendingBuyThreshold = (itemKey: string, value: string): void => {
+  initializePendingSettings(itemKey)
+  const numValue = value === '' ? null : Number(value)
+  pendingManagerSettings.value[itemKey]!.buyThreshold =
+    numValue === null || isNaN(numValue) ? null : Math.max(0, Math.min(90, numValue))
+}
+
+const validateSellThresholdInput = (itemKey: string, event: FocusEvent): void => {
+  const input = event.target as HTMLInputElement
+  if (input.value === '') {
+    pendingManagerSettings.value[itemKey]!.sellThreshold = null
+  } else {
+    const value = Number(input.value)
+    if (!isNaN(value)) {
+      pendingManagerSettings.value[itemKey]!.sellThreshold = Math.max(0, Math.min(100, value))
+    }
+  }
+}
+
+const validateBuyThresholdInput = (itemKey: string, event: FocusEvent): void => {
+  const input = event.target as HTMLInputElement
+  if (input.value === '') {
+    pendingManagerSettings.value[itemKey]!.buyThreshold = null
+  } else {
+    const value = Number(input.value)
+    if (!isNaN(value)) {
+      pendingManagerSettings.value[itemKey]!.buyThreshold = Math.max(0, Math.min(90, value))
+    }
+  }
+}
+
+const toggleSellEnabled = (itemKey: string): void => {
+  if (!canAdjustSellThreshold(itemKey)) return
+  initializePendingSettings(itemKey)
+  pendingManagerSettings.value[itemKey]!.autoSellEnabled =
+    !pendingManagerSettings.value[itemKey]!.autoSellEnabled
+}
+
+const toggleBuyEnabled = (itemKey: string): void => {
+  initializePendingSettings(itemKey)
+  pendingManagerSettings.value[itemKey]!.autoBuyEnabled =
+    !pendingManagerSettings.value[itemKey]!.autoBuyEnabled
+}
+
+const hasPendingChanges = (itemKey: string): boolean => {
+  const manager = getManagerForItem(itemKey)
+  if (!manager || !pendingManagerSettings.value[itemKey]) return false
+
+  const pending = pendingManagerSettings.value[itemKey]!
+  const currentSell = manager.settings.sellThreshold || 80
+  const currentBuy = manager.settings.buyThreshold || 10
+  const currentAutoSell = manager.settings.autoSellEnabled ?? true
+  const currentAutoBuy = manager.settings.autoBuyEnabled ?? false
+
+  return (
+    (pending.sellThreshold !== null && pending.sellThreshold !== currentSell) ||
+    (pending.buyThreshold !== null && pending.buyThreshold !== currentBuy) ||
+    pending.autoSellEnabled !== currentAutoSell ||
+    pending.autoBuyEnabled !== currentAutoBuy
+  )
+}
+
+const validateAndAdjustThresholds = (
+  sellThreshold: number | null,
+  buyThreshold: number | null,
+): { sellThreshold: number; buyThreshold: number } => {
+  // Use defaults if null
+  let adjustedSell = sellThreshold ?? 80
+  let adjustedBuy = buyThreshold ?? 10
+
+  // Clamp values to valid ranges
+  adjustedSell = Math.max(0, Math.min(100, adjustedSell))
+  adjustedBuy = Math.max(0, Math.min(90, adjustedBuy))
+
+  // Ensure sell threshold is higher than buy threshold (with at least 1% gap)
+  if (adjustedSell <= adjustedBuy) {
+    // If sell is too low, try to increase it
+    if (adjustedBuy <= 100) {
+      adjustedSell = adjustedBuy + 1
+    } else {
+      // If we can't increase sell, decrease buy
+      adjustedBuy = Math.max(0, adjustedSell)
+    }
+  }
+
+  return { sellThreshold: adjustedSell, buyThreshold: adjustedBuy }
+}
+
+const saveManagerSettings = (itemKey: string): void => {
+  const manager = getManagerForItem(itemKey)
+  if (!manager || !pendingManagerSettings.value[itemKey]) return
+
+  const pending = pendingManagerSettings.value[itemKey]!
+  const validated = validateAndAdjustThresholds(pending.sellThreshold, pending.buyThreshold)
+
+  // Update the pending values with validated ones (in case they were adjusted)
+  pendingManagerSettings.value[itemKey]! = {
+    ...pending,
+    sellThreshold: validated.sellThreshold,
+    buyThreshold: validated.buyThreshold,
+  }
+
+  // Build new settings object
+  const newSettings = { ...manager.settings }
+
+  // Always save enable/disable states regardless of level
+  if (pending.autoSellEnabled !== undefined) {
+    newSettings.autoSellEnabled = pending.autoSellEnabled
+  }
+  if (pending.autoBuyEnabled !== undefined) {
+    newSettings.autoBuyEnabled = pending.autoBuyEnabled
+  }
+
+  // Only save threshold settings that the manager level allows
+  if (canAdjustSellThreshold(itemKey)) {
+    newSettings.sellThreshold = validated.sellThreshold
+  }
+
+  if (canAdjustBuyThreshold(itemKey)) {
+    newSettings.buyThreshold = validated.buyThreshold
+  }
+
+  emit('update-manager-settings', { itemKey, settings: newSettings })
+
+  // Clear pending changes after successful save
+  delete pendingManagerSettings.value[itemKey]
 }
 </script>
 
@@ -382,6 +680,125 @@ button {
 
   &:hover {
     background-color: #d32f2f;
+  }
+}
+
+// Manager UI Styles
+.manager-status {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.manager-settings {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+
+  .thresholds-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  .threshold-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85rem;
+
+    .threshold-toggle {
+      background-color: rgba(255, 255, 255, 0.1);
+      color: var(--coffee-text-secondary);
+      border: 1px solid var(--coffee-border-primary);
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      min-width: 40px;
+
+      &.active {
+        background-color: rgba(76, 175, 80, 0.3);
+        color: #4caf50;
+        border-color: #4caf50;
+      }
+
+      &.disabled {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: var(--coffee-text-secondary);
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
+
+      &:hover:not(.disabled) {
+        background-color: rgba(255, 255, 255, 0.15);
+      }
+
+      &:active:not(.disabled) {
+        background-color: rgba(255, 255, 255, 0.2);
+      }
+    }
+
+    .threshold-input {
+      width: 45px;
+      padding: 2px 4px;
+      border-radius: 3px;
+      border: 1px solid var(--coffee-border-primary);
+      background-color: var(--coffee-bg-card);
+      color: var(--coffee-text-primary);
+      font-size: 0.8rem;
+      text-align: center;
+
+      &::placeholder {
+        color: var(--coffee-text-secondary);
+        opacity: 0.6;
+      }
+
+      &:focus {
+        outline: none;
+        border-color: #4caf50;
+        box-shadow: 0 0 0 1px rgba(76, 175, 80, 0.3);
+      }
+
+      &.disabled {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: var(--coffee-text-secondary);
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
+    }
+
+    .setting-note {
+      font-size: 0.7rem;
+      color: var(--coffee-text-secondary);
+      font-style: italic;
+      margin-left: 4px;
+    }
+  }
+
+  .save-settings-btn {
+    background-color: #4caf50;
+    color: white;
+    border: 1px solid #45a049;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    width: 100%;
+
+    &:hover {
+      background-color: #45a049;
+    }
+
+    &:active {
+      background-color: #3d8b40;
+    }
   }
 }
 </style>

@@ -19,6 +19,13 @@
         >
           Storage Upgrades
         </button>
+        <button
+          class="tab-button"
+          :class="{ active: activeTab === 'salesManagers' }"
+          @click="activeTab = 'salesManagers'"
+        >
+          Sales Managers
+        </button>
       </div>
 
       <!-- Manager Upgrades Tab -->
@@ -85,6 +92,141 @@
         </div>
       </div>
 
+      <!-- Sales Managers Tab -->
+      <div v-if="activeTab === 'salesManagers'" class="shop-items">
+        <div
+          v-for="itemKey in availableSalesManagerItems"
+          :key="itemKey"
+          class="shop-item sales-manager-item"
+          :class="{
+            'has-manager': getSalesManagerLevel(itemKey) > 0,
+            expanded: expandedSalesManagers.has(itemKey),
+          }"
+        >
+          <!-- Collapsed Row -->
+          <div class="manager-row" @click="toggleSalesManagerExpansion(itemKey)">
+            <img :src="getItemIcon(itemKey)" :alt="getItemName(itemKey)" class="item-icon" />
+            <div class="item-info">
+              <h3>{{ getItemName(itemKey) }} Sales Manager</h3>
+              <span class="level-display">Level {{ getSalesManagerLevel(itemKey) }}</span>
+            </div>
+            <div class="expand-indicator">
+              <span class="arrow" :class="{ expanded: expandedSalesManagers.has(itemKey) }">
+                ▼
+              </span>
+            </div>
+          </div>
+
+          <!-- Expanded Content -->
+          <div v-if="expandedSalesManagers.has(itemKey)" class="expanded-content">
+            <!-- Current Level Display -->
+            <div class="current-level-section">
+              <h4>Current Level</h4>
+              <div v-if="getSalesManagerLevel(itemKey) === 0" class="level-info no-manager">
+                <div class="level-details">
+                  <p class="level-name">No Sales Manager</p>
+                  <p class="level-description">
+                    Purchase a sales manager to automate buying and selling
+                  </p>
+                </div>
+              </div>
+              <div v-else class="level-info current">
+                <div class="level-details">
+                  <p class="level-name">{{ getCurrentLevelConfig(itemKey)?.name || 'Unknown' }}</p>
+                  <p class="level-description">
+                    {{ getCurrentLevelConfig(itemKey)?.description || '' }}
+                  </p>
+                  <div class="level-features">
+                    <span v-if="getCurrentLevelConfig(itemKey)?.features.canSell">✓ Auto-Sell</span>
+                    <span v-if="getCurrentLevelConfig(itemKey)?.features.canBuy">✓ Auto-Buy</span>
+                    <span v-if="getCurrentLevelConfig(itemKey)?.features.canSetThresholds"
+                      >✓ Custom Thresholds</span
+                    >
+                    <span v-if="getCurrentLevelConfig(itemKey)?.features.offlineWork"
+                      >✓ Offline Work</span
+                    >
+                  </div>
+                  <div class="level-stats">
+                    <span
+                      >Rate:
+                      {{
+                        getCurrentLevelConfig(itemKey)?.sellRate === -1
+                          ? 'Unlimited'
+                          : (getCurrentLevelConfig(itemKey)?.sellRate || 0) + '/s'
+                      }}</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Next Level Available -->
+            <div v-if="getNextAvailableLevel(itemKey)" class="next-level-section">
+              <h4>Next Upgrade</h4>
+              <div class="level-info next">
+                <div class="level-details">
+                  <p class="level-name">{{ getNextAvailableLevel(itemKey)?.name }}</p>
+                  <p class="level-description">{{ getNextAvailableLevel(itemKey)?.description }}</p>
+                  <div class="level-features">
+                    <span v-if="getNextAvailableLevel(itemKey)?.features.canSell">✓ Auto-Sell</span>
+                    <span v-if="getNextAvailableLevel(itemKey)?.features.canBuy">✓ Auto-Buy</span>
+                    <span v-if="getNextAvailableLevel(itemKey)?.features.canSetThresholds"
+                      >✓ Custom Thresholds</span
+                    >
+                    <span v-if="getNextAvailableLevel(itemKey)?.features.offlineWork"
+                      >✓ Offline Work</span
+                    >
+                  </div>
+                  <div class="level-stats">
+                    <span
+                      >Rate:
+                      {{
+                        getNextAvailableLevel(itemKey)?.sellRate === -1
+                          ? 'Unlimited'
+                          : (getNextAvailableLevel(itemKey)?.sellRate || 0) + '/s'
+                      }}</span
+                    >
+                    <span>Required Level: {{ getNextAvailableLevel(itemKey)?.levelRequired }}</span>
+                  </div>
+                </div>
+                <div class="upgrade-actions">
+                  <div class="price-display">
+                    <span
+                      >${{
+                        getUpgradeCost(
+                          itemKey,
+                          getNextAvailableLevel(itemKey)!.level,
+                        ).toLocaleString()
+                      }}</span
+                    >
+                  </div>
+                  <button
+                    @click.stop="
+                      emitBuySalesManager(itemKey, getNextAvailableLevel(itemKey)!.level)
+                    "
+                    :disabled="!canUpgradeToLevel(itemKey, getNextAvailableLevel(itemKey)!.level)"
+                  >
+                    {{
+                      canUpgradeToLevel(itemKey, getNextAvailableLevel(itemKey)!.level)
+                        ? 'Upgrade'
+                        : 'Locked'
+                    }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Max Level Reached -->
+            <div
+              v-else-if="getSalesManagerLevel(itemKey) === salesManagerLevels.length"
+              class="max-level-section"
+            >
+              <div class="max-level-badge">✓ Maximum Level Reached</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <button class="close-button" @click="emitClose">Close</button>
     </div>
   </div>
@@ -97,12 +239,18 @@ import type {
   InventoryUpgrade,
   UserUpgrades,
   MachineKey,
+  ItemKey,
+  SalesManager,
 } from '@/components/coffeequeen/types'
 import {
   getAvailableUpgrades,
   getAvailableInventoryUpgrades,
+  salesManagerLevels,
+  getAvailableSalesManagerItems,
+  getSalesManagerUpgradeCost,
 } from '@/components/coffeequeen/data-upgrades'
 import { machineDataList } from '@/components/coffeequeen/data-machines'
+import { itemDataList } from '@/components/coffeequeen/data-items'
 
 interface Props {
   userMoney: number
@@ -112,6 +260,7 @@ interface Props {
 
 interface Emits {
   (e: 'buy-upgrade', upgradeId: string): void
+  (e: 'buy-sales-manager', itemKey: ItemKey, level: number): void
   (e: 'close'): void
 }
 
@@ -119,7 +268,18 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 // Active tab state
-const activeTab = ref<'managers' | 'inventory'>('managers')
+const activeTab = ref<'managers' | 'inventory' | 'salesManagers'>('managers')
+
+// Sales manager expansion state
+const expandedSalesManagers = ref<Set<ItemKey>>(new Set())
+
+const toggleSalesManagerExpansion = (itemKey: ItemKey) => {
+  if (expandedSalesManagers.value.has(itemKey)) {
+    expandedSalesManagers.value.delete(itemKey)
+  } else {
+    expandedSalesManagers.value.add(itemKey)
+  }
+}
 
 // Manager upgrades
 const availableManagerUpgrades = computed(() => {
@@ -149,6 +309,54 @@ const isInventoryUpgradePurchased = (upgradeId: string): boolean => {
 
 const getMachineName = (machineKey: MachineKey): string => {
   return machineDataList[machineKey]?.name || machineKey
+}
+
+// Sales Manager functions
+const availableSalesManagerItems = computed(() => {
+  return getAvailableSalesManagerItems()
+})
+
+const getSalesManagerLevel = (itemKey: ItemKey): number => {
+  return props.upgrades.salesManagers?.[itemKey]?.level || 0
+}
+
+const getItemName = (itemKey: ItemKey): string => {
+  return itemDataList[itemKey]?.name || itemKey
+}
+
+const getItemIcon = (itemKey: ItemKey): string => {
+  return itemDataList[itemKey]?.icon || ''
+}
+
+const getCurrentLevelConfig = (itemKey: ItemKey) => {
+  const level = getSalesManagerLevel(itemKey)
+  return salesManagerLevels.find((config) => config.level === level)
+}
+
+const getNextAvailableLevel = (itemKey: ItemKey) => {
+  const currentLevel = getSalesManagerLevel(itemKey)
+  return salesManagerLevels.find((config) => config.level === currentLevel + 1)
+}
+
+const canUpgradeToLevel = (itemKey: ItemKey, level: number): boolean => {
+  const currentLevel = getSalesManagerLevel(itemKey)
+  const cost = getUpgradeCost(itemKey, level)
+  const levelConfig = salesManagerLevels.find((l) => l.level === level)
+
+  return (
+    currentLevel < level &&
+    props.userMoney >= cost &&
+    props.userLevel >= (levelConfig?.levelRequired || 999)
+  )
+}
+
+const getUpgradeCost = (itemKey: ItemKey, targetLevel: number): number => {
+  const currentLevel = getSalesManagerLevel(itemKey)
+  return getSalesManagerUpgradeCost(currentLevel, targetLevel)
+}
+
+const emitBuySalesManager = (itemKey: ItemKey, level: number): void => {
+  emit('buy-sales-manager', itemKey, level)
 }
 
 const emitBuyUpgrade = (upgradeId: string): void => {
@@ -336,6 +544,328 @@ button {
     background-color: #a0a0a0;
     border-color: #666;
     cursor: not-allowed;
+  }
+}
+
+// Sales Manager specific styles
+.sales-manager-item {
+  flex-direction: column;
+  min-height: auto;
+  padding: 0;
+
+  &.has-manager {
+    border-color: var(--coffee-accent-primary);
+    background-color: rgba(137, 67, 40, 0.1);
+  }
+
+  &.expanded {
+    border-color: var(--coffee-accent-secondary);
+  }
+}
+
+.manager-row {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-radius: 10px;
+  width: 100%;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .item-icon {
+    width: 40px;
+    height: 40px;
+    margin-right: 15px;
+    border-radius: 6px;
+  }
+
+  .item-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    h3 {
+      margin: 0;
+      font-size: 16px;
+      color: var(--coffee-text-secondary);
+    }
+
+    .level-display {
+      font-size: 12px;
+      color: var(--coffee-text-primary);
+      opacity: 0.8;
+
+      &::before {
+        content: 'Currently: ';
+        opacity: 0.7;
+      }
+    }
+  }
+
+  .expand-indicator {
+    .arrow {
+      font-size: 12px;
+      color: var(--coffee-text-secondary);
+      transition: transform 0.3s ease;
+
+      &.expanded {
+        transform: rotate(180deg);
+      }
+    }
+  }
+}
+
+.expanded-content {
+  padding: 15px;
+  margin-top: 0;
+  border-top: 1px solid var(--coffee-border-primary);
+  animation: slideDown 0.3s ease-out;
+  width: 100%;
+}
+
+.current-level-section,
+.next-level-section {
+  margin-bottom: 20px;
+
+  h4 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: var(--coffee-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+}
+
+.level-info {
+  border: 1px solid var(--coffee-border-primary);
+  border-radius: 8px;
+  padding: 12px;
+
+  &.no-manager {
+    background-color: rgba(158, 158, 158, 0.1);
+    border-color: #9e9e9e;
+  }
+
+  &.current {
+    background-color: rgba(76, 175, 80, 0.1);
+    border-color: #4caf50;
+  }
+
+  &.next {
+    background-color: rgba(33, 150, 243, 0.1);
+    border-color: #2196f3;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .level-details {
+    flex: 1;
+
+    .level-name {
+      margin: 0 0 5px 0;
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--coffee-text-secondary);
+    }
+
+    .level-description {
+      margin: 0 0 8px 0;
+      font-size: 12px;
+      color: var(--coffee-text-primary);
+      opacity: 0.9;
+    }
+
+    .level-features {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+
+      span {
+        background: var(--coffee-accent-secondary);
+        color: white;
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-size: 10px;
+      }
+    }
+
+    .level-stats {
+      font-size: 11px;
+      color: var(--coffee-text-secondary);
+      display: flex;
+      gap: 15px;
+
+      span {
+        opacity: 0.8;
+      }
+    }
+  }
+
+  .upgrade-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-width: 120px;
+
+    .price-display {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--coffee-text-secondary);
+    }
+
+    button {
+      min-width: 80px;
+      font-size: 12px;
+      padding: 8px 16px;
+    }
+  }
+}
+
+.max-level-section {
+  text-align: center;
+
+  .max-level-badge {
+    background: linear-gradient(135deg, #ffd700, #ffa500);
+    color: #333;
+    padding: 12px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+    display: inline-block;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+    transform: translateY(0);
+  }
+}
+
+.current-level {
+  background: var(--coffee-accent-primary);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.manager-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 15px;
+}
+
+.level-option {
+  border: 1px solid var(--coffee-border-primary);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+
+  &.owned {
+    background-color: rgba(76, 175, 80, 0.1);
+    border-color: #4caf50;
+  }
+
+  &.available {
+    background-color: rgba(33, 150, 243, 0.1);
+    border-color: #2196f3;
+    cursor: pointer;
+
+    &:hover {
+      background-color: rgba(33, 150, 243, 0.2);
+    }
+  }
+
+  &.locked {
+    background-color: rgba(158, 158, 158, 0.1);
+    border-color: #9e9e9e;
+    opacity: 0.6;
+  }
+}
+
+.level-info {
+  flex: 1;
+
+  h4 {
+    margin: 0 0 5px 0;
+    color: var(--coffee-text-secondary);
+    font-size: 14px;
+  }
+
+  .level-description {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    color: var(--coffee-text-primary);
+    opacity: 0.9;
+  }
+
+  .level-features {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 5px;
+
+    span {
+      background: var(--coffee-accent-secondary);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+    }
+  }
+
+  .level-stats {
+    font-size: 11px;
+    color: var(--coffee-text-secondary);
+    display: flex;
+    gap: 15px;
+
+    span {
+      opacity: 0.8;
+    }
+  }
+}
+
+.level-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 100px;
+
+  .owned-badge {
+    background: #4caf50;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 11px;
+    font-weight: bold;
+  }
+
+  button {
+    min-width: 80px;
+    font-size: 11px;
+    padding: 6px 12px;
   }
 }
 

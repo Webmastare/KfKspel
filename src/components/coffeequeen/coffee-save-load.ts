@@ -7,12 +7,13 @@ import type {
     OfflineProductionSummary,
     SavedGameData,
     User,
+    SalesManager,
 } from "./types";
 import {
     calculateBatchSize,
     calculateEfficiencyBonus,
 } from "./coffee-upgrade-calculations";
-import { calculateInventoryMultiplier } from "./data-upgrades";
+import { calculateInventoryMultiplier, getSalesManagerLevelConfig } from "./data-upgrades";
 
 import { normalizeBucketsForAllTimeScales } from "@/composables/coffeequeen/statsManager";
 
@@ -260,6 +261,128 @@ function simulateOfflineProgress(
                 // Reset for next production cycle and consume resources
                 machine.progressPercent = 0;
             }
+        }
+        
+        // Process Sales Managers for this time step
+        if (simUser.upgrades.salesManagers) {
+            for (const itemKey in simUser.upgrades.salesManagers) {
+                const manager = simUser.upgrades.salesManagers[itemKey as ItemKey];
+                if (!manager || manager.level === 0) continue;
+                
+                const inventoryItem = simUser.inventory[itemKey as ItemKey];
+                if (!inventoryItem) continue;
+                
+                const levelConfig = getSalesManagerLevelConfig(manager.level);
+                if (!levelConfig) continue;
+                
+                // Handle auto-sell
+                if (manager.settings.autoSellEnabled && levelConfig.features.canSell) {
+                    const sellThreshold = manager.settings.sellThreshold || (manager.level === 1 ? 90 : 80);
+                    const currentPercentage = (inventoryItem.amount / inventoryItem.capacity) * 100;
+                    
+                    if (currentPercentage >= sellThreshold && inventoryItem.amount > 0) {
+                        // Add to accumulator based on sell rate and time elapsed
+                        if (levelConfig.sellRate === -1) {
+                            // Unlimited rate - use a high rate for accumulation
+                            manager.partialItemsToSell += (1000 * timeStepMS) / 1000; // 1000 items/second for "unlimited"
+                        } else {
+                            manager.partialItemsToSell += (levelConfig.sellRate * timeStepMS) / 1000;
+                        }
+
+                        // Only process when we have at least 1 full item to sell
+                        const itemsToSell = Math.floor(manager.partialItemsToSell);
+                        
+                        if (itemsToSell > 0) {
+                            const itemsAboveThreshold = inventoryItem.amount - Math.floor((sellThreshold / 100) * inventoryItem.capacity);
+                            const actualItemsToSell = Math.min(itemsToSell, itemsAboveThreshold, inventoryItem.amount);
+                            
+                            if (actualItemsToSell > 0) {
+                                const sellPrice = inventoryItem.basePrice * inventoryItem.sellMultiplier;
+                                const totalEarned = actualItemsToSell * sellPrice;
+                                
+                                // Execute the sale
+                                inventoryItem.amount -= actualItemsToSell;
+                                simUser.money += totalEarned;
+                                
+                                // Update statistics
+                                manager.statistics.totalItemsSold += actualItemsToSell;
+                                manager.statistics.totalMoneyEarned += totalEarned;
+                                manager.statistics.lastActionTime = Date.now();
+
+                                // Subtract sold items from accumulator (keep remainder)
+                                manager.partialItemsToSell -= actualItemsToSell;
+                                
+                                // Track in production summary for display
+                                const itemKeyStr = itemKey as ItemKey;
+                                if (!productionSummary[itemKeyStr]) {
+                                    productionSummary[itemKeyStr] = { amount: 0, bonusAmount: 0 };
+                                }
+                                const summaryItem = productionSummary[itemKeyStr]!;
+                                if (!summaryItem.itemsSold) {
+                                    summaryItem.itemsSold = 0;
+                                }
+                                summaryItem.itemsSold += actualItemsToSell;
+                            }
+                        }
+                    }
+                }
+                
+                // Handle auto-buy
+                if (manager.settings.autoBuyEnabled && levelConfig.features.canBuy && manager.level >= 3) {
+                    const buyThreshold = manager.settings.buyThreshold || 10;
+                    const currentPercentage = (inventoryItem.amount / inventoryItem.capacity) * 100;
+                    
+                    if (currentPercentage <= buyThreshold && inventoryItem.amount < inventoryItem.capacity) {
+                        const buyPrice = inventoryItem.cost;
+                        const availableSpace = inventoryItem.capacity - inventoryItem.amount;
+                        
+                        // Add to accumulator based on buy rate and time elapsed
+                        if (levelConfig.sellRate === -1) {
+                            // Unlimited rate - use a high rate for accumulation
+                            manager.partialItemsToBuy += (1000 * timeStepMS) / 1000; // 1000 items/second for "unlimited"
+                        } else {
+                            manager.partialItemsToBuy += (levelConfig.sellRate * timeStepMS) / 1000;
+                        }
+                        
+                        // Only process when we have at least 1 full item to buy
+                        const itemsToBuy = Math.floor(manager.partialItemsToBuy);
+                        
+                        if (itemsToBuy > 0) {
+                            const maxAffordable = Math.floor(simUser.money / buyPrice);
+                            const spaceBelowThreshold = Math.max(0, Math.floor((buyThreshold / 100) * inventoryItem.capacity) - inventoryItem.amount);
+                            const actualItemsToBuy = Math.min(itemsToBuy, maxAffordable, availableSpace, spaceBelowThreshold);
+
+                            if (actualItemsToBuy > 0 && simUser.money >= buyPrice * actualItemsToBuy) {
+                                const totalCost = actualItemsToBuy * buyPrice;
+                            
+                                // Execute the purchase
+                                inventoryItem.amount += actualItemsToBuy;
+                                simUser.money -= totalCost;
+                                
+                                // Update statistics
+                                manager.statistics.totalItemsBought += actualItemsToBuy;
+                                manager.statistics.totalMoneySpent += totalCost;
+                                manager.statistics.lastActionTime = Date.now();
+
+                                // Subtract bought items from accumulator (keep remainder)
+                                manager.partialItemsToBuy -= actualItemsToBuy;
+                                
+                                // Track in production summary for display
+                                const itemKeyStr = itemKey as ItemKey;
+                                if (!productionSummary[itemKeyStr]) {
+                                    productionSummary[itemKeyStr] = { amount: 0, bonusAmount: 0 };
+                                }
+                                const summaryItem = productionSummary[itemKeyStr]!;
+                                if (!summaryItem.itemsBought) {
+                                    summaryItem.itemsBought = 0;
+                                }
+                                summaryItem.itemsBought += actualItemsToBuy;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Calculate total experience gained
@@ -273,6 +396,8 @@ function simulateOfflineProgress(
     user.level = simUser.level;
     user.nextLevelExperience = simUser.nextLevelExperience;
     user.machines = simUser.machines;
+    user.money = simUser.money; // Don't forget to copy money back after sales manager operations
+    user.upgrades = simUser.upgrades; // Copy sales manager statistics
 
     // Add item names and icons to the production summary
     for (const itemKey in productionSummary) {
@@ -290,8 +415,8 @@ function simulateOfflineProgress(
         `💫 Total experience gained:`,
         totalExperienceGained,
     );
-}
-return { productionSummary, totalExperienceGained };
+    
+    return { productionSummary, totalExperienceGained };
 }
 
 // --- SAVE/LOAD LOGIC ---
@@ -362,12 +487,32 @@ export function loadFromLocalStorage(
                 gameData.upgrades = {
                     managers: {},
                     inventory: {},
+                    salesManagers: {},
                 };
             }
             
             // Ensure inventory upgrades exist for backward compatibility
             if (!gameData.upgrades.inventory) {
                 gameData.upgrades.inventory = {};
+            }
+            
+            // Ensure sales managers exist for backward compatibility
+            if (!gameData.upgrades.salesManagers) {
+                gameData.upgrades.salesManagers = {};
+            }
+
+            // Migrate sales managers to include accumulator properties
+            for (const itemKey in gameData.upgrades.salesManagers) {
+                const manager = gameData.upgrades.salesManagers[itemKey];
+                if (manager) {
+                    // Add accumulator properties if they don't exist
+                    if (typeof manager.partialItemsToSell !== 'number') {
+                        manager.partialItemsToSell = 0;
+                    }
+                    if (typeof manager.partialItemsToBuy !== 'number') {
+                        manager.partialItemsToBuy = 0;
+                    }
+                }
             }
 
             // Restore production stats to stats manager if available
@@ -537,7 +682,9 @@ export function createNewUser(): User {
         upgrades: {
             managers: {},
             inventory: {},
+            salesManagers: {},
         },
+        lastSaved: new Date().toISOString(),
         productionStats: null,
     };
 }

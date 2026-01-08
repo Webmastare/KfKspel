@@ -1,4 +1,4 @@
-import type { ManagerUpgrade, InventoryUpgrade } from "./types";
+import type { ManagerUpgrade, InventoryUpgrade, SalesManager, ItemKey } from "./types";
 
 export const managerUpgrades: ManagerUpgrade[] = [
     {
@@ -174,4 +174,121 @@ export function calculateInventoryMultiplier(purchasedUpgrades: Record<string, b
     }
     
     return multiplier;
+}
+
+// Sales Manager Level Configurations
+export interface SalesManagerLevelConfig {
+    level: number;
+    name: string;
+    description: string;
+    cost: number;
+    levelRequired: number;
+    sellRate: number; // items per second
+    features: {
+        canSell: boolean;
+        canBuy: boolean;
+        canSetThresholds: boolean;
+        offlineWork: boolean;
+    };
+}
+
+export const salesManagerLevels: SalesManagerLevelConfig[] = [
+    {
+        level: 1,
+        name: "Basic Sales Assistant",
+        description: "Simple auto-sell when inventory reaches 90% capacity",
+        cost: 1000,
+        levelRequired: 3,
+        sellRate: 1, // 1 item/s
+        features: {
+            canSell: true,
+            canBuy: false,
+            canSetThresholds: false,
+            offlineWork: false
+        }
+    },
+    {
+        level: 2,
+        name: "Junior Sales Manager", 
+        description: "Auto-sell with configurable thresholds and offline capability",
+        cost: 5000,
+        levelRequired: 7,
+        sellRate: 5, // 5 items/s
+        features: {
+            canSell: true,
+            canBuy: false,
+            canSetThresholds: true,
+            offlineWork: true
+        }
+    },
+    {
+        level: 3,
+        name: "Senior Sales Manager",
+        description: "Full auto-buy/sell with unlimited rate and complete control",
+        cost: 25000,
+        levelRequired: 12,
+        sellRate: -1, // unlimited (-1 indicates no rate limit)
+        features: {
+            canSell: true,
+            canBuy: true,
+            canSetThresholds: true,
+            offlineWork: true
+        }
+    }
+];
+
+// Helper function to get sales manager level config
+export function getSalesManagerLevelConfig(level: number): SalesManagerLevelConfig | undefined {
+    return salesManagerLevels.find(config => config.level === level);
+}
+
+// Helper function to create a new sales manager for an item
+export function createSalesManager(itemKey: ItemKey, level: number = 0): SalesManager {
+    return {
+        id: `sales_${itemKey}`,
+        itemKey,
+        level,
+        settings: {
+            buyThreshold: 10,
+            sellThreshold: level === 1 ? 90 : 80, // Level 1 uses fixed 90%, others default to 80%
+            sellRate: getSalesManagerLevelConfig(level)?.sellRate || 0,
+            autoBuyEnabled: false,
+            autoSellEnabled: level > 0,
+            offlineWork: getSalesManagerLevelConfig(level)?.features.offlineWork || false
+        },
+        statistics: {
+            totalItemsBought: 0,
+            totalItemsSold: 0,
+            totalMoneyEarned: 0,
+            totalMoneySpent: 0,
+            lastActionTime: Date.now()
+        },
+        // Initialize accumulator properties
+        partialItemsToSell: 0,
+        partialItemsToBuy: 0
+    };
+}
+
+// Helper function to get upgrade cost for sales manager level
+export function getSalesManagerUpgradeCost(fromLevel: number, toLevel: number): number {
+    let totalCost = 0;
+    for (let level = fromLevel + 1; level <= toLevel; level++) {
+        const config = getSalesManagerLevelConfig(level);
+        if (config) {
+            totalCost += config.cost;
+        }
+    }
+    return totalCost;
+}
+
+// Helper function to get all available sales manager items
+export function getAvailableSalesManagerItems(): ItemKey[] {
+    return [
+        'rawCoffeeBeans',
+        'roastedCoffeeBeans', 
+        'groundCoffee',
+        'brewedCoffee',
+        'espresso',
+        'latte'
+    ];
 }
