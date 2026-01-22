@@ -164,6 +164,7 @@ export interface UserUpgrades {
     salesManagers: Record<string, SalesManager>; // itemKey -> sales manager
 }
 
+import type { ManagerStatsManager } from '@/composables/coffeequeen/managerStatsTypes'
 export interface SalesManager {
     id: string;
     itemKey: ItemKey;
@@ -182,7 +183,7 @@ export interface SalesManager {
         totalMoneyEarned: number;
         totalMoneySpent: number;
         lastActionTime: number;
-        timeseries?: {}; // For future chart data
+        timeseries?: ManagerStatsManager;
     };
     // Accumulator for smooth rate limiting
     partialItemsToSell: number; // Tracks fractional items to sell

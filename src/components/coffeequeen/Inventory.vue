@@ -33,6 +33,13 @@
             <!-- Manager Status Indicator -->
             <div v-if="hasManager(key)" class="manager-status">
               Manager L{{ getManagerLevel(key) }}
+              <button
+                @click="showManagerStats(key)"
+                class="stats-button"
+                title="View manager statistics"
+              >
+                📊
+              </button>
             </div>
 
             <!-- Manager Settings (only shown if manager is owned) -->
@@ -128,6 +135,14 @@
       </div>
       <button class="close-button" @click="emitClose">Close</button>
     </div>
+
+    <!-- Manager Statistics Modal -->
+    <ManagerStats
+      v-if="showStatsFor && getManagerForItem(showStatsFor) && itemData"
+      :sales-manager="getManagerForItem(showStatsFor)!"
+      :item-data="itemData"
+      @close="showStatsFor = null"
+    />
   </div>
 </template>
 
@@ -138,7 +153,9 @@ import type {
   MultiActionValue,
   SalesManager,
   ItemKey,
+  ItemData,
 } from '@/components/coffeequeen/types'
+import ManagerStats from './ManagerStats.vue'
 
 interface Props {
   inventory: Record<string, InventoryItem>
@@ -146,6 +163,7 @@ interface Props {
   multiAction: MultiActionValue
   customPercentage: number
   salesManagers?: Record<string, SalesManager> | null
+  itemData: Record<string, ItemData>
 }
 
 interface Emits {
@@ -162,6 +180,9 @@ const emit = defineEmits<Emits>()
 
 // Create local custom percentage state since props is read-only
 const localPercentage = ref(props.customPercentage /* initial */)
+
+// Manager stats modal state
+const showStatsFor = ref<string | null>(null)
 
 // Manager settings pending changes
 const pendingManagerSettings = ref<
@@ -306,6 +327,10 @@ const hasManager = (itemKey: string): boolean => {
 const getManagerLevel = (itemKey: string): number => {
   const manager = getManagerForItem(itemKey)
   return manager?.level || 0
+}
+
+const showManagerStats = (itemKey: string): void => {
+  showStatsFor.value = itemKey
 }
 
 const canAdjustSellThreshold = (itemKey: string): boolean => {
@@ -689,6 +714,27 @@ button {
   font-size: 0.8rem;
   color: #4caf50;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .stats-button {
+    background: none;
+    border: 1px solid rgba(76, 175, 80, 0.4);
+    color: #4caf50;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.8;
+
+    &:hover {
+      opacity: 1;
+      background-color: rgba(76, 175, 80, 0.1);
+      transform: translateY(-1px);
+    }
+  }
 }
 
 .manager-settings {

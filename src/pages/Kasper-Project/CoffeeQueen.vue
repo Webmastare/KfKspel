@@ -42,6 +42,7 @@
       :multi-action="inventoryMultiAction"
       :custom-percentage="customPercentage"
       :sales-managers="user.upgrades.salesManagers || {}"
+      :item-data="itemData"
       @buy-item="buyItem"
       @sell-item="sellItem"
       @close="showInventory = false"
@@ -139,6 +140,11 @@ import {
   setUserReference,
   updateProductionBuckets,
 } from '@/composables/coffeequeen/statsManager'
+import {
+  initializeManagerTimeseries,
+  recordManagerSellAction,
+  recordManagerBuyAction,
+} from '@/composables/coffeequeen/managerStatsManager'
 import { it } from 'node:test'
 
 // Initialize theme store and stats
@@ -511,6 +517,8 @@ function buySalesManager(itemKey: ItemKey, targetLevel: number) {
     user.value.upgrades.salesManagers[itemKey] = createSalesManager(itemKey, targetLevel)
     // Enable auto-sell by default for all levels (they bought it to use it!)
     user.value.upgrades.salesManagers[itemKey].settings.autoSellEnabled = true
+    // Initialize timeseries data
+    initializeManagerTimeseries(user.value.upgrades.salesManagers[itemKey])
   } else {
     // Upgrade existing sales manager
     user.value.upgrades.salesManagers[itemKey].level = targetLevel
@@ -677,6 +685,16 @@ function loadGame(itemKey: string) {
     // Update all inventory capacities in case new upgrades were added
     updateInventoryCapacities()
 
+    // Initialize timeseries for existing sales managers if not present
+    if (user.value.upgrades.salesManagers) {
+      for (const itemKey in user.value.upgrades.salesManagers) {
+        const manager = user.value.upgrades.salesManagers[itemKey as ItemKey]
+        if (manager && !manager.statistics.timeseries) {
+          initializeManagerTimeseries(manager)
+        }
+      }
+    }
+
     // Show offline progress if there was any
     offlineTime.value = timeOffline
     offlineProductionSummary.value = result.offlineProductionSummary
@@ -786,6 +804,9 @@ function processSalesManagers(deltaTimeMS: number) {
             manager.statistics.totalMoneyEarned += totalEarned
             manager.statistics.lastActionTime = Date.now()
 
+            // Record timeseries data
+            recordManagerSellAction(manager, actualItemsToSell, totalEarned)
+
             // Subtract sold items from accumulator (keep remainder)
             manager.partialItemsToSell = Math.max(
               0,
@@ -843,6 +864,9 @@ function processSalesManagers(deltaTimeMS: number) {
             manager.statistics.totalItemsBought += actualItemsToBuy
             manager.statistics.totalMoneySpent += totalCost
             manager.statistics.lastActionTime = Date.now()
+
+            // Record timeseries data
+            recordManagerBuyAction(manager, actualItemsToBuy, totalCost)
 
             // Subtract bought items from accumulator (keep remainder)
             manager.partialItemsToBuy -= actualItemsToBuy
