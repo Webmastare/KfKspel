@@ -31,3 +31,6 @@ Notes.md
 *.sw?
 
 *.tsbuildinfo
+
+# Secrets
+gh-actions-deploy
