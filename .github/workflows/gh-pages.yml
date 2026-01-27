@@ -21,8 +21,8 @@ jobs:
       - name: Deploy dist to external repo
         uses: peaceiris/actions-gh-pages@v4
         with:
-          deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+          deploy_key: ${{ secrets.DEPLOY_TO_TEMPORARY_KFKSPELPAGE }}
           external_repository: temporary-coder1/temporary-coder1.github.io
-          publish_branch: main # or gh-pages, whatever your target repo uses
+          publish_branch: gh-pages
           publish_dir: dist
           force_orphan: true
