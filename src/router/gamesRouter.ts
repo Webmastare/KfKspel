@@ -17,7 +17,7 @@ export default [
     {
         path: "/kfkbandvagn",
         name: "KfKbandvagn",
-        component: () => import("@/pages/games/KfKbandvagn.vue"),
+        component: () => import("@/pages/games/Kfkbandvagn.vue"),
     },
     {
         path: "/snake",
