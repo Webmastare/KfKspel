@@ -37,7 +37,7 @@ export default [
     {
         path: "/kfkbatians",
         name: "KfkBatians",
-        component: () => import("@/pages/games/KfkBatians.vue"),
+        component: () => import("@/pages/games/Kfkbatians.vue"),
     },
     {
         path: "/ordel",
