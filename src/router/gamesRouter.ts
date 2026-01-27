@@ -12,7 +12,7 @@ export default [
     {
         path: "/kfkblock",
         name: "KfKblock",
-        component: () => import("@/pages/games/KfKblock.vue"),
+        component: () => import("@/pages/games/Kfkblock.vue"),
     },
     {
         path: "/kfkbandvagn",
