@@ -1,3 +1,5 @@
+import { path } from "d3";
+
 export default [
     {
         path: "/simulator",
@@ -26,8 +28,18 @@ export default [
         component: () => import("@/pages/Kasper-Project/Defense.vue"),
     },
     {
+        path: "/defense-twoplay",
+        name: "DefenseTwoPlay",
+        component: () => import("@/pages/Kasper-Project/DefenseTwoPlay.vue"),
+    },
+    {
         path: "/coffee-queen",
         name: "CoffeeQueen",
         component: () => import("@/pages/Kasper-Project/CoffeeQueen.vue"),
+    },
+    {
+        path: "/sudoku",
+        name: "Sudoku",
+        component: () => import("@/pages/games/Sudoku.vue"),
     },
 ];
