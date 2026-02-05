@@ -15,14 +15,19 @@ export function isValid(
     col: number,
     num: number,
 ): boolean {
+    // Validate bounds
+    if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) {
+        return false;
+    }
+
     // Check Row
     for (let x = 0; x < GRID_SIZE; x++) {
-        if (board[row][x] === num && x !== col) return false;
+        if (board[row]?.[x] === num && x !== col) return false;
     }
 
     // Check Col
     for (let x = 0; x < GRID_SIZE; x++) {
-        if (board[x][col] === num && x !== row) return false;
+        if (board[x]?.[col] === num && x !== row) return false;
     }
 
     // Check 3x3 Box
@@ -30,7 +35,7 @@ export function isValid(
     const startCol = col - (col % BOX_SIZE);
     for (let i = 0; i < BOX_SIZE; i++) {
         for (let j = 0; j < BOX_SIZE; j++) {
-            if (board[i + startRow][j + startCol] === num) return false;
+            if (board[i + startRow]?.[j + startCol] === num) return false;
         }
     }
 
@@ -45,12 +50,16 @@ export function isValid(
 export function solveBoard(board: Board): boolean {
     for (let row = 0; row < GRID_SIZE; row++) {
         for (let col = 0; col < GRID_SIZE; col++) {
-            if (board[row][col] === 0) {
+            const cell = board[row]?.[col];
+            if (cell === 0) {
                 for (let num = 1; num <= 9; num++) {
                     if (isValid(board, row, col, num)) {
-                        board[row][col] = num;
-                        if (solveBoard(board)) return true;
-                        board[row][col] = 0; // Backtrack
+                        const targetRow = board[row];
+                        if (targetRow) {
+                            targetRow[col] = num;
+                            if (solveBoard(board)) return true;
+                            targetRow[col] = 0; // Backtrack
+                        }
                     }
                 }
                 return false; // No valid number found
@@ -77,7 +86,7 @@ function countSolutions(board: Board): number {
         // Find empty cell
         for (let i = 0; i < GRID_SIZE; i++) {
             for (let j = 0; j < GRID_SIZE; j++) {
-                if (currentBoard[i][j] === 0) {
+                if (currentBoard[i]?.[j] === 0) {
                     row = i;
                     col = j;
                     isEmpty = true;
@@ -94,9 +103,12 @@ function countSolutions(board: Board): number {
 
         for (let num = 1; num <= 9; num++) {
             if (isValid(currentBoard, row, col, num)) {
-                currentBoard[row][col] = num;
-                helper(currentBoard);
-                currentBoard[row][col] = 0;
+                const targetRow = currentBoard[row];
+                if (targetRow) {
+                    targetRow[col] = num;
+                    helper(currentBoard);
+                    targetRow[col] = 0;
+                }
             }
         }
     }
@@ -138,22 +150,27 @@ export function generateSudoku(
         let row = Math.floor(Math.random() * GRID_SIZE);
         let col = Math.floor(Math.random() * GRID_SIZE);
 
-        while (board[row][col] === 0) {
+        while (board[row]?.[col] === 0) {
             row = Math.floor(Math.random() * GRID_SIZE);
             col = Math.floor(Math.random() * GRID_SIZE);
         }
 
-        const backup = board[row][col];
-        board[row][col] = 0;
+        const targetRow = board[row];
+        if (targetRow) {
+            const backup = targetRow[col];
+            if (backup !== undefined) {
+                targetRow[col] = 0;
 
-        // copy board for uniqueness check
-        const checkBoard = board.map((r) => [...r]);
+                // copy board for uniqueness check
+                const checkBoard = board.map((r) => [...r]);
 
-        // If multiple solutions exist, put it back (uniqueness constraint)
-        if (countSolutions(checkBoard) !== 1) {
-            board[row][col] = backup;
-        } else {
-            attempts--;
+                // If multiple solutions exist, put it back (uniqueness constraint)
+                if (countSolutions(checkBoard) !== 1) {
+                    targetRow[col] = backup;
+                } else {
+                    attempts--;
+                }
+            }
         }
     }
 
@@ -167,7 +184,10 @@ function fillBox(board: Board, row: number, col: number) {
             do {
                 num = Math.floor(Math.random() * 9) + 1;
             } while (!isSafeInBox(board, row, col, num));
-            board[row + i][col + j] = num;
+            const targetRow = board[row + i];
+            if (targetRow) {
+                targetRow[col + j] = num;
+            }
         }
     }
 }
@@ -180,7 +200,7 @@ function isSafeInBox(
 ) {
     for (let i = 0; i < BOX_SIZE; i++) {
         for (let j = 0; j < BOX_SIZE; j++) {
-            if (board[rowStart + i][colStart + j] === num) return false;
+            if (board[rowStart + i]?.[colStart + j] === num) return false;
         }
     }
     return true;

@@ -97,36 +97,44 @@ const emitLoadData = (item: SavedGameData): void => {
   height: 100%;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   z-index: 200;
   font-family: 'Courier New', Courier, monospace;
   background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: clamp(10px, 3vh, 20px);
+  box-sizing: border-box;
 
   .data-modal {
-    padding: 20px;
+    padding: clamp(15px, 3vh, 20px);
     border-radius: 10px;
-    width: 500px;
-    max-height: 80vh;
+    width: min(500px, calc(100vw - 20px));
+    max-height: calc(100vh - 40px);
     overflow-y: auto;
     background: var(--coffee-bg-card);
     border: 1px solid var(--coffee-border-primary);
     color: var(--coffee-text-primary);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    margin: auto 0;
 
     h2 {
       text-align: center;
       margin-top: 0;
-      margin-bottom: 20px;
+      margin-bottom: clamp(15px, 3vh, 20px);
+      font-size: clamp(1.2rem, 4vw, 1.5rem);
     }
   }
 
   .data-wrapper {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: clamp(8px, 2vh, 10px);
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: clamp(15px, 3vh, 20px);
     border-radius: 10px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     background: var(--coffee-bg-primary);
@@ -139,15 +147,24 @@ const emitLoadData = (item: SavedGameData): void => {
       justify-content: center;
       flex-direction: column;
       width: 100%;
-      padding: 10px;
+      padding: clamp(8px, 2vh, 10px);
       border-radius: 8px;
       background: var(--coffee-bg-secondary);
       color: var(--coffee-text-primary);
+
+      p {
+        margin: 2px 0;
+        font-size: clamp(0.9rem, 2.2vw, 1rem);
+      }
+
+      @media (max-width: 768px) {
+        padding: 12px;
+      }
     }
   }
 
   button {
-    padding: 10px 20px;
+    padding: clamp(8px, 2vh, 10px) clamp(15px, 3vw, 20px);
     border-radius: 5px;
     cursor: pointer;
     font-family: inherit;
@@ -155,6 +172,9 @@ const emitLoadData = (item: SavedGameData): void => {
     background-color: #4caf50;
     color: white;
     border: 2px solid #45a049;
+    min-height: 44px;
+    font-size: clamp(0.9rem, 2.2vw, 1rem);
+    transition: all 0.2s ease;
 
     &:hover {
       background-color: #45a049;

@@ -1,6 +1,6 @@
 <template>
   <div class="coffee-queen-game">
-    <h1>Coffee Queen</h1>
+    <h1>KfKbrygg</h1>
 
     <!-- Game Overlay with User Stats -->
     <GameOverlay :user="user" :inventory="inventoryForDisplay" />
@@ -145,7 +145,6 @@ import {
   recordManagerSellAction,
   recordManagerBuyAction,
 } from '@/composables/coffeequeen/managerStatsManager'
-import { it } from 'node:test'
 
 // Initialize theme store and stats
 const themeStore = useThemeStore()
@@ -1143,9 +1142,9 @@ onUnmounted(() => {
 <style scoped lang="scss">
 h1 {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: clamp(10px, 4vw, 20px);
   font-family: 'Courier New', Courier, monospace;
-  font-size: 2.5rem;
+  font-size: clamp(1.5rem, 5vw, 2.5rem);
   color: var(--coffee-text-secondary);
   transition: all 0.3s ease;
 }
@@ -1154,27 +1153,32 @@ h1 {
   background: linear-gradient(135deg, var(--coffee-bg-primary) 0%, var(--coffee-bg-secondary) 100%);
   color: var(--coffee-text-primary);
   transition: all 0.3s ease;
-  padding: 20px;
+  padding: clamp(10px, 3vw, 20px);
   min-height: calc(100vh - 140px);
+  padding-bottom: clamp(100px, 15vh, 140px); // Space for fixed bottom overlay
 }
 
 .controls {
   display: flex;
   justify-content: center;
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: clamp(5px, 3vw, 20px);
+  margin-bottom: clamp(15px, 4vw, 30px);
+  flex-wrap: wrap;
+  padding: 0 clamp(10px, 2vw, 0px);
 
   button {
     background: var(--coffee-button-bg);
     color: var(--coffee-button-text);
     border: 2px solid var(--coffee-button-border);
     transition: all 0.3s ease;
-    padding: 12px 24px;
-    font-size: 16px;
+    padding: clamp(8px, 2vw, 12px) clamp(12px, 3vw, 24px);
+    font-size: clamp(12px, 2.5vw, 16px);
     font-weight: bold;
     border-radius: 8px;
     cursor: pointer;
     font-family: 'Courier New', Courier, monospace;
+    white-space: nowrap;
+    min-height: 44px; // Touch target minimum
 
     &:hover {
       transform: translateY(-2px);
@@ -1187,24 +1191,26 @@ h1 {
 }
 
 .machines-container {
-  margin-bottom: 100px; // Space for overlay
+  margin-bottom: clamp(80px, 12vh, 120px); // Space for overlay
 }
 
 .machine-row-container {
-  margin-bottom: 30px;
+  margin-bottom: clamp(20px, 4vw, 30px);
 }
 
 .machine-type-header {
   color: var(--coffee-text-secondary);
   transition: all 0.3s ease;
   text-align: center;
-  font-size: 1.5rem;
-  margin-bottom: 15px;
+  font-size: clamp(1.2rem, 3.5vw, 1.5rem);
+  margin-bottom: clamp(10px, 2vw, 15px);
 }
 
 .machine-row {
   display: flex;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch; // Smooth scrolling on iOS
+  scroll-snap-type: x mandatory;
 
   &::-webkit-scrollbar {
     height: 8px;
@@ -1212,22 +1218,53 @@ h1 {
 
   &::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
   }
 
   &::-webkit-scrollbar-thumb {
     background: var(--coffee-border-secondary);
     border-radius: 4px;
   }
+
   padding: 10px 0;
-  gap: 10px;
+  gap: clamp(8px, 2vw, 15px);
   justify-content: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; // Prevent wrapping for horizontal scroll
+
+  > * {
+    flex-shrink: 0; // Prevent items from shrinking
+    scroll-snap-align: start;
+  }
 }
 
 // Responsive adjustments
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .machine-row {
     justify-content: flex-start;
+    padding-left: clamp(10px, 3vw, 20px);
+    padding-right: clamp(10px, 3vw, 20px);
+  }
+
+  .controls {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+
+    button {
+      width: 100%;
+      max-width: 280px;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .coffee-queen-game {
+    padding: clamp(5px, 2vw, 10px);
+  }
+
+  .controls button {
+    padding: 12px 16px;
+    font-size: 14px;
   }
 }
 </style>

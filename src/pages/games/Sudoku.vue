@@ -92,7 +92,9 @@ const isSelected = (r: number, c: number) => {
 const shouldHighlight = (val: number) => {
   // Highlight all cells containing the same number as the selected one (if not 0)
   if (!selected.value || val === 0) return false
-  const selectedVal = displayBoard.value[selected.value.r][selected.value.c].value
+  const selectedCell = displayBoard.value[selected.value.r]?.[selected.value.c]
+  if (!selectedCell) return false
+  const selectedVal = selectedCell.value
   return selectedVal !== 0 && selectedVal === val
 }
 
@@ -100,7 +102,8 @@ const inputNumber = (num: number) => {
   if (!selected.value) return
 
   const { r, c } = selected.value
-  const cell = displayBoard.value[r][c]
+  const cell = displayBoard.value[r]?.[c]
+  if (!cell) return
 
   if (cell.isFixed) return // Cannot edit fixed cells
 
@@ -117,14 +120,18 @@ const inputNumber = (num: number) => {
 }
 
 const validateCellInstant = (r: number, c: number) => {
-  const cell = displayBoard.value[r][c]
+  const cell = displayBoard.value[r]?.[c]
+  if (!cell) return
+
   if (cell.value === 0) {
     cell.isError = false
     return
   }
   // Compare against the pre-generated solution for 100% accuracy
-  const correctVal = fullSolution.value[r][c]
-  cell.isError = cell.value !== correctVal
+  const correctVal = fullSolution.value[r]?.[c]
+  if (correctVal !== undefined) {
+    cell.isError = cell.value !== correctVal
+  }
 }
 
 const checkWinCondition = () => {
@@ -136,8 +143,10 @@ const checkWinCondition = () => {
   let isWon = true
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
-      const cell = displayBoard.value[r][c]
-      const correct = fullSolution.value[r][c]
+      const cell = displayBoard.value[r]?.[c]
+      const correct = fullSolution.value[r]?.[c]
+      if (!cell || correct === undefined) continue
+
       if (cell.value !== correct) {
         cell.isError = true
         isWon = false

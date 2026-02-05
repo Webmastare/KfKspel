@@ -377,47 +377,76 @@ const emitClose = (): void => {
   height: 100%;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   z-index: 200;
   font-family: 'Courier New', Courier, monospace;
   background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: clamp(10px, 3vh, 20px);
+  box-sizing: border-box;
 }
 
 .shop-modal {
   position: relative;
-  padding: 20px;
+  padding: clamp(15px, 3vh, 20px);
   border-radius: 10px;
-  width: 600px;
-  max-height: 80vh;
+  width: min(600px, calc(100vw - 20px));
+  max-height: calc(100vh - 40px);
   overflow-y: auto;
   background: var(--coffee-bg-card);
   border: 1px solid var(--coffee-border-primary);
   color: var(--coffee-text-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  margin: auto 0;
+
+  // Custom scrollbar for modal content
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--coffee-border-secondary);
+    border-radius: 4px;
+  }
 }
 
 h2 {
   text-align: center;
   margin-top: 0;
-  margin-bottom: 20px;
+  margin-bottom: clamp(15px, 3vh, 20px);
   color: var(--coffee-text-secondary);
+  font-size: clamp(1.2rem, 4vw, 1.5rem);
 }
 
 .category-tabs {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: clamp(5px, 2vw, 10px);
+  margin-bottom: clamp(15px, 3vh, 20px);
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .tab-button {
-  padding: 10px 20px;
+  padding: clamp(8px, 2vw, 10px) clamp(12px, 3vw, 20px);
   border-radius: 8px;
   border: 1px solid var(--coffee-border-primary);
   background: var(--coffee-button-bg);
   color: var(--coffee-button-text);
   cursor: pointer;
   transition: all 0.3s ease;
+  font-size: clamp(12px, 2.5vw, 14px);
+  white-space: nowrap;
+  min-height: 44px; // Touch target minimum
+  display: flex;
+  align-items: center;
 
   &:hover {
     background: var(--coffee-button-hover);
@@ -440,19 +469,23 @@ h2 {
 .shop-items {
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  margin-bottom: 20px;
+  gap: clamp(10px, 2vh, 15px);
+  margin-bottom: clamp(15px, 3vh, 20px);
 }
 
 .shop-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 15px;
+  align-items: stretch;
+  padding: clamp(10px, 2.5vh, 15px);
   border-radius: 8px;
   background: var(--coffee-bg-secondary);
   border: 1px solid var(--coffee-border-primary);
   transition: all 0.3s ease;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 12px;
+  }
 
   &:hover:not(.purchased) {
     transform: translateY(-2px);
@@ -468,6 +501,11 @@ h2 {
 .upgrade-details {
   flex: 1;
   margin-right: 15px;
+
+  @media (max-width: 768px) {
+    margin-right: 0;
+    margin-bottom: 0;
+  }
 }
 
 .upgrade-header {
@@ -475,32 +513,35 @@ h2 {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
 
   h3 {
     margin: 0;
-    font-size: 16px;
+    font-size: clamp(14px, 3vw, 16px);
     color: var(--coffee-text-primary);
   }
 
   .level-requirement {
-    font-size: 12px;
+    font-size: clamp(10px, 2vw, 12px);
     padding: 4px 8px;
     border-radius: 4px;
     background: var(--coffee-button-bg);
     color: var(--coffee-button-text);
+    white-space: nowrap;
   }
 }
 
 .description {
   margin: 5px 0;
-  font-size: 13px;
+  font-size: clamp(11px, 2.2vw, 13px);
   color: var(--coffee-text-secondary);
   line-height: 1.4;
 }
 
 .machine-name {
   margin: 5px 0 0 0;
-  font-size: 12px;
+  font-size: clamp(10px, 2vw, 12px);
   font-style: italic;
   color: var(--coffee-text-primary);
   opacity: 0.8;
@@ -511,25 +552,36 @@ h2 {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  min-width: 120px;
+  justify-content: center;
+
+  @media (max-width: 768px) {
+    flex-direction: row;
+    justify-content: space-between;
+    min-width: auto;
+    width: 100%;
+  }
 }
 
 .price-display {
-  font-size: 14px;
+  font-size: clamp(12px, 2.5vw, 14px);
   font-weight: bold;
   color: var(--coffee-text-secondary);
 }
 
 button {
-  padding: 8px 16px;
+  padding: clamp(6px, 1.5vh, 8px) clamp(12px, 3vw, 16px);
   border-radius: 5px;
   cursor: pointer;
   font-family: inherit;
   font-weight: bold;
-  font-size: 13px;
+  font-size: clamp(11px, 2.2vw, 13px);
   background-color: #4caf50;
   color: white;
   border: 2px solid #45a049;
   transition: all 0.3s ease;
+  min-height: 44px; // Touch target minimum
+  white-space: nowrap;
 
   &:hover:not(:disabled) {
     background-color: #45a049;
@@ -871,12 +923,87 @@ button {
 
 .close-button {
   display: block;
-  margin: 20px auto 0;
+  margin: clamp(15px, 3vh, 20px) auto 0;
   background-color: #f44336;
   border-color: #d32f2f;
+  width: 100%;
+  max-width: 200px;
+  padding: clamp(10px, 2vh, 12px) clamp(16px, 4vw, 24px);
 
   &:hover:not(:disabled) {
     background-color: #d32f2f;
+  }
+}
+
+// Mobile-specific adjustments
+@media (max-width: 768px) {
+  .shop-modal-overlay {
+    align-items: flex-start;
+    padding: 10px;
+  }
+
+  .shop-modal {
+    width: 100%;
+    max-width: 100vw;
+    border-radius: 8px;
+    margin-top: 0;
+  }
+
+  .category-tabs {
+    gap: 5px;
+
+    .tab-button {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+      padding: 8px 4px;
+    }
+  }
+
+  .manager-row {
+    padding: 12px;
+
+    .item-icon {
+      width: 32px;
+      height: 32px;
+      margin-right: 12px;
+    }
+  }
+
+  .level-info {
+    &.next {
+      flex-direction: column;
+      gap: 12px;
+    }
+  }
+
+  .level-actions {
+    min-width: auto;
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .shop-modal {
+    padding: 12px;
+    border-radius: 6px;
+  }
+
+  h2 {
+    font-size: 1.2rem;
+  }
+
+  .upgrade-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .category-tabs .tab-button {
+    font-size: 11px;
+    padding: 6px 3px;
   }
 }
 </style>

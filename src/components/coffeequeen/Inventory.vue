@@ -527,38 +527,60 @@ const saveManagerSettings = (itemKey: string): void => {
   height: 100%;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   z-index: 200;
   font-family: 'Courier New', Courier, monospace;
   background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: clamp(10px, 3vh, 20px);
+  box-sizing: border-box;
 }
 
 .shop-modal {
   position: relative;
-  padding: 20px;
+  padding: clamp(15px, 3vh, 20px);
   border-radius: 10px;
-  width: 500px;
-  max-height: 80vh;
+  width: min(500px, calc(100vw - 20px));
+  max-height: calc(100vh - 40px);
   overflow-y: auto;
   background: var(--coffee-bg-card);
   border: 1px solid var(--coffee-border-primary);
   color: var(--coffee-text-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  margin: auto 0;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--coffee-border-secondary);
+    border-radius: 4px;
+  }
 }
 
 .multi-action {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: clamp(15px, 3vh, 20px);
+  right: clamp(15px, 3vh, 20px);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 5px;
   text-align: center;
+  z-index: 10;
 
   p {
     margin: 0;
-    font-size: 14px;
+    font-size: clamp(12px, 2.5vw, 14px);
     font-weight: bold;
   }
 
@@ -566,10 +588,12 @@ const saveManagerSettings = (itemKey: string): void => {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
   }
 
   button {
-    padding: 5px 10px;
+    padding: clamp(4px, 1vh, 6px) clamp(8px, 2vw, 10px);
     background-color: #bb5705;
     color: white;
     border: none;
@@ -578,6 +602,8 @@ const saveManagerSettings = (itemKey: string): void => {
     font-family: inherit;
     font-weight: bold;
     min-width: 60px;
+    min-height: 32px;
+    font-size: clamp(11px, 2vw, 13px);
 
     &:hover {
       background-color: rgb(208, 114, 56);
@@ -585,14 +611,15 @@ const saveManagerSettings = (itemKey: string): void => {
   }
 
   .percentage-input {
-    width: 50px;
+    width: clamp(45px, 10vw, 60px);
     padding: 4px;
     border: 2px solid #bb5705;
     border-radius: 4px;
     text-align: center;
     font-family: inherit;
-    font-size: 12px;
+    font-size: clamp(11px, 2vw, 12px);
     color: var(--coffee-text-primary);
+    min-height: 24px;
 
     &:focus {
       outline: none;
@@ -616,46 +643,68 @@ const saveManagerSettings = (itemKey: string): void => {
 h2 {
   text-align: center;
   margin-top: 0;
-  margin-bottom: 20px;
+  margin-bottom: clamp(15px, 3vh, 20px);
+  font-size: clamp(1.2rem, 4vw, 1.5rem);
+  margin-right: 140px; // Space for multi-action controls
 }
 
 .shop-items {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: clamp(10px, 2vh, 15px);
 }
 
 .shop-item {
   display: flex;
-  align-items: center;
-  padding: 10px;
+  align-items: flex-start;
+  padding: clamp(8px, 2vh, 12px);
   border-radius: 8px;
   background: var(--coffee-bg-secondary);
   color: var(--coffee-text-primary);
+  gap: clamp(8px, 2vw, 15px);
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .item-icon {
-  width: 60px;
-  height: 60px;
-  margin-right: 15px;
+  width: clamp(50px, 8vw, 60px);
+  height: clamp(50px, 8vw, 60px);
+  flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    align-self: center;
+  }
 }
 
 .item-details {
   flex-grow: 1;
+  min-width: 0;
 
   h3 {
     margin: 0 0 -5px 0;
+    font-size: clamp(14px, 3vw, 16px);
   }
   p {
     padding: 0;
     margin: 0 0 5px 0;
-    font-size: 12px;
+    font-size: clamp(10px, 2.2vw, 12px);
+    word-break: break-word;
   }
 }
 
 .item-actions {
   display: flex;
-  gap: 15px;
+  gap: clamp(8px, 2vw, 15px);
+  flex-wrap: wrap;
+  align-items: center;
+
+  @media (max-width: 768px) {
+    justify-content: center;
+    width: 100%;
+  }
 }
 
 .action-group {
@@ -666,14 +715,14 @@ h2 {
 }
 
 .price-display {
-  font-size: 12px;
+  font-size: clamp(10px, 2vw, 12px);
   margin: 0;
   color: #f0f0f0;
   font-weight: bold;
 }
 
 button {
-  padding: 3px 10px;
+  padding: clamp(4px, 1vh, 6px) clamp(8px, 2vw, 12px);
   border-radius: 5px;
   cursor: pointer;
   font-family: inherit;
@@ -681,6 +730,9 @@ button {
   background-color: #4caf50;
   color: white;
   border: 2px solid #45a049;
+  min-height: 36px;
+  font-size: clamp(11px, 2.2vw, 13px);
+  white-space: nowrap;
 
   &:hover {
     background-color: #45a049;
@@ -699,9 +751,11 @@ button {
 
 .close-button {
   display: block;
-  margin: 20px auto 0;
+  margin: clamp(15px, 3vh, 20px) auto 0;
   background-color: #f44336;
   border-color: #d32f2f;
+  width: 100%;
+  max-width: 200px;
 
   &:hover {
     background-color: #d32f2f;
@@ -711,12 +765,13 @@ button {
 // Manager UI Styles
 .manager-status {
   margin-top: 4px;
-  font-size: 0.8rem;
+  font-size: clamp(0.7rem, 2vw, 0.8rem);
   color: #4caf50;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 
   .stats-button {
     background: none;
@@ -724,10 +779,11 @@ button {
     color: #4caf50;
     padding: 2px 6px;
     border-radius: 4px;
-    font-size: 0.7rem;
+    font-size: clamp(0.6rem, 1.5vw, 0.7rem);
     cursor: pointer;
     transition: all 0.2s ease;
     opacity: 0.8;
+    min-height: 28px;
 
     &:hover {
       opacity: 1;
@@ -739,7 +795,7 @@ button {
 
 .manager-settings {
   margin-top: 6px;
-  padding: 6px 8px;
+  padding: clamp(4px, 1vh, 6px) clamp(6px, 1.5vw, 8px);
   background-color: rgba(255, 255, 255, 0.03);
   border-radius: 4px;
   border: 1px solid rgba(76, 175, 80, 0.2);
@@ -747,15 +803,26 @@ button {
   .thresholds-row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: clamp(8px, 2vw, 12px);
     margin-bottom: 6px;
+    flex-wrap: wrap;
+
+    @media (max-width: 480px) {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
   }
 
   .threshold-group {
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 0.85rem;
+    font-size: clamp(0.75rem, 2vw, 0.85rem);
+
+    @media (max-width: 480px) {
+      justify-content: space-between;
+    }
 
     .threshold-toggle {
       background-color: rgba(255, 255, 255, 0.1);
@@ -763,10 +830,11 @@ button {
       border: 1px solid var(--coffee-border-primary);
       border-radius: 3px;
       padding: 2px 6px;
-      font-size: 0.8rem;
+      font-size: clamp(0.7rem, 1.8vw, 0.8rem);
       cursor: pointer;
       transition: all 0.2s;
       min-width: 40px;
+      min-height: 28px;
 
       &.active {
         background-color: rgba(76, 175, 80, 0.3);
@@ -791,14 +859,15 @@ button {
     }
 
     .threshold-input {
-      width: 45px;
+      width: clamp(35px, 8vw, 45px);
       padding: 2px 4px;
       border-radius: 3px;
       border: 1px solid var(--coffee-border-primary);
       background-color: var(--coffee-bg-card);
       color: var(--coffee-text-primary);
-      font-size: 0.8rem;
+      font-size: clamp(0.7rem, 1.8vw, 0.8rem);
       text-align: center;
+      min-height: 24px;
 
       &::placeholder {
         color: var(--coffee-text-secondary);
@@ -820,7 +889,7 @@ button {
     }
 
     .setting-note {
-      font-size: 0.7rem;
+      font-size: clamp(0.6rem, 1.5vw, 0.7rem);
       color: var(--coffee-text-secondary);
       font-style: italic;
       margin-left: 4px;
@@ -832,11 +901,12 @@ button {
     color: white;
     border: 1px solid #45a049;
     border-radius: 4px;
-    padding: 3px 8px;
-    font-size: 0.8rem;
+    padding: clamp(3px, 1vh, 6px) clamp(6px, 1.5vw, 8px);
+    font-size: clamp(0.7rem, 1.8vw, 0.8rem);
     cursor: pointer;
     transition: background-color 0.2s;
     width: 100%;
+    min-height: 32px;
 
     &:hover {
       background-color: #45a049;

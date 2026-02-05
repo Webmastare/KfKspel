@@ -228,16 +228,17 @@ function emitStart() {
   color: var(--coffee-text-primary);
   transition: all 0.3s ease;
   position: relative;
-  width: 200px;
-  /*height: 200px;*/
+  width: clamp(180px, 25vw, 220px);
+  min-height: clamp(200px, 30vh, 280px);
   border-radius: 8px;
-  padding: 10px;
+  padding: clamp(8px, 2vw, 12px);
   font-family: 'Courier New', Courier, monospace;
-  margin: 10px;
+  margin: clamp(5px, 1.5vw, 10px);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.4);
+  scroll-snap-align: start;
 }
 
 .machine-card.locked {
@@ -264,29 +265,31 @@ function emitStart() {
   .machine-icon {
     filter: grayscale(100%);
     opacity: 0.5;
-    width: 80px;
-    height: 80px;
+    width: clamp(60px, 12vw, 80px);
+    height: clamp(60px, 12vw, 80px);
     display: block;
-    margin: 0 auto 10px;
+    margin: 0 auto clamp(5px, 2vw, 10px);
   }
 
   .buy-section {
-    margin-top: 10px;
+    margin-top: clamp(8px, 2vw, 10px);
     p {
       margin: -5px 0;
-      font-size: 13px;
+      font-size: clamp(11px, 2.2vw, 13px);
       font-weight: bold;
       color: white;
     }
     button {
       margin-top: 5px;
-      padding: 5px 10px;
-      font-size: 14px;
+      padding: clamp(6px, 1.5vw, 8px) clamp(8px, 2vw, 10px);
+      font-size: clamp(12px, 2.5vw, 14px);
       border-radius: 4px;
       cursor: pointer;
       background-color: #4caf50;
       color: white;
       border: 2px solid #45a049;
+      min-height: 36px;
+      width: 100%;
 
       &:hover {
         background-color: #45a049;
@@ -303,17 +306,18 @@ function emitStart() {
 
 .stats-container {
   position: absolute;
-  top: 5px;
-  right: 5px;
+  top: clamp(3px, 1vw, 5px);
+  right: clamp(3px, 1vw, 5px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: clamp(8px, 2vw, 10px);
+  z-index: 10;
 
   .stats-button {
-    padding: 5px 10px;
+    padding: clamp(3px, 1vw, 5px) clamp(6px, 1.5vw, 10px);
     cursor: pointer;
-    font-size: 12px;
+    font-size: clamp(10px, 2vw, 12px);
     border-radius: 4px;
     background: var(--coffee-button-bg);
     color: var(--coffee-button-text);
@@ -329,9 +333,9 @@ function emitStart() {
     top: 100%;
     right: 0;
     border-radius: 8px;
-    padding: 5px;
+    padding: clamp(4px, 1vw, 6px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    width: 170px;
+    width: clamp(140px, 25vw, 170px);
     opacity: 0;
     visibility: hidden;
     transform: translateY(-10px);
@@ -348,21 +352,23 @@ function emitStart() {
     }
     span {
       display: block;
-      font-size: 11px;
+      font-size: clamp(9px, 1.8vw, 11px);
+      margin-bottom: 2px;
     }
   }
 }
 
 .status {
   position: absolute;
-  top: 5px;
-  left: 5px;
-  font-size: 10px;
+  top: clamp(3px, 1vw, 5px);
+  left: clamp(3px, 1vw, 5px);
+  font-size: clamp(8px, 1.5vw, 10px);
   font-weight: 900;
   padding: 2px 6px;
   border-radius: 4px;
   background-color: #d13232d5;
   color: white;
+  z-index: 10;
 }
 
 .status-active {
@@ -370,21 +376,21 @@ function emitStart() {
 }
 
 .machine-icon {
-  width: 80px;
-  height: 80px;
+  width: clamp(60px, 12vw, 80px);
+  height: clamp(60px, 12vw, 80px);
   display: block;
-  margin: 0 auto 10px;
+  margin: clamp(15px, 3vw, 20px) auto clamp(8px, 2vw, 10px);
 }
 
 .machine-header {
   text-align: center;
   font-weight: bold;
-  font-size: 14px;
-  margin-top: -15px;
-  margin-bottom: 5px;
+  font-size: clamp(12px, 2.5vw, 14px);
+  margin-top: clamp(-12px, -2.5vw, -15px);
+  margin-bottom: clamp(4px, 1vw, 5px);
   p {
     margin: -5px 0;
-    font-size: 12px;
+    font-size: clamp(10px, 2vw, 12px);
   }
 }
 
@@ -394,7 +400,7 @@ function emitStart() {
   color: var(--coffee-text-primary);
   position: relative;
   width: 100%;
-  height: 12px;
+  height: clamp(10px, 2vh, 14px);
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 2px;
@@ -402,21 +408,26 @@ function emitStart() {
 
   p {
     position: absolute;
-    top: 60%;
+    top: 50%;
     left: 5%;
     transform: translate(0%, -50%);
     display: inline-block;
     margin: 0;
     height: auto;
-    font-size: 10px;
+    font-size: clamp(8px, 1.5vw, 10px);
     font-weight: bold;
     z-index: 2;
     white-space: nowrap;
+
+    @media (max-width: 480px) {
+      font-size: 7px;
+      left: 2%;
+    }
   }
 }
 
 .progress-bars-container {
-  margin-bottom: 8px;
+  margin-bottom: clamp(6px, 1.5vw, 8px);
 }
 
 .progress-bar-fill {
@@ -477,32 +488,59 @@ function emitStart() {
 .upgrade-buttons {
   display: flex;
   justify-content: space-between;
+  gap: clamp(4px, 1vw, 8px);
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    flex-direction: column;
+    gap: 4px;
+  }
 }
 
 .upgrade-button-container {
   position: relative;
+  flex: 1;
+  min-width: clamp(60px, 15vw, 80px);
 
   button {
     background: var(--coffee-button-bg);
     color: var(--coffee-button-text);
     border: 2px solid var(--coffee-button-border);
-    padding: 4px 4px;
-    font-size: 11px;
+    padding: clamp(3px, 1vw, 4px);
+    font-size: clamp(9px, 1.8vw, 11px);
     border-radius: 4px;
     cursor: pointer;
+    width: 100%;
+    min-height: 32px;
+    transition: all 0.2s ease;
+
+    &:hover:not(:disabled) {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      filter: grayscale(50%);
+    }
   }
 
   .tooltip {
     visibility: hidden;
-    width: 160px;
+    width: clamp(140px, 25vw, 160px);
     text-align: left;
     border-radius: 6px;
-    padding: 8px;
+    padding: clamp(6px, 1.5vw, 8px);
     position: absolute;
     z-index: 10;
     bottom: 125%;
     left: 50%;
-    margin-left: -80px;
+    margin-left: clamp(-70px, -12.5vw, -80px);
     opacity: 0;
     transition: opacity 0.3s;
     background: var(--coffee-bg-card);
@@ -511,7 +549,7 @@ function emitStart() {
 
     p {
       margin: 2px 0;
-      font-size: 11px;
+      font-size: clamp(9px, 1.8vw, 11px);
     }
   }
 
@@ -522,7 +560,7 @@ function emitStart() {
 }
 
 .manual-start-container {
-  margin: 8px 0;
+  margin: clamp(6px, 1.5vw, 8px) 0;
   text-align: center;
 }
 
@@ -530,13 +568,14 @@ function emitStart() {
   background: var(--coffee-button-bg);
   color: var(--coffee-button-text);
   border: 2px solid var(--coffee-button-border);
-  padding: 8px 16px;
-  font-size: 12px;
+  padding: clamp(6px, 1.5vw, 8px) clamp(12px, 3vw, 16px);
+  font-size: clamp(10px, 2vw, 12px);
   font-weight: bold;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-width: 80px;
+  min-width: clamp(60px, 15vw, 80px);
+  min-height: 36px;
 
   &:hover:not(:disabled) {
     filter: brightness(1.2);
@@ -567,6 +606,50 @@ function emitStart() {
   }
   100% {
     box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+  }
+}
+
+// Mobile-specific adjustments
+@media (max-width: 768px) {
+  .machine-card {
+    margin: 5px;
+    width: clamp(160px, 40vw, 180px);
+  }
+
+  .stats-dropdown {
+    width: 120px;
+    padding: 4px;
+
+    span {
+      font-size: 8px;
+      line-height: 1.2;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .machine-card {
+    width: 150px;
+    min-height: 180px;
+    padding: 8px;
+  }
+
+  .machine-icon {
+    width: 50px;
+    height: 50px;
+    margin: 10px auto 5px;
+  }
+
+  .machine-header {
+    font-size: 11px;
+
+    p {
+      font-size: 9px;
+    }
+  }
+
+  .progress-bar {
+    height: 10px;
   }
 }
 </style>
