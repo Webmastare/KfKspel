@@ -7,6 +7,7 @@ import LandingPage from "@/pages/LandingPage.vue";
 import Feedback from "@/pages/Feedback.vue";
 import FeedbackAdmin from "@/pages/FeedbackAdmin.vue";
 import gameRouter from "./gamesRouter";
+import projectRouter from "./projectRouter";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -27,6 +28,7 @@ const router = createRouter({
       component: FeedbackAdmin,
     },
     ...gameRouter,
+    ...projectRouter,
     {
       path: "/:pathMatch(.*)*",
       name: "not-found",

@@ -1,0 +1,572 @@
+<template>
+  <div class="machine-card" :class="{ locked: !machine.isOwned }">
+    <div v-if="machine.isOwned" class="machine-content">
+      <span :class="['status', { 'status-active': machine.isActive }]">
+        {{ machine.isActive ? 'Active' : 'Inactive' }}
+      </span>
+      <div class="stats-container" @mouseenter="showStats = true" @mouseleave="showStats = false">
+        <button class="stats-button">Stats</button>
+        <div class="stats-dropdown" :class="{ show: showStats }">
+          <span>Production: {{ getMachineProductionRate() }} u/s</span>
+          <span>Efficiency: {{ getMachineEfficiencyRate() }} u/s</span>
+          <span>Items Produced: {{ machine.itemsProduced }}</span>
+          <span>Bonus Items: {{ machine.bonusItems }}</span>
+        </div>
+      </div>
+
+      <div class="machine-body">
+        <img :src="machine.icon" :alt="machine.name" class="machine-icon" />
+
+        <div class="machine-header">
+          <span>{{ machine.name }}</span> <br />
+          <p>Batch Size: {{ machine.batchSize }}</p>
+        </div>
+
+        <!-- Manual start button for manual machines -->
+        <div v-if="machine.isManual" class="manual-start-container">
+          <button
+            @click="emitStart"
+            :disabled="!canStart"
+            class="manual-start-button"
+            :class="{ 'button-pulse': canStart }"
+          >
+            {{ machine.isRunning ? 'Running...' : 'Start' }}
+          </button>
+        </div>
+
+        <div class="progress-bars-container">
+          <div class="progress-bar">
+            <p>
+              Progress: <span>{{ (calculateProductionTimeLeft() / 1000).toFixed(1) }}s</span>
+            </p>
+            <div
+              class="progress-bar-fill"
+              :class="{ 'high-speed': isHighSpeedMode }"
+              :style="{ width: progressBarWidth }"
+            ></div>
+          </div>
+          <div class="progress-bar">
+            <p>Efficiency:</p>
+            <div
+              class="efficiency-bar-fill"
+              :class="{ 'high-speed': isHighSpeedMode }"
+              :style="{ width: efficiencyProgressBarWidth }"
+            ></div>
+          </div>
+        </div>
+
+        <div class="upgrade-buttons">
+          <div class="upgrade-button-container">
+            <button @click="emitUpgrade('speed')" :disabled="!canAffordSpeedUpgrade">
+              Speed: {{ machine.speedUpgrade }}
+            </button>
+            <div class="tooltip">
+              <p>Cost: ${{ machine.speedUpgradeCost }}</p>
+              <p>Current: {{ (machine.productionTime / 1000).toFixed(2) }}s</p>
+              <p>Next: {{ (nextSpeedTime / 1000).toFixed(2) }}s</p>
+            </div>
+          </div>
+          <div class="upgrade-button-container">
+            <button @click="emitUpgrade('efficiency')" :disabled="!canAffordEfficiencyUpgrade">
+              Efficiency: {{ machine.efficiencyUpgrade }}
+            </button>
+            <div class="tooltip">
+              <p>Cost: ${{ machine.efficiencyUpgradeCost }}</p>
+              <p>Current: {{ getEfficiency(false) }}</p>
+              <p>Next: {{ getEfficiency(true) }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-else class="locked-overlay">
+      <img :src="machine.icon" :alt="machine.name" class="machine-icon" />
+      <div class="machine-header">
+        <span>{{ machine.name }}</span>
+        <p>Batch Size: {{ machine.batchSize }}</p>
+      </div>
+      <div class="buy-section">
+        <p>Cost: ${{ machine.cost }}</p>
+        <p>Requires Level: {{ machine.levelRequired }}</p>
+        <button @click="emitBuy" :disabled="!canAffordMachine || !levelMet">
+          <span v-if="!levelMet">Level {{ machine.levelRequired }} Required</span>
+          <span v-else>Buy</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import type { UserMachine, MachineKey } from '@/components/coffeequeen/types'
+import {
+  calculateProductionTime,
+  calculateEfficiencyBonus,
+  calculateBatchSize,
+} from '@/components/coffeequeen/coffee-upgrade-calculations'
+import { machineDataList } from '@/components/coffeequeen/data-machines'
+
+interface Props {
+  machine: UserMachine
+  userMoney: number
+  userLevel: number
+}
+
+interface Emits {
+  (e: 'upgrade-machine', payload: { machineKey: MachineKey; upgradeType: string }): void
+  (e: 'buy-machine', machineKey: MachineKey): void
+  (e: 'start-machine', machineKey: MachineKey): void
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits<Emits>()
+
+const showStats = ref<boolean>(false)
+
+const progressBarWidth = computed(() => {
+  if (!props.machine.isOwned) return '0%'
+
+  // For very fast machines (< 0.1s), show continuous animation
+  if (props.machine.productionTime < 100) return '100%'
+
+  // Use the progressPercent directly - much simpler and more accurate!
+  const progress = Math.max(0, Math.min(1, props.machine.progressPercent || 0))
+  return `${progress * 100}%`
+})
+
+const calculateProductionTimeLeft = () => {
+  if (!props.machine.isOwned) return 0
+
+  const prodTime = props.machine.productionTime
+  const progress = Math.max(0, Math.min(1, props.machine.progressPercent || 0))
+  return prodTime * (1 - progress)
+}
+
+const efficiencyProgressBarWidth = computed(() => {
+  if (!props.machine.isOwned) return '0%'
+  const progress = Math.max(0, Math.min(1, props.machine.efficiencyProgress))
+  return `${progress * 100}%`
+})
+
+// Check if machine is in high-speed mode (< 0.1 seconds production time)
+const isHighSpeedMode = computed(() => {
+  return props.machine.isOwned && props.machine.productionTime < 100
+})
+
+const nextSpeedTime = computed(() => {
+  if (!props.machine.isOwned) return 0
+
+  // Get the base production time from the machine config
+  const machineConfig = machineDataList[props.machine.key as MachineKey]
+  const baseProductionTime = machineConfig?.productionTime || props.machine.productionTime
+
+  return calculateProductionTime(
+    props.machine.baseBatchSize,
+    props.machine.speedUpgrade + 1,
+    baseProductionTime,
+  )
+})
+
+const getEfficiency = (next: boolean): string => {
+  if (!props.machine.isOwned) return '0%'
+  const efficiencyLevel = props.machine.efficiencyUpgrade + (next ? 1 : 0)
+  const efficiencyBonus = calculateEfficiencyBonus(efficiencyLevel)
+  return (efficiencyBonus * 100).toFixed(1) + '%'
+}
+
+const getMachineProductionRate = () => {
+  if (!props.machine.isOwned) return '0.00'
+  const batchSize = props.machine.batchSize || 1
+  let timeInSeconds = props.machine.productionTime / 1000 // Convert milliseconds to seconds
+  return (batchSize / timeInSeconds).toFixed(2)
+}
+
+const getMachineEfficiencyRate = () => {
+  if (!props.machine.isOwned) return '0.00'
+  const batchSize =
+    props.machine.batchSize ||
+    calculateBatchSize(props.machine.baseBatchSize, props.machine.speedUpgrade)
+  const prodRate = batchSize / (props.machine.productionTime / 1000) // Production rate in units per second
+  const efficiencyBonus = calculateEfficiencyBonus(props.machine.efficiencyUpgrade)
+  return (prodRate * efficiencyBonus).toFixed(2)
+}
+
+const canAffordSpeedUpgrade = computed(
+  () => props.machine.isOwned && props.userMoney >= props.machine.speedUpgradeCost,
+)
+const canAffordEfficiencyUpgrade = computed(
+  () => props.machine.isOwned && props.userMoney >= props.machine.efficiencyUpgradeCost,
+)
+
+// For buying the machine
+const canAffordMachine = computed(() => props.userMoney >= props.machine.cost)
+const levelMet = computed(() => props.userLevel >= props.machine.levelRequired)
+
+// For manual start button
+const canStart = computed(() => {
+  return props.machine.isOwned && props.machine.isManual && !props.machine.isRunning
+})
+
+function emitUpgrade(type: string) {
+  emit('upgrade-machine', { machineKey: props.machine.key as MachineKey, upgradeType: type })
+}
+
+function emitBuy() {
+  emit('buy-machine', props.machine.key as MachineKey)
+}
+
+function emitStart() {
+  emit('start-machine', props.machine.key as MachineKey)
+}
+</script>
+
+<style scoped lang="scss">
+.machine-card {
+  background: var(--coffee-bg-card);
+  border: 2px solid var(--coffee-border-primary);
+  color: var(--coffee-text-primary);
+  transition: all 0.3s ease;
+  position: relative;
+  width: 200px;
+  /*height: 200px;*/
+  border-radius: 8px;
+  padding: 10px;
+  font-family: 'Courier New', Courier, monospace;
+  margin: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.machine-card.locked {
+  background-color: #a0a0a0;
+  border-color: #666;
+  justify-content: center;
+  align-items: center;
+}
+
+.machine-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.locked-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+
+  .machine-icon {
+    filter: grayscale(100%);
+    opacity: 0.5;
+    width: 80px;
+    height: 80px;
+    display: block;
+    margin: 0 auto 10px;
+  }
+
+  .buy-section {
+    margin-top: 10px;
+    p {
+      margin: -5px 0;
+      font-size: 13px;
+      font-weight: bold;
+      color: white;
+    }
+    button {
+      margin-top: 5px;
+      padding: 5px 10px;
+      font-size: 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      background-color: #4caf50;
+      color: white;
+      border: 2px solid #45a049;
+
+      &:hover {
+        background-color: #45a049;
+      }
+
+      &:disabled {
+        background-color: #a0a0a0;
+        border-color: #666;
+        cursor: not-allowed;
+      }
+    }
+  }
+}
+
+.stats-container {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+
+  .stats-button {
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 4px;
+    background: var(--coffee-button-bg);
+    color: var(--coffee-button-text);
+    border: 2px solid var(--coffee-button-border);
+
+    &:hover {
+      filter: brightness(1.2);
+    }
+  }
+
+  .stats-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    border-radius: 8px;
+    padding: 5px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    width: 170px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+    z-index: 1000;
+    background: var(--coffee-bg-card);
+    border: 1px solid var(--coffee-border-primary);
+    color: var(--coffee-text-primary);
+
+    &.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+    span {
+      display: block;
+      font-size: 11px;
+    }
+  }
+}
+
+.status {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: #d13232d5;
+  color: white;
+}
+
+.status-active {
+  background-color: #37c737cd;
+}
+
+.machine-icon {
+  width: 80px;
+  height: 80px;
+  display: block;
+  margin: 0 auto 10px;
+}
+
+.machine-header {
+  text-align: center;
+  font-weight: bold;
+  font-size: 14px;
+  margin-top: -15px;
+  margin-bottom: 5px;
+  p {
+    margin: -5px 0;
+    font-size: 12px;
+  }
+}
+
+.progress-bar {
+  background: var(--coffee-bg-secondary);
+  border-color: var(--coffee-border-primary);
+  color: var(--coffee-text-primary);
+  position: relative;
+  width: 100%;
+  height: 12px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 2px;
+  border: 1px solid;
+
+  p {
+    position: absolute;
+    top: 60%;
+    left: 5%;
+    transform: translate(0%, -50%);
+    display: inline-block;
+    margin: 0;
+    height: auto;
+    font-size: 10px;
+    font-weight: bold;
+    z-index: 2;
+    white-space: nowrap;
+  }
+}
+
+.progress-bars-container {
+  margin-bottom: 8px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background-color: #00ff00;
+  position: relative;
+  z-index: 1;
+
+  &.high-speed {
+    background: linear-gradient(
+      45deg,
+      #00ff00 25%,
+      #00cc00 25%,
+      #00cc00 50%,
+      #00ff00 50%,
+      #00ff00 75%,
+      #00cc00 75%,
+      #00cc00
+    );
+    background-size: 20px 20px;
+    animation: diagonal-move 0.5s linear infinite;
+    transition: none;
+  }
+}
+
+.efficiency-bar-fill {
+  height: 100%;
+  background-color: #ffc107;
+  position: relative;
+  z-index: 1;
+
+  &.high-speed {
+    background: linear-gradient(
+      45deg,
+      #ffc107 25%,
+      #ffb300 25%,
+      #ffb300 50%,
+      #ffc107 50%,
+      #ffc107 75%,
+      #ffb300 75%,
+      #ffb300
+    );
+    background-size: 20px 20px;
+    animation: diagonal-move 0.5s linear infinite;
+    transition: none;
+  }
+}
+
+@keyframes diagonal-move {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 20px 20px;
+  }
+}
+
+.upgrade-buttons {
+  display: flex;
+  justify-content: space-between;
+}
+
+.upgrade-button-container {
+  position: relative;
+
+  button {
+    background: var(--coffee-button-bg);
+    color: var(--coffee-button-text);
+    border: 2px solid var(--coffee-button-border);
+    padding: 4px 4px;
+    font-size: 11px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .tooltip {
+    visibility: hidden;
+    width: 160px;
+    text-align: left;
+    border-radius: 6px;
+    padding: 8px;
+    position: absolute;
+    z-index: 10;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -80px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    background: var(--coffee-bg-card);
+    border: 1px solid var(--coffee-border-primary);
+    color: var(--coffee-text-primary);
+
+    p {
+      margin: 2px 0;
+      font-size: 11px;
+    }
+  }
+
+  &:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+}
+
+.manual-start-container {
+  margin: 8px 0;
+  text-align: center;
+}
+
+.manual-start-button {
+  background: var(--coffee-button-bg);
+  color: var(--coffee-button-text);
+  border: 2px solid var(--coffee-button-border);
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 80px;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.2);
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    filter: grayscale(50%);
+  }
+
+  &.button-pulse {
+    animation: pulse 2s infinite;
+  }
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(76, 175, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+  }
+}
+</style>
