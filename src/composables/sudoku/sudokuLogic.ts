@@ -145,18 +145,24 @@ export function generateSudoku(
     const fullBoard = board.map((row) => [...row]);
 
     // 3. Remove digits to create puzzle
-    let attempts = difficultyPoints;
-    while (attempts > 0) {
-        let row = Math.floor(Math.random() * GRID_SIZE);
-        let col = Math.floor(Math.random() * GRID_SIZE);
-
-        while (board[row]?.[col] === 0) {
-            row = Math.floor(Math.random() * GRID_SIZE);
-            col = Math.floor(Math.random() * GRID_SIZE);
+    // Precompute all available cell positions
+    const availableCells: Array<{ row: number; col: number }> = [];
+    for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+            availableCells.push({ row: r, col: c });
         }
+    }
+
+    let removedCount = 0;
+    while (availableCells.length > 0 && removedCount < difficultyPoints) {
+        // Get next cell to try
+        const randomIndex = Math.floor(Math.random() * availableCells.length);
+        const cellPos = availableCells.splice(randomIndex, 1)[0]; // Remove from available
+
+        const { row, col } = cellPos!;
 
         const targetRow = board[row];
-        if (targetRow) {
+        if (targetRow && targetRow[col] !== 0) {
             const backup = targetRow[col];
             if (backup !== undefined) {
                 targetRow[col] = 0;
@@ -168,10 +174,11 @@ export function generateSudoku(
                 if (countSolutions(checkBoard) !== 1) {
                     targetRow[col] = backup;
                 } else {
-                    attempts--;
+                    removedCount++;
                 }
             }
         }
+        // Always remove this cell from future consideration regardless of outcome
     }
 
     return { full: fullBoard, puzzle: board };

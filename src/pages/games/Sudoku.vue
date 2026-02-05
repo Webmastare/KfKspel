@@ -7,6 +7,10 @@
           <input type="checkbox" v-model="instantCheck" />
           Instant Feedback
         </label>
+        <label>
+          <input type="checkbox" v-model="devMode" />
+          Dev Mode
+        </label>
         <button @click="newGame">New Game</button>
       </div>
     </div>
@@ -28,7 +32,10 @@
             }"
             @click="selectCell(rowIndex, colIndex)"
           >
-            {{ cell.value !== 0 ? cell.value : '' }}
+            <span class="cell-value">{{ cell.value !== 0 ? cell.value : '' }}</span>
+            <span v-if="devMode" class="solution-hint">{{
+              fullSolution[rowIndex]?.[colIndex] || ''
+            }}</span>
           </div>
         </div>
       </div>
@@ -37,15 +44,16 @@
         <button v-for="n in 9" :key="n" @click="inputNumber(n)">
           {{ n }}
         </button>
-        <button class="clear-btn" @click="inputNumber(0)">X</button>
+        <button class="clear-btn" @click="inputNumber(0)">✕</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { generateSudoku, isValid, type Board } from '@/composables/sudoku/sudokuLogic'
+import { useThemeStore } from '@/stores/theme'
 
 // Types
 interface CellState {
@@ -54,11 +62,15 @@ interface CellState {
   isError: boolean // Visual red flag
 }
 
+// Initialize theme store
+const themeStore = useThemeStore()
+
 // State
 const fullSolution = ref<Board>([])
 const displayBoard = ref<CellState[][]>([])
 const selected = ref<{ r: number; c: number } | null>(null)
 const instantCheck = ref(false)
+const devMode = ref(true)
 const gameContainer = ref<HTMLElement | null>(null)
 
 // -- Core Game Logic --
@@ -189,31 +201,43 @@ const handleKeydown = (e: KeyboardEvent) => {
 }
 
 onMounted(() => {
+  themeStore.init()
   newGame()
 })
 </script>
 
 <style scoped lang="scss">
-$border-color: #333;
-$border-light: #ccc;
-$cell-size: 50px;
-$highlight-color: #e2e8f0;
-$select-color: #bbdefb;
-$error-color: #ffcdd2;
-$fixed-text: #000;
-$user-text: #2c3e50; // A nice dark blue-ish grey
+// Import the centralized theme system
+@use '@/styles/theme.scss';
 
 .sudoku-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-family: 'Segoe UI', sans-serif;
-  outline: none; // Remove browser outline on focus
+  gap: 20px;
   padding: 20px;
+  max-width: 100vw;
+  min-height: 100vh;
+  background-color: var(--theme-bg-primary);
+  color: var(--theme-text-primary);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  outline: none;
+  transition:
+    background-color 0.3s,
+    color 0.3s;
 
   .header {
     text-align: center;
     margin-bottom: 20px;
+
+    h1 {
+      margin: 0 0 15px 0;
+      font-size: 3rem;
+      font-weight: bold;
+      color: var(--theme-modal-header);
+      text-shadow: var(--theme-shadow-sm);
+      transition: color 0.3s;
+    }
 
     .controls {
       display: flex;
@@ -221,104 +245,222 @@ $user-text: #2c3e50; // A nice dark blue-ish grey
       align-items: center;
       justify-content: center;
       margin-top: 10px;
+      flex-wrap: wrap;
+
+      label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--theme-sidebar-bg);
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        box-shadow: var(--theme-shadow-sm);
+        color: var(--theme-sidebar-text);
+        font-weight: 500;
+        transition: all 0.2s ease;
+
+        &:hover {
+          background: var(--theme-sidebar-bg-hover);
+          color: var(--theme-sidebar-text-on-dark);
+        }
+
+        input[type='checkbox'] {
+          accent-color: var(--theme-modal-header);
+          width: 16px;
+          height: 16px;
+        }
+      }
 
       button {
-        padding: 8px 16px;
-        background: #2c3e50;
-        color: white;
-        border: none;
-        border-radius: 4px;
+        color: var(--theme-button-primary-text);
+        padding: 0.75rem 1rem;
+        background: var(--theme-button-primary-bg);
+        border: 2px solid var(--theme-button-primary-border);
+        border-radius: 12px;
+        font-weight: 600;
         cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: var(--theme-shadow-sm);
+
         &:hover {
-          background: #34495e;
+          background: var(--theme-button-primary-hover);
+          transform: translateY(-1px);
+          box-shadow: var(--theme-shadow-md);
+        }
+
+        &:active {
+          transform: translateY(0);
         }
       }
     }
   }
 
+  .game-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
   .grid {
     display: grid;
-    // 9 rows
-    grid-template-rows: repeat(9, $cell-size);
-    border: 2px solid $border-color;
+    grid-template-rows: repeat(9, 50px);
+    border: 3px solid var(--theme-canvas-border);
+    border-radius: 12px;
+    overflow: hidden;
     user-select: none;
-    background: white;
+    background: var(--theme-sodoku-bg);
+    box-shadow: var(--theme-shadow-lg);
+    transition: all 0.3s;
   }
 
   .row {
     display: grid;
-    // 9 cols
-    grid-template-columns: repeat(9, $cell-size);
+    grid-template-columns: repeat(9, 50px);
   }
 
   .cell {
-    width: $cell-size;
-    height: $cell-size;
-    border-right: 1px solid $border-light;
-    border-bottom: 1px solid $border-light;
+    width: 50px;
+    height: 50px;
+    border-right: 1px solid var(--theme-sudoku-border);
+    border-bottom: 1px solid var(--theme-sudoku-border);
     display: flex;
     justify-content: center;
     align-items: center;
     font-size: 1.5rem;
+    font-weight: 600;
     cursor: pointer;
-    color: $user-text;
+    color: var(--theme-text-primary);
+    background: var(--theme-sudoku-bg);
+    transition: all 0.15s ease;
+    position: relative;
 
     // Subgrid (3x3) thick borders
     &.box-right {
-      border-right: 2px solid $border-color;
+      border-right: 2px solid var(--theme-sudoku-border);
     }
     &.box-bottom {
-      border-bottom: 2px solid $border-color;
+      border-bottom: 2px solid var(--theme-sudoku-border);
     }
-    // Last column/row doesn't need border (handled by container)
-    &:last-child {
+
+    // Remove border on last column/row cells
+    &:nth-child(9n) {
       border-right: none;
     }
 
     // States
     &.fixed {
       font-weight: bold;
-      color: $fixed-text;
-      background-color: #f8f9fa;
+      color: var(--theme-modal-header);
+      background-color: var(--theme-modal-border);
       cursor: default;
     }
 
     &.highlight {
-      background-color: $highlight-color;
+      background-color: var(--theme-sidebar-bg);
+      color: var(--theme-warning);
     }
 
     &.selected {
-      background-color: $select-color;
+      background: var(--theme-canvas-grid);
+      color: var(--theme-button-primary-text);
+      border: 2px solid var(--theme-canvas-glow);
+      transform: scale(0.95);
     }
 
     &.error {
-      background-color: $error-color;
-      color: #b71c1c;
+      background: linear-gradient(
+        135deg,
+        var(--theme-button-decline-bg),
+        var(--theme-button-decline-hover)
+      );
+      color: var(--theme-button-primary-text);
+      animation: shake 0.3s ease-in-out;
+    }
+
+    &:hover:not(.selected):not(.fixed) {
+      background-color: var(--theme-bg-elevated);
+      transform: scale(1.05);
+      box-shadow: var(--theme-shadow-sm);
+    }
+
+    .cell-value {
+      z-index: 2;
+    }
+
+    .solution-hint {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      font-size: 0.7rem;
+      font-weight: 400;
+      color: var(--theme-warning);
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 3px;
+      padding: 1px 3px;
+      line-height: 1;
+      z-index: 1;
+      opacity: 0.8;
     }
   }
 
   .numpad {
-    margin-top: 20px;
     display: flex;
-    gap: 5px;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 450px;
 
     button {
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 50px;
       font-size: 1.2rem;
-      background: white;
-      border: 1px solid $border-light;
-      border-radius: 4px;
+      font-weight: 600;
+      background: var(--theme-sidebar-bg);
+      color: var(--theme-sidebar-text);
+      border: 2px solid var(--theme-sidebar-border);
+      border-radius: 12px;
       cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: var(--theme-shadow-sm);
+
       &:hover {
-        background: #f0f0f0;
+        background: var(--theme-sidebar-bg-hover);
+        color: var(--theme-sidebar-text-on-dark);
+        transform: scale(1.05);
+        box-shadow: var(--theme-shadow-md);
+      }
+
+      &:active {
+        transform: scale(0.95);
       }
 
       &.clear-btn {
-        color: red;
+        background: var(--theme-button-decline-bg);
+        color: var(--theme-button-primary-text);
+        border: 2px solid var(--theme-button-decline-border);
         font-weight: bold;
+
+        &:hover {
+          background: var(--theme-button-decline-hover);
+          color: var(--theme-button-primary-text);
+        }
       }
     }
+  }
+}
+
+// Shake animation for errors
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
   }
 }
 </style>

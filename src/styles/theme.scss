@@ -113,6 +113,10 @@
   // Kfkbandvagn - Uses accent color
   --theme-canvas-kfkbandvagn-accent: #22c55e;
 
+  // Sudoku
+  --theme-sudoku-bg: #f5f5f5;
+  --theme-sudoku-border: #4a5568;
+
   // === Coffee Queen Game Colors ===
   // Background colors
   --coffee-bg-primary: #f5e7de;
@@ -244,16 +248,17 @@
   --theme-2048-tile-2: #3e3931;
   --theme-2048-tile-4: #3d3530;
   --theme-2048-board: #2d2520;
+  --theme-canvas-2048-bg: var(--theme-2048-board);
 
   // Lights Out
   --theme-light-on: #fde68a;
 
-  // === Game-Specific Variables ===
-  // 2048 - Uses different board background in dark mode
-  --theme-canvas-2048-bg: var(--theme-2048-board);
-
-  // Kfkbandvagn - Uses accent color
+  // Kfkbandvagn
   --theme-canvas-kfkbandvagn-accent: #34d399;
+
+  // Sudoku
+  --theme-sudoku-bg: #282828;
+  --theme-sudoku-border: #686c7a;
 
   // === Coffee Queen Game Colors (Dark Theme) ===
   // Background colors
