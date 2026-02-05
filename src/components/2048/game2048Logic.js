@@ -1,23 +1,3 @@
-export class Tile {
-  constructor(value = 0) {
-    this.value = value
-  }
-
-  draw(ctx, x, y, tileSize, gap, colors) {
-    const colorSet = colors[this.value] || colors.default
-    ctx.fillStyle = colorSet[0]
-    ctx.fillRect(x + gap, y + gap, tileSize - gap, tileSize - gap)
-
-    if (this.value > 0) {
-      ctx.fillStyle = this.value <= 4 ? '#776e65' : '#f9f6f2'
-      ctx.font = `${Math.floor(tileSize / 2.5)}px 'Segoe UI', Arial, sans-serif`
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(this.value, x + gap / 2 + tileSize / 2, y + gap / 2 + tileSize / 2)
-    }
-  }
-}
-
 export class Game2048Logic {
   constructor(canvas) {
     this.canvas = canvas
@@ -101,6 +81,29 @@ export class Game2048Logic {
     this.useClassicColors = useClassic
   }
 
+  drawTile(value, x, y, colors) {
+    const colorSet = colors[value] || colors.default
+    this.ctx.fillStyle = colorSet[0]
+    this.ctx.fillRect(
+      x + this.gap,
+      y + this.gap,
+      this.tileSize - this.gap,
+      this.tileSize - this.gap,
+    )
+
+    if (value > 0) {
+      this.ctx.fillStyle = value <= 4 ? '#776e65' : '#f9f6f2'
+      this.ctx.font = `${Math.floor(this.tileSize / 2.5)}px 'Segoe UI', Arial, sans-serif`
+      this.ctx.textAlign = 'center'
+      this.ctx.textBaseline = 'middle'
+      this.ctx.fillText(
+        value,
+        x + this.gap / 2 + this.tileSize / 2,
+        y + this.gap / 2 + this.tileSize / 2,
+      )
+    }
+  }
+
   setBoardSize(rows, columns) {
     this.rows = rows
     this.columns = columns
@@ -108,12 +111,8 @@ export class Game2048Logic {
   }
 
   initGame() {
-    // Ensure board is properly initialized
-    this.board = Array.from({ length: this.rows }, () =>
-      Array(this.columns)
-        .fill(null)
-        .map(() => new Tile()),
-    )
+    // Ensure board is properly initialized with raw values
+    this.board = Array.from({ length: this.rows }, () => Array(this.columns).fill(0))
     this.score = 0
 
     this.addRandomTile()
@@ -183,16 +182,14 @@ export class Game2048Logic {
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.columns; c++) {
-        if (this.board[r] && this.board[r][c]) {
-          const x = c * this.tileSize
-          const y = r * this.tileSize
-          const tileColors = {
-            ...colors,
-            0: [this.darkMode ? colors[0][1] : colors[0][0], colors[0][1]],
-            default: [this.darkMode ? colors.default[1] : colors.default[0], colors.default[1]],
-          }
-          this.board[r][c].draw(this.ctx, x, y, this.tileSize, this.gap, tileColors)
+        const x = c * this.tileSize
+        const y = r * this.tileSize
+        const tileColors = {
+          ...colors,
+          0: [this.darkMode ? colors[0][1] : colors[0][0], colors[0][1]],
+          default: [this.darkMode ? colors.default[1] : colors.default[0], colors.default[1]],
         }
+        this.drawTile(this.board[r][c], x, y, tileColors)
       }
     }
 
@@ -205,14 +202,14 @@ export class Game2048Logic {
     const emptyTiles = []
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.columns; c++) {
-        if (this.board[r][c].value === 0) {
+        if (this.board[r][c] === 0) {
           emptyTiles.push({ r, c })
         }
       }
     }
 
     if (emptyTiles.length === 0) {
-      const gameOver = this.checkGameOver()
+      const gameOver = this.isGameOver()
       if (gameOver && this.onGameOver) {
         this.onGameOver()
         return
@@ -221,32 +218,32 @@ export class Game2048Logic {
 
     if (emptyTiles.length > 0) {
       const { r, c } = emptyTiles[Math.floor(Math.random() * emptyTiles.length)]
-      this.board[r][c].value = Math.random() < 0.9 ? 2 : 4
+      this.board[r][c] = Math.random() < 0.9 ? 2 : 4
     }
   }
 
-  checkGameOver() {
+  // Method to check game over
+  isGameOver(boardValues = this.board, rows = this.rows, columns = this.columns) {
     // Check if there are any empty tiles
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.columns; c++) {
-        if (this.board[r][c].value === 0) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < columns; c++) {
+        if (boardValues[r][c] === 0) {
           return false
         }
       }
     }
 
     // Check for possible merges
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.columns; c++) {
-        const currentTile = this.board[r][c].value
-
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < columns; c++) {
+        const currentValue = boardValues[r][c]
         // Check right neighbor
-        if (c < this.columns - 1 && currentTile === this.board[r][c + 1].value) {
+        if (c < columns - 1 && currentValue === boardValues[r][c + 1]) {
           return false
         }
 
         // Check bottom neighbor
-        if (r < this.rows - 1 && currentTile === this.board[r + 1][c].value) {
+        if (r < rows - 1 && currentValue === boardValues[r + 1][c]) {
           return false
         }
       }
@@ -256,17 +253,17 @@ export class Game2048Logic {
   }
 
   slide(row) {
-    const filteredRow = row.filter((tile) => tile.value !== 0)
+    const filteredRow = row.filter((value) => value !== 0)
     for (let i = 0; i < filteredRow.length - 1; i++) {
-      if (filteredRow[i].value === filteredRow[i + 1].value) {
-        filteredRow[i].value *= 2
-        this.score += filteredRow[i].value
-        filteredRow[i + 1].value = 0
+      if (filteredRow[i] === filteredRow[i + 1]) {
+        filteredRow[i] *= 2
+        this.score += filteredRow[i]
+        filteredRow[i + 1] = 0
       }
     }
-    const newRow = filteredRow.filter((tile) => tile.value !== 0)
+    const newRow = filteredRow.filter((value) => value !== 0)
     while (newRow.length < this.columns) {
-      newRow.push(new Tile())
+      newRow.push(0)
     }
     return newRow
   }
@@ -315,13 +312,17 @@ export class Game2048Logic {
     this.drawBoard()
   }
 
-  saveGame() {
-    const gameState = {
-      board: this.board.map((row) => row.map((tile) => tile.value)),
+  getGameState() {
+    return {
+      board: this.board,
       score: this.score,
       rows: this.rows,
       columns: this.columns,
     }
+  }
+
+  saveGame() {
+    const gameState = this.getGameState()
     localStorage.setItem('2048GameState', JSON.stringify(gameState))
   }
 
@@ -333,7 +334,7 @@ export class Game2048Logic {
         this.rows = gameState.rows
         this.columns = gameState.columns
         this.score = gameState.score
-        this.board = gameState.board.map((row) => row.map((value) => new Tile(value)))
+        this.board = gameState.board
         this.resizeBoard()
         return gameState
       } catch (error) {

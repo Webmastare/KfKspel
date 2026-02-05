@@ -43,7 +43,6 @@ export class ånger
 
             //lägg tillbaks kort i en hög
             case 0:
-                console.log(0);
                 this.kort.högstSynlig();
                 this.kort.läggMigLängstUppInteract();
                 this.kort.removeParent();
@@ -57,7 +56,6 @@ export class ånger
 
             //lägg tillbaks kort i spawn
             case 1:
-                console.log(1);
                 let kortiHög = this.kort.jagÄrIbehållare();
 
                 this.kort.högstSynlig();
@@ -79,7 +77,6 @@ export class ånger
             break;
 
             case 2:
-                console.log(this.kort);
                 this.kort.högstSynlig();
                 this.kort.läggMigLängstUppInteract();
                 if(this.kort.hasparent){
@@ -110,7 +107,6 @@ export class ånger
 
             case 3:
                 if(spawn.liggandekort.length === 0){
-                    console.log('noll liggande kort');
                     let längd = spawn.lek.allakort.length;
                     for(let i = 0; i < längd; i++){
                         
@@ -126,7 +122,7 @@ export class ånger
                 else{
                     if(difficulty === 'easy'){
                         let nukort = spawn.liggandekort.shift();
-                        console.log(nukort);
+                        
                         nukort.vänd();
                         nukort.moveTill(spawn.position, spawnare.cardMoveTime);
                         spawn.lek.allakort.unshift(nukort);
@@ -141,7 +137,7 @@ export class ånger
                         
                         for(let i = 0; i < this.kort; i++){
                             let nukort = spawn.liggandekort.shift();
-                            console.log(nukort);
+                            
                             nukort.vänd();
                             nukort.moveTill(spawn.position, spawnare.cardMoveTime);
                             spawn.lek.allakort.unshift(nukort);

@@ -46,7 +46,6 @@ class kontinuerliga {
     //setInterval(this.därRörelseHänder, updatetime);
     setInterval(async () => {
       if (kör) {
-        console.log('tillbaks')
         return
       }
 
@@ -126,7 +125,6 @@ class kontinuerliga {
   }
 
   static drawGameObject(listan) {
-    console.log(listan)
     //allt som ritas är ett gameobject, minns det
     for (let i = 0; i < listan.length; i++) {
       let nuvarande = listan[i]
@@ -203,7 +201,6 @@ class kontinuerliga {
   //musnerfunktioner
   static Musner(event) {
     if (event.button === 0) {
-      console.log('kollar klickande')
       Vemklickades()
     }
   }
@@ -218,18 +215,17 @@ class kontinuerliga {
 
   //tangentbordsgrejer
   static knappner(event) {
-    /*        
-        if(event.key === 'a'){
-            krrrr = !krrrr;
-        }
+           
+    if(event.key === 'a'){
+      krrrr = !krrrr;
+    }
 
-        if(event.key === 's'){
-            sant = false;
-        }
-        */
+    if(event.key === 's'){
+      sant = false;
+    }
+        
 
     fuskaktivering(event)
-    console.log(behållare.allabehållare)
   }
 }
 
@@ -244,9 +240,7 @@ function fuskaktivering(event) {
 
   if (fuskord === lösenord) {
     //Fusk.LäggAllaLätt();
-    console.log('startar fusk')
     Uskare.StartaFusk()
-    console.log('wekfkiakjf')
   } else if (fuskord === delord) {
   } else {
     fuskord = ''
@@ -355,7 +349,6 @@ function sleep(ms) {
 }
 
 async function kollar() {
-  console.log('kolar')
   await sleep(300)
 }
 //kanske prova att lägga en "jobbar på" variabel, så att animationsobjektet
@@ -383,6 +376,8 @@ class Animation {
   }
 
   moveStraightTo(mål, tid) {
+    console.log('kom till animationsklassen');
+    console.log(this.objekt);
     if (Animation.straight.indexOf(this) !== -1) {
       //console.log('den fanns redan');
       let index = Animation.straight.indexOf(this)
@@ -418,6 +413,10 @@ class Animation {
 
     let animationslängden = Animation.straight.length
 
+    if(krrrr){
+      console.log(Animation.straight);
+    }
+    
     for (let i = 0; i < animationslängden && rörelsebarn; i++) {
       let nuvarande = Animation.straight[i]
       let nuvarandeObjekt = nuvarande.objekt
@@ -738,7 +737,6 @@ class GameObject {
   }
 
   removeParent() {
-    console.log('removed parent')
     this.parent.child = undefined
     this.parent.haschild = false
 

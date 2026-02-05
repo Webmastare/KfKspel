@@ -7,11 +7,13 @@ import type {
     OfflineProductionSummary,
     SavedGameData,
     User,
+    SalesManager,
 } from "./types";
 import {
     calculateBatchSize,
     calculateEfficiencyBonus,
 } from "./coffee-upgrade-calculations";
+import { calculateInventoryMultiplier, getSalesManagerLevelConfig } from "./data-upgrades";
 
 import { normalizeBucketsForAllTimeScales } from "@/composables/coffeequeen/statsManager";
 
@@ -20,15 +22,6 @@ let statsManagerRef: any = null;
 
 export function setStatsManagerReference(statsManager: any) {
     statsManagerRef = statsManager;
-    console.log('🔗 Stats manager reference set in save/load module');
-    console.log('Stats manager ref check:', {
-        exists: !!statsManagerRef,
-        hasValue: !!(statsManagerRef && statsManagerRef.value),
-        currentBuckets: statsManagerRef && statsManagerRef.value ? {
-            tenSeconds: statsManagerRef.value.tenSeconds?.length || 0,
-            oneMinute: statsManagerRef.value.oneMinute?.length || 0
-        } : 'no value'
-    });
 }
 
 // --- OFFLINE PROGRESS CALCULATION ---
@@ -50,12 +43,32 @@ function simulateOfflineProgress(
 
     // Create a deep copy of the user state to avoid modifying the original during simulation
     const simUser: User = JSON.parse(JSON.stringify(user));
+    console.log('Raw coffee beans before simulation:', simUser.inventory['rawCoffeeBeans']);
+
+    // Ensure all inventory items have proper capacity based on current upgrades
+    const inventoryMultiplier = calculateInventoryMultiplier(user.upgrades.inventory);
+    for (const itemKey in simUser.inventory) {
+        const inventoryItem = simUser.inventory[itemKey];
+        const itemInfo = itemData[itemKey as ItemKey];
+        if (inventoryItem && itemInfo) {
+            inventoryItem.capacity = Math.floor(itemInfo.defaultCapacity * inventoryMultiplier);
+            // Also ensure starting inventory doesn't exceed capacity (edge case for old saves)
+            if (inventoryItem.amount > inventoryItem.capacity) {
+                inventoryItem.amount = inventoryItem.capacity;
+            }
+        }
+    }
+    console.log('Raw coffee beans before simulation, checked:', simUser.inventory['rawCoffeeBeans']);
+
 
     console.log(
         `Simulating offline progress for ${
             offlineTimeMS / 1000
         } seconds using time-stepped simulation.`,
     );
+
+    // We cap the offline time to 1 hour (3,600,000 ms) Upgradeable in the future
+    offlineTimeMS = Math.min(offlineTimeMS, 3600000);
 
     // Use a time step of 100ms for fast but accurate simulation
     const timeStepMS = 100;
@@ -65,123 +78,317 @@ function simulateOfflineProgress(
         // Process all machines in this time step (similar to game loop)
         for (const machineKey in simUser.machines) {
             const machine = simUser.machines[machineKey];
-            if (!machine) continue;
-
             const machineConf = machinesConfig[machineKey as MachineKey];
-            if (!machineConf) continue;
+
+            if (!machine || !machine.isOwned || !machineConf) continue;
+            
+            // Skip manual machines during offline simulation
+            if (machine.isManual) continue;
 
             // Check if the machine is active
             if (!machine.isActive) {
-                continue;
+                const batchSize = machine.batchSize || calculateBatchSize(machineConf.baseBatchSize, machine.speedUpgrade);
+                const usesItemKey = machineConf.uses as ItemKey;
+                const usesInventory = usesItemKey ? simUser.inventory[usesItemKey] : null;
+                const availableAmount = usesInventory?.amount || 0;
+
+                // Check if we have enough input materials
+                const hasEnoughInputs = usesInventory ? availableAmount >= batchSize : true;
+
+                // Check if there's enough space in output inventory
+                const producesItemKey = machineConf.produces as ItemKey;
+                let outputInventory = simUser.inventory[producesItemKey];
+
+                // If output inventory doesn't exist, create it with proper capacity
+                if (!outputInventory) {
+                    const itemInfo = itemData[producesItemKey];
+                    const inventoryMultiplier = calculateInventoryMultiplier(user.upgrades.inventory);
+                    simUser.inventory[producesItemKey] = {
+                        name: itemInfo.name,
+                        icon: itemInfo.icon,
+                        amount: 0,
+                        cost: itemInfo.cost,
+                        basePrice: itemInfo.basePrice,
+                        sellMultiplier: itemInfo.sellMultiplier,
+                        capacity: Math.floor(itemInfo.defaultCapacity * inventoryMultiplier),
+                    };
+                    outputInventory = simUser.inventory[producesItemKey];
+                }
+
+                // Reactivate machine if all conditions are met
+                if (hasEnoughInputs) {
+                    machine.isActive = true;
+                } else {
+                    continue; // Skip to next machine if not active
+                }
             }
 
-            // Update production progress
             if (machine.progressPercent < 1) {
-                const deltaTime = timeStepMS;
-                const productionTime = machine.productionTime;
+                // Calculate progress per millisecond based on current production time
+                const progressPerMS = 1 / machine.productionTime;
+                const progressThisFrame = timeStepMS * progressPerMS;
 
-                if (productionTime > 0) {
-                    const progress = deltaTime / productionTime;
-                    machine.progressPercent = Math.min(
-                        1,
-                        machine.progressPercent + progress,
-                    );
+                // Update progress
+                machine.progressPercent += progressThisFrame;
 
-                    // Update efficiency progress
-                    if (machine.efficiencyUpgrade > 0) {
-                        const efficiencyBonus = calculateEfficiencyBonus(
-                            machine.efficiencyUpgrade,
-                        );
-                        const efficiencyProgress = progress * efficiencyBonus;
-                        machine.efficiencyProgress = Math.min(
-                            1,
-                            machine.efficiencyProgress + efficiencyProgress,
-                        );
+                // Update efficiency progress gradually during production
+                if (machine.efficiencyUpgrade > 0) {
+                    const totalEfficiencyBonus = calculateEfficiencyBonus(machine.efficiencyUpgrade);
+                    const efficiencyGainThisFrame = totalEfficiencyBonus * progressThisFrame;
+                    machine.efficiencyProgress += efficiencyGainThisFrame;
+
+                    // Check if we've accumulated enough for bonus items
+                    if (machine.efficiencyProgress >= 1) {
+                        const numberOfBonusItems = Math.floor(machine.efficiencyProgress) * machine.batchSize;
+                        const producesItemKey = machineConf.produces as ItemKey;
+
+                        // Ensure inventory item exists
+                        if (!simUser.inventory[producesItemKey]) {
+                            const itemInfo = itemData[producesItemKey];
+                            const inventoryMultiplier = calculateInventoryMultiplier(user.upgrades.inventory);
+                            simUser.inventory[producesItemKey] = {
+                                name: itemInfo.name,
+                                icon: itemInfo.icon,
+                                amount: 0,
+                                cost: itemInfo.cost,
+                                basePrice: itemInfo.basePrice,
+                                sellMultiplier: itemInfo.sellMultiplier,
+                                capacity: Math.floor(itemInfo.defaultCapacity * inventoryMultiplier),
+                            };
+                        }
+
+                        // Check if adding bonus items would exceed capacity
+                        const inventoryItem = simUser.inventory[producesItemKey];
+                        const availableSpace = inventoryItem.capacity - inventoryItem.amount;
+                        const itemsToAdd = Math.min(numberOfBonusItems, availableSpace);
+                        const itemsLost = numberOfBonusItems - itemsToAdd;
+
+                        if (itemsToAdd > 0) {
+                            inventoryItem.amount += itemsToAdd;
+                            
+                            // Track production for summary
+                            if (!productionSummary[producesItemKey]) {
+                                productionSummary[producesItemKey] = { amount: 0, bonusAmount: 0 };
+                            }
+                            productionSummary[producesItemKey].amount += itemsToAdd;
+                            productionSummary[producesItemKey].bonusAmount += itemsToAdd;
+                        }
+
+                        // Track items lost to capacity
+                        if (itemsLost > 0) {
+                            if (!productionSummary[producesItemKey]) {
+                                productionSummary[producesItemKey] = { amount: 0, bonusAmount: 0 };
+                            }
+                            if (!productionSummary[producesItemKey].itemsLostToCapacity) {
+                                productionSummary[producesItemKey].itemsLostToCapacity = 0;
+                            }
+                            productionSummary[producesItemKey].itemsLostToCapacity! += itemsLost;
+                        }
+
+                        machine.efficiencyProgress -= Math.floor(machine.efficiencyProgress);
                     }
                 }
             }
 
-            // If production cycle is complete
             if (machine.progressPercent >= 1) {
-                // Calculate actual production
-                let itemsProduced = machine.batchSize || 1;
+                // Production complete - produce main items based on batch size
+                const batchSize = machine.batchSize || 1;
+                const producesItemKey = machineConf.produces as ItemKey;
 
-                // Add efficiency bonus items
-                if (machine.efficiencyProgress >= 1) {
-                    const efficiencyBonus = calculateEfficiencyBonus(
-                        machine.efficiencyUpgrade,
-                    );
-                    const bonusItems = Math.floor(
-                        itemsProduced * efficiencyBonus,
-                    );
-                    itemsProduced += bonusItems;
-                    machine.efficiencyProgress = 0; // Reset efficiency progress
+                // Ensure inventory item exists
+                if (!simUser.inventory[producesItemKey]) {
+                    const itemInfo = itemData[producesItemKey];
+                    const inventoryMultiplier = calculateInventoryMultiplier(user.upgrades.inventory);
+                    simUser.inventory[producesItemKey] = {
+                        name: itemInfo.name,
+                        icon: itemInfo.icon,
+                        amount: 0,
+                        cost: itemInfo.cost,
+                        basePrice: itemInfo.basePrice,
+                        sellMultiplier: itemInfo.sellMultiplier,
+                        capacity: Math.floor(itemInfo.defaultCapacity * inventoryMultiplier),
+                    };
                 }
 
-                // Check if we have input materials
-                const inputItem = machine.uses;
-                let canProduce = true;
+                // Consume item inputs
+                const usesItemKey = machineConf.uses as ItemKey;
+                const usesInventory = usesItemKey ? simUser.inventory[usesItemKey] : null;
+                const availableAmount = usesInventory?.amount || 0;
 
-                if (inputItem && simUser.inventory[inputItem as ItemKey]) {
-                    const inventoryItem =
-                        simUser.inventory[inputItem as ItemKey];
-                    if (inventoryItem) {
-                        const available = inventoryItem.amount;
-                        const needed = itemsProduced;
+                // Check if adding batch would exceed capacity
+                const inventoryItem = simUser.inventory[producesItemKey];
+                const availableSpace = inventoryItem.capacity - inventoryItem.amount;
+                const itemsToAdd = Math.min(batchSize, availableSpace);
+                const itemsLost = batchSize - itemsToAdd;
 
-                        if (available >= needed) {
-                            inventoryItem.amount -= needed;
-                        } else {
-                            canProduce = false;
-                        }
-                    } else {
-                        canProduce = false;
-                    }
-                }
-
-                if (canProduce) {
-                    // Produce output items
-                    const outputItem = machine.produces as ItemKey;
-                    if (!simUser.inventory[outputItem]) {
-                        const itemInfo = itemData[outputItem];
-                        simUser.inventory[outputItem] = {
-                            name: itemInfo.name,
-                            icon: itemInfo.icon,
-                            amount: 0,
-                            cost: itemInfo.cost,
-                            basePrice: itemInfo.basePrice,
-                            sellMultiplier: itemInfo.sellMultiplier,
-                        };
-                    }
-
-                    simUser.inventory[outputItem].amount += itemsProduced;
-
+                if (itemsToAdd > 0) {
+                    inventoryItem.amount += itemsToAdd;
+                    
                     // Track production for summary
-                    if (!productionSummary[outputItem]) {
-                        productionSummary[outputItem] = { amount: 0 };
+                    if (!productionSummary[producesItemKey]) {
+                        productionSummary[producesItemKey] = { amount: 0, bonusAmount: 0 };
                     }
-                    productionSummary[outputItem].amount += itemsProduced;
+                    productionSummary[producesItemKey].amount += itemsToAdd;
 
-                    // Gain experience
-                    const experienceGain = itemsProduced * 10; // 10 XP per item
-                    simUser.experience += experienceGain;
-                    totalExperienceGained += experienceGain;
+                    // Award XP for items actually added
+                    simUser.experience += itemsToAdd;
+                    totalExperienceGained += itemsToAdd;
+
+                    // Only consume inputs if we were able to produce otherwise no inputs are consumed
+                    if (usesInventory && availableAmount >= batchSize) {
+                        usesInventory.amount -= batchSize;
+                    } 
                 }
 
-                // Reset production progress
+                // Track items lost to capacity
+                if (itemsLost > 0) {
+                    if (!productionSummary[producesItemKey]) {
+                        productionSummary[producesItemKey] = { amount: 0, bonusAmount: 0 };
+                    }
+                    if (!productionSummary[producesItemKey].itemsLostToCapacity) {
+                        productionSummary[producesItemKey].itemsLostToCapacity = 0;
+                    }
+                    productionSummary[producesItemKey].itemsLostToCapacity! += itemsLost;
+                }
+
+                // Check for level up
+                if (simUser.experience >= simUser.nextLevelExperience) {
+                    simUser.level++;
+                    simUser.experience -= simUser.nextLevelExperience;
+                    simUser.nextLevelExperience = Math.ceil(simUser.nextLevelExperience * 1.2);
+                }
+
+                // Reset for next production cycle and consume resources
                 machine.progressPercent = 0;
+            }
+        }
+        
+        // Process Sales Managers for this time step
+        if (simUser.upgrades.salesManagers) {
+            for (const itemKey in simUser.upgrades.salesManagers) {
+                const manager = simUser.upgrades.salesManagers[itemKey as ItemKey];
+                if (!manager || manager.level === 0) continue;
+                
+                const inventoryItem = simUser.inventory[itemKey as ItemKey];
+                if (!inventoryItem) continue;
+                
+                const levelConfig = getSalesManagerLevelConfig(manager.level);
+                if (!levelConfig) continue;
+                
+                // Handle auto-sell
+                if (manager.settings.autoSellEnabled && levelConfig.features.canSell) {
+                    const sellThreshold = manager.settings.sellThreshold || (manager.level === 1 ? 90 : 80);
+                    const currentPercentage = (inventoryItem.amount / inventoryItem.capacity) * 100;
+                    
+                    if (currentPercentage >= sellThreshold && inventoryItem.amount > 0) {
+                        // Add to accumulator based on sell rate and time elapsed
+                        if (levelConfig.sellRate === -1) {
+                            // Unlimited rate - use a high rate for accumulation
+                            manager.partialItemsToSell += (1000 * timeStepMS) / 1000; // 1000 items/second for "unlimited"
+                        } else {
+                            manager.partialItemsToSell += (levelConfig.sellRate * timeStepMS) / 1000;
+                        }
+
+                        // Only process when we have at least 1 full item to sell
+                        const itemsToSell = Math.floor(manager.partialItemsToSell);
+                        
+                        if (itemsToSell > 0) {
+                            const itemsAboveThreshold = inventoryItem.amount - Math.floor((sellThreshold / 100) * inventoryItem.capacity);
+                            const actualItemsToSell = Math.min(itemsToSell, itemsAboveThreshold, inventoryItem.amount);
+                            
+                            if (actualItemsToSell > 0) {
+                                const sellPrice = inventoryItem.basePrice * inventoryItem.sellMultiplier;
+                                const totalEarned = actualItemsToSell * sellPrice;
+                                
+                                // Execute the sale
+                                inventoryItem.amount -= actualItemsToSell;
+                                simUser.money += totalEarned;
+                                
+                                // Update statistics
+                                manager.statistics.totalItemsSold += actualItemsToSell;
+                                manager.statistics.totalMoneyEarned += totalEarned;
+                                manager.statistics.lastActionTime = Date.now();
+
+                                // Subtract sold items from accumulator (keep remainder)
+                                manager.partialItemsToSell -= actualItemsToSell;
+                                
+                                // Track in production summary for display
+                                const itemKeyStr = itemKey as ItemKey;
+                                if (!productionSummary[itemKeyStr]) {
+                                    productionSummary[itemKeyStr] = { amount: 0, bonusAmount: 0 };
+                                }
+                                const summaryItem = productionSummary[itemKeyStr]!;
+                                if (!summaryItem.itemsSold) {
+                                    summaryItem.itemsSold = 0;
+                                }
+                                summaryItem.itemsSold += actualItemsToSell;
+                            }
+                        }
+                    }
+                }
+                
+                // Handle auto-buy
+                if (manager.settings.autoBuyEnabled && levelConfig.features.canBuy && manager.level >= 3) {
+                    const buyThreshold = manager.settings.buyThreshold || 10;
+                    const currentPercentage = (inventoryItem.amount / inventoryItem.capacity) * 100;
+                    
+                    if (currentPercentage <= buyThreshold && inventoryItem.amount < inventoryItem.capacity) {
+                        const buyPrice = inventoryItem.cost;
+                        const availableSpace = inventoryItem.capacity - inventoryItem.amount;
+                        
+                        // Add to accumulator based on buy rate and time elapsed
+                        if (levelConfig.sellRate === -1) {
+                            // Unlimited rate - use a high rate for accumulation
+                            manager.partialItemsToBuy += (1000 * timeStepMS) / 1000; // 1000 items/second for "unlimited"
+                        } else {
+                            manager.partialItemsToBuy += (levelConfig.sellRate * timeStepMS) / 1000;
+                        }
+                        
+                        // Only process when we have at least 1 full item to buy
+                        const itemsToBuy = Math.floor(manager.partialItemsToBuy);
+                        
+                        if (itemsToBuy > 0) {
+                            const maxAffordable = Math.floor(simUser.money / buyPrice);
+                            const spaceBelowThreshold = Math.max(0, Math.floor((buyThreshold / 100) * inventoryItem.capacity) - inventoryItem.amount);
+                            const actualItemsToBuy = Math.min(itemsToBuy, maxAffordable, availableSpace, spaceBelowThreshold);
+
+                            if (actualItemsToBuy > 0 && simUser.money >= buyPrice * actualItemsToBuy) {
+                                const totalCost = actualItemsToBuy * buyPrice;
+                            
+                                // Execute the purchase
+                                inventoryItem.amount += actualItemsToBuy;
+                                simUser.money -= totalCost;
+                                
+                                // Update statistics
+                                manager.statistics.totalItemsBought += actualItemsToBuy;
+                                manager.statistics.totalMoneySpent += totalCost;
+                                manager.statistics.lastActionTime = Date.now();
+
+                                // Subtract bought items from accumulator (keep remainder)
+                                manager.partialItemsToBuy -= actualItemsToBuy;
+                                
+                                // Track in production summary for display
+                                const itemKeyStr = itemKey as ItemKey;
+                                if (!productionSummary[itemKeyStr]) {
+                                    productionSummary[itemKeyStr] = { amount: 0, bonusAmount: 0 };
+                                }
+                                const summaryItem = productionSummary[itemKeyStr]!;
+                                if (!summaryItem.itemsBought) {
+                                    summaryItem.itemsBought = 0;
+                                }
+                                summaryItem.itemsBought += actualItemsToBuy;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
-    // Handle level ups
-    while (simUser.experience >= simUser.nextLevelExperience) {
-        simUser.level++;
-        simUser.experience -= simUser.nextLevelExperience;
-        simUser.nextLevelExperience = Math.ceil(
-            simUser.nextLevelExperience * 1.2,
-        );
-    }
+    // Calculate total experience gained
+
+    // Log production summary
+    console.log('Production summary:', productionSummary);
 
     // Copy the simulated state back to the original user object
     user.inventory = simUser.inventory;
@@ -189,6 +396,8 @@ function simulateOfflineProgress(
     user.level = simUser.level;
     user.nextLevelExperience = simUser.nextLevelExperience;
     user.machines = simUser.machines;
+    user.money = simUser.money; // Don't forget to copy money back after sales manager operations
+    user.upgrades = simUser.upgrades; // Copy sales manager statistics
 
     // Add item names and icons to the production summary
     for (const itemKey in productionSummary) {
@@ -201,11 +410,12 @@ function simulateOfflineProgress(
     }
 
     console.log(
-        `productionSummary:`,
+        `📈 Final production summary:`,
         productionSummary,
-        `totalExperienceGained:`,
+        `💫 Total experience gained:`,
         totalExperienceGained,
     );
+    
     return { productionSummary, totalExperienceGained };
 }
 
@@ -276,7 +486,33 @@ export function loadFromLocalStorage(
             if (!gameData.upgrades) {
                 gameData.upgrades = {
                     managers: {},
+                    inventory: {},
+                    salesManagers: {},
                 };
+            }
+            
+            // Ensure inventory upgrades exist for backward compatibility
+            if (!gameData.upgrades.inventory) {
+                gameData.upgrades.inventory = {};
+            }
+            
+            // Ensure sales managers exist for backward compatibility
+            if (!gameData.upgrades.salesManagers) {
+                gameData.upgrades.salesManagers = {};
+            }
+
+            // Migrate sales managers to include accumulator properties
+            for (const itemKey in gameData.upgrades.salesManagers) {
+                const manager = gameData.upgrades.salesManagers[itemKey];
+                if (manager) {
+                    // Add accumulator properties if they don't exist
+                    if (typeof manager.partialItemsToSell !== 'number') {
+                        manager.partialItemsToSell = 0;
+                    }
+                    if (typeof manager.partialItemsToBuy !== 'number') {
+                        manager.partialItemsToBuy = 0;
+                    }
+                }
             }
 
             // Restore production stats to stats manager if available
@@ -381,8 +617,9 @@ export function loadFromLocalStorage(
             let offlineProductionSummary: OfflineProductionSummary = {};
             let offlineExperienceGained = 0;
 
-            // Only calculate offline progress if there was significant time away (> 30 seconds)
-            if (offlineTimeMS > 30000) {
+            // Only calculate offline progress if there was significant time away (> 1 second)
+            console.log('Calculating offline progress..., offlineTimeMS:', offlineTimeMS);
+            if (offlineTimeMS > 1000) {
                 const result = simulateOfflineProgress(
                     gameData,
                     machinesConfig,
@@ -444,30 +681,10 @@ export function createNewUser(): User {
         inventory: {},
         upgrades: {
             managers: {},
+            inventory: {},
+            salesManagers: {},
         },
+        lastSaved: new Date().toISOString(),
         productionStats: null,
     };
-}
-
-/**
- * Debug function to test stats manager save/load
- */
-export function debugStatsManager() {
-    console.log('🧪 Debug Stats Manager:', {
-        statsManagerRefExists: !!statsManagerRef,
-        statsManagerValueExists: !!(statsManagerRef && statsManagerRef.value),
-        currentData: statsManagerRef && statsManagerRef.value ? {
-            gameTimeMs: statsManagerRef.value.gameTimeMs,
-            buckets: {
-                tenSeconds: statsManagerRef.value.tenSeconds?.length || 0,
-                oneMinute: statsManagerRef.value.oneMinute?.length || 0,
-                tenMinutes: statsManagerRef.value.tenMinutes?.length || 0,
-                oneHour: statsManagerRef.value.oneHour?.length || 0,
-                tenHours: statsManagerRef.value.tenHours?.length || 0,
-                hundredHours: statsManagerRef.value.hundredHours?.length || 0,
-                allTime: statsManagerRef.value.allTime?.length || 0
-            },
-            sampleBucket: statsManagerRef.value.tenSeconds?.[0] || 'none'
-        } : 'no data'
-    });
 }

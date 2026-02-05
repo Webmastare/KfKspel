@@ -119,6 +119,7 @@ export class card extends GameObject {
   }
 
   offKlickUpdate() {
+    console.log('offklick initiated');
     //kollar överlapp med andra objekt
     let överlappare = []
     cardAction.ÖverlappMedHög(this, överlappare)
@@ -133,7 +134,7 @@ export class card extends GameObject {
           if (reglerFöljs) {
             //gör det som ska göras vid giltigt drag
             let minnen = cardAction.SaveMove(this)
-
+            console.log('behållare, regler följs');
             cardAction.KortTillHög(this, överlappare[i], minnen)
             //kolla om längden ska kortas ned ska vara här
             längdfix.FixaLängder()
@@ -141,6 +142,7 @@ export class card extends GameObject {
           } else if (överlappare.length !== i + 1) {
             //det finns fler överlappare så gör inget, ba fortsätt till nästa
           } else {
+            console.log('animation startad');
             this.moveTill(this.oldPosition, spawnare.cardMoveTime)
           }
         } else if (objekttyp === 'card') {
@@ -150,15 +152,18 @@ export class card extends GameObject {
           if (reglerFöljs) {
             //gör det som ska göras vid giltigt drag
             let minnen = cardAction.SaveMove(this)
+            console.log('regler följs för kort kort');
             cardAction.KortTillKort(this, överlappare[i], minnen)
             //kolla om längden ska kortas ned ska vara här för
             // att den ska få med senaste kortet som lades till
+            console.log('kort till kort fixar längder');
             längdfix.FixaLängder()
 
             break
           } else if (överlappare.length !== i + 1) {
             //det finns fler överlappare så gör inget, ba fortsätt till nästa
           } else {
+            console.log('animation startad');
             this.moveTill(this.oldPosition, spawnare.cardMoveTime)
           }
         } else {
@@ -166,6 +171,7 @@ export class card extends GameObject {
         }
       }
     } else {
+      console.log('animation startad');
       this.moveTill(this.oldPosition, spawnare.cardMoveTime)
     }
   }
@@ -489,9 +495,9 @@ export class spawnare extends GameObject {
   }
 
   ettKortTillbaks(kort) {
-    console.log('borde gå hem')
-    this.liggandekort.unshift(kort)
-    this.flyttaLiggandeKort()
+    
+    this.liggandekort.unshift(kort);
+    this.flyttaLiggandeKort();
   }
 }
 
@@ -500,14 +506,14 @@ export class behållare extends GameObject {
   static allabehållare = []
   static synligaBehållare = []
   constructor(xpos, ypos, färg, bild) {
-    super(xpos, ypos, card.kortbredd, card.korthöjd, bild)
-    behållare.allabehållare.push(this)
-    this.addToInteractable()
-    this.synligGör()
+    super(xpos, ypos, card.kortbredd, card.korthöjd, bild);
+    behållare.allabehållare.push(this);
+    this.addToInteractable();
+    this.synligGör();
 
-    this.allakortdenhar = []
-    this.färg = färg
-    this.överstakortet
+    this.allakortdenhar = [];
+    this.färg = färg;
+    this.överstakortet;
   }
 
   synligGör() {
@@ -647,8 +653,6 @@ export class Fusk {
         }
         let kortet = Fusk.HittaKortet(valörer[i], j)
         counter++
-        console.log(counter)
-        console.log(kortet)
         if (kortet !== 69) {
           //sätter alla dess variabler rätt
 
@@ -792,7 +796,6 @@ export class Uskare {
 
   static HittaKort(färg, nummer) {
     //börja leta i kortleken
-    console.log('letar')
     let leklängd = spawn.lek.allakort.length
 
     for (let i = 0; i < leklängd; i++) {
@@ -801,7 +804,6 @@ export class Uskare {
       if (nukort.färg === färg && nukort.nummer === nummer) {
         let indes = spawn.lek.allakort.indexOf(nukort)
         spawn.lek.allakort.splice(indes, 1)
-        console.log('det fanns i leken')
         return nukort
       }
     }
@@ -1045,10 +1047,7 @@ function flyttaKlickad() {
 
 export function Vemklickades() {
   klickad = GameObject.kollaKlickad()
-  console.log('har kollat klickad:')
-  console.log(klickad)
   if (klickad === 69) {
-    console.log(knappar.allaKnappar)
     if (botton.hovard !== undefined) {
       botton.hovard.onklick()
     }
@@ -1100,8 +1099,7 @@ async function SkickaUtKortEnEfterEn() {
 
       await sleep(50) // vänta 500ms mellan varje kort
     } else if (valör - 1 < -1) {
-      console.log(hög)
-      console.log(valör)
+     
       skcikar = false
     } else {
       await sleep(50) // Vänta lite tills ett kort försvinner

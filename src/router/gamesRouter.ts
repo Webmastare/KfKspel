@@ -12,12 +12,12 @@ export default [
     {
         path: "/kfkblock",
         name: "KfKblock",
-        component: () => import("@/pages/games/KfKblock.vue"),
+        component: () => import("@/pages/games/Kfkblock.vue"),
     },
     {
         path: "/kfkbandvagn",
         name: "KfKbandvagn",
-        component: () => import("@/pages/games/KfKbandvagn.vue"),
+        component: () => import("@/pages/games/Kfkbandvagn.vue"),
     },
     {
         path: "/snake",
@@ -37,7 +37,7 @@ export default [
     {
         path: "/kfkbatians",
         name: "KfkBatians",
-        component: () => import("@/pages/games/KfkBatians.vue"),
+        component: () => import("@/pages/games/Kfkbatians.vue"),
     },
     {
         path: "/ordel",

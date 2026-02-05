@@ -31,7 +31,7 @@ export class action
 
         //kollar om den redan var i en hög
         let varRedanIhög = kort.isFromBehållare;
-        console.log(varRedanIhög);
+
 
         //sätter denna hög som dess gamla hög, används för när man lägger ett kort från en hög fel
         //annars kommer behållaren tro att det har förlorat kortet, utan att den faktiskt gjort det
@@ -151,7 +151,6 @@ export class cardAction
     static SaveMove(kort){
         //minnesarrayen är till för att man inte ska behöva kolla allt igen när man faktiskt gör flytten
         let minnen = [];
-        console.log(kort);
         let spawnish = kort.jagÄrIspawn();        
         minnen.push(spawnish);
 
@@ -178,10 +177,9 @@ export class cardAction
             if(kort.parent.isTurned === false){
                 vändFadern = true;
                 minnen.push('vänd');
-                console.log('fader ska vändas');
             }
         }
-        console.log('ny ånger');
+        
         new ånger(minnesAction, kort, läggMigI, vändFadern);
 
         return minnen;
@@ -210,7 +208,7 @@ export class cardAction
         else{
             kort.removeParent();
         }
-
+        console.log('kortets animation startad');
         kort.moveTill(hög.position, spawnare.cardMoveTime);
         
 
@@ -224,7 +222,7 @@ export class cardAction
     }
 
     static KortTillKort(kort, andraKort, minnen){
-        
+        console.log('kom till kort till kort');
         kort.isChildAble = true;
         if(minnen.length === 3){
             kort.parent.vänd();
@@ -251,12 +249,13 @@ export class cardAction
         //kort.moveTill(nypos, spawnare.cardMoveTime);
         kort.ändrAllaBarnsOldPosition(nypos);
         */
+       console.log('gick igenom hela kort till kort funktionen');
     }
 
     //skulle kunna potimisera genom att man skickar med endast längden som man la kortet i 
     //och längden som kortet kommer från
     static FixaAllaLängder(){
-        console.log('fixa längd initiated');
+       
         let lång = card.SuperKort.length;
 
         for(let i = 0; i < lång; i++){
@@ -264,8 +263,7 @@ export class cardAction
 
             let urban = längden.hittaUrbarn();
             if(urban.position.y > card.lägstaPosition){
-                console.log('måste fixa längd');
-                console.log(i);
+                
                 //kortet var för långt ner
                 let differens = urban.position.y - card.lägstaPosition;
 
@@ -417,6 +415,7 @@ export class cardAction
 export class längdfix
 {
     static FixaLängder(){
+        console.log('fixar längder');
         let antalSuperkort = card.SuperKort.length;
 
         for(let i = 0; i < antalSuperkort; i++){
