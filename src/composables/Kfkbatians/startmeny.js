@@ -21,7 +21,6 @@ export class startmeny
         spawnare.födare = [];
         bakgrund.allaBakgrundsObjekt = [];
         knappar.allaKnappar = [];
-        console.log(bredd * 3 / 4);
         new bakgrund(0, 0, bredd, höjd, '#07ab33');
         new bakgrund(0, 0, bredd, höjd, '#00000080');
         new bakgrund(bredd/4, höjd/4, bredd/2, höjd/2, 'rgba(255, 255, 255, 1)');
@@ -48,13 +47,11 @@ export class startmeny
 
 function easy(){
     SetDifficulty('easy');
-    console.log('enkel');
     setTimeout(StartaSpelet, 200);
 }
 
 function hard(){
     SetDifficulty('hard');
-    console.log('hards');
     setTimeout(StartaSpelet, 200);
 }
 
@@ -157,8 +154,7 @@ async function SkickaUtKortEnEfterEn(){
                 await sleep(50); // vänta 500ms mellan varje kort
             } 
             else if(valör - 1 < -1){
-                console.log(hög);
-                console.log(valör);
+                
                 skcikar = false;
             }          
             else {

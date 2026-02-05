@@ -9,8 +9,8 @@
         <div class="stats-dropdown" :class="{ show: showStats }">
           <span>Production: {{ getMachineProductionRate() }} u/s</span>
           <span>Efficiency: {{ getMachineEfficiencyRate() }} u/s</span>
-          <span>Batch Size: {{ machine.batchSize }}</span>
-          <span>Speed Level: {{ machine.speedUpgrade }}</span>
+          <span>Items Produced: {{ machine.itemsProduced }}</span>
+          <span>Bonus Items: {{ machine.bonusItems }}</span>
         </div>
       </div>
 
@@ -22,9 +22,23 @@
           <p>Batch Size: {{ machine.batchSize }}</p>
         </div>
 
+        <!-- Manual start button for manual machines -->
+        <div v-if="machine.isManual" class="manual-start-container">
+          <button
+            @click="emitStart"
+            :disabled="!canStart"
+            class="manual-start-button"
+            :class="{ 'button-pulse': canStart }"
+          >
+            {{ machine.isRunning ? 'Running...' : 'Start' }}
+          </button>
+        </div>
+
         <div class="progress-bars-container">
           <div class="progress-bar">
-            <p>Progress:</p>
+            <p>
+              Progress: <span>{{ (calculateProductionTimeLeft() / 1000).toFixed(1) }}s</span>
+            </p>
             <div
               class="progress-bar-fill"
               :class="{ 'high-speed': isHighSpeedMode }"
@@ -87,12 +101,11 @@
 import { ref, computed } from 'vue'
 import type { UserMachine, MachineKey } from '@/components/coffeequeen/types'
 import {
-  calculateSpeedUpgradeCost,
-  calculateEfficiencyUpgradeCost,
   calculateProductionTime,
   calculateEfficiencyBonus,
   calculateBatchSize,
 } from '@/components/coffeequeen/coffee-upgrade-calculations'
+import { machineDataList } from '@/components/coffeequeen/data-machines'
 
 interface Props {
   machine: UserMachine
@@ -103,6 +116,7 @@ interface Props {
 interface Emits {
   (e: 'upgrade-machine', payload: { machineKey: MachineKey; upgradeType: string }): void
   (e: 'buy-machine', machineKey: MachineKey): void
+  (e: 'start-machine', machineKey: MachineKey): void
 }
 
 const props = defineProps<Props>()
@@ -121,6 +135,14 @@ const progressBarWidth = computed(() => {
   return `${progress * 100}%`
 })
 
+const calculateProductionTimeLeft = () => {
+  if (!props.machine.isOwned) return 0
+
+  const prodTime = props.machine.productionTime
+  const progress = Math.max(0, Math.min(1, props.machine.progressPercent || 0))
+  return prodTime * (1 - progress)
+}
+
 const efficiencyProgressBarWidth = computed(() => {
   if (!props.machine.isOwned) return '0%'
   const progress = Math.max(0, Math.min(1, props.machine.efficiencyProgress))
@@ -134,10 +156,15 @@ const isHighSpeedMode = computed(() => {
 
 const nextSpeedTime = computed(() => {
   if (!props.machine.isOwned) return 0
+
+  // Get the base production time from the machine config
+  const machineConfig = machineDataList[props.machine.key as MachineKey]
+  const baseProductionTime = machineConfig?.productionTime || props.machine.productionTime
+
   return calculateProductionTime(
     props.machine.baseBatchSize,
     props.machine.speedUpgrade + 1,
-    props.machine.productionTime,
+    baseProductionTime,
   )
 })
 
@@ -176,6 +203,11 @@ const canAffordEfficiencyUpgrade = computed(
 const canAffordMachine = computed(() => props.userMoney >= props.machine.cost)
 const levelMet = computed(() => props.userLevel >= props.machine.levelRequired)
 
+// For manual start button
+const canStart = computed(() => {
+  return props.machine.isOwned && props.machine.isManual && !props.machine.isRunning
+})
+
 function emitUpgrade(type: string) {
   emit('upgrade-machine', { machineKey: props.machine.key as MachineKey, upgradeType: type })
 }
@@ -183,19 +215,24 @@ function emitUpgrade(type: string) {
 function emitBuy() {
   emit('buy-machine', props.machine.key as MachineKey)
 }
+
+function emitStart() {
+  emit('start-machine', props.machine.key as MachineKey)
+}
 </script>
 
 <style scoped lang="scss">
 .machine-card {
+  background: var(--coffee-bg-card);
+  border: 2px solid var(--coffee-border-primary);
+  color: var(--coffee-text-primary);
+  transition: all 0.3s ease;
   position: relative;
   width: 200px;
-  height: 200px;
-  background-color: #8f6c5e;
-  border: 2px solid #452f26;
+  /*height: 200px;*/
   border-radius: 8px;
   padding: 10px;
   font-family: 'Courier New', Courier, monospace;
-  color: white;
   margin: 10px;
   display: flex;
   flex-direction: column;
@@ -239,19 +276,25 @@ function emitBuy() {
       margin: -5px 0;
       font-size: 13px;
       font-weight: bold;
-      color: #ffffff;
+      color: white;
     }
     button {
       margin-top: 5px;
       padding: 5px 10px;
       font-size: 14px;
-      background-color: #4caf50;
-      color: white;
-      border: none;
       border-radius: 4px;
       cursor: pointer;
+      background-color: #4caf50;
+      color: white;
+      border: 2px solid #45a049;
+
+      &:hover {
+        background-color: #45a049;
+      }
+
       &:disabled {
-        background-color: #888;
+        background-color: #a0a0a0;
+        border-color: #666;
         cursor: not-allowed;
       }
     }
@@ -268,13 +311,13 @@ function emitBuy() {
   margin-bottom: 10px;
 
   .stats-button {
-    background-color: #6f4c3e;
-    color: white;
-    border: none;
-    border-radius: 4px;
     padding: 5px 10px;
     cursor: pointer;
     font-size: 12px;
+    border-radius: 4px;
+    background: var(--coffee-button-bg);
+    color: var(--coffee-button-text);
+    border: 2px solid var(--coffee-button-border);
 
     &:hover {
       filter: brightness(1.2);
@@ -285,9 +328,6 @@ function emitBuy() {
     position: absolute;
     top: 100%;
     right: 0;
-    background-color: rgba(255, 255, 255, 0.8);
-    color: #000;
-    border: 1px solid #ddd;
     border-radius: 8px;
     padding: 5px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -297,6 +337,10 @@ function emitBuy() {
     transform: translateY(-10px);
     transition: all 0.2s ease;
     z-index: 1000;
+    background: var(--coffee-bg-card);
+    border: 1px solid var(--coffee-border-primary);
+    color: var(--coffee-text-primary);
+
     &.show {
       opacity: 1;
       visibility: visible;
@@ -345,30 +389,32 @@ function emitBuy() {
 }
 
 .progress-bar {
+  background: var(--coffee-bg-secondary);
+  border-color: var(--coffee-border-primary);
+  color: var(--coffee-text-primary);
   position: relative;
   width: 100%;
   height: 12px;
-  background-color: #c9c9c9;
-  border: 1px solid #452f26;
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 2px;
+  border: 1px solid;
+
   p {
     position: absolute;
-    top: 50%;
+    top: 60%;
     left: 5%;
     transform: translate(0%, -50%);
     display: inline-block;
     margin: 0;
     height: auto;
     font-size: 10px;
-    color: #000000;
-    text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
     font-weight: bold;
     z-index: 2;
     white-space: nowrap;
   }
 }
+
 .progress-bars-container {
   margin-bottom: 8px;
 }
@@ -376,7 +422,6 @@ function emitBuy() {
 .progress-bar-fill {
   height: 100%;
   background-color: #00ff00;
-  /* transition: width 0.1s linear; */
   position: relative;
   z-index: 1;
 
@@ -393,14 +438,13 @@ function emitBuy() {
     );
     background-size: 20px 20px;
     animation: diagonal-move 0.5s linear infinite;
-    transition: none; /* Remove transition for smooth animation */
+    transition: none;
   }
 }
 
 .efficiency-bar-fill {
   height: 100%;
   background-color: #ffc107;
-  /* transition: width 0.1s linear; */
   position: relative;
   z-index: 1;
 
@@ -417,7 +461,7 @@ function emitBuy() {
     );
     background-size: 20px 20px;
     animation: diagonal-move 0.5s linear infinite;
-    transition: none; /* Remove transition for smooth animation */
+    transition: none;
   }
 }
 
@@ -439,29 +483,18 @@ function emitBuy() {
   position: relative;
 
   button {
+    background: var(--coffee-button-bg);
+    color: var(--coffee-button-text);
+    border: 2px solid var(--coffee-button-border);
     padding: 4px 4px;
     font-size: 11px;
-    background-color: #6f4c3e;
-    color: white;
-    border: 1px solid #452f26;
     border-radius: 4px;
     cursor: pointer;
-    transition: background-color 0.2s ease;
-    &:hover {
-      background-color: #8f6c5e;
-    }
-
-    &:disabled {
-      background-color: #555;
-      cursor: not-allowed;
-    }
   }
 
   .tooltip {
     visibility: hidden;
     width: 160px;
-    background-color: #333;
-    color: #fff;
     text-align: left;
     border-radius: 6px;
     padding: 8px;
@@ -472,6 +505,9 @@ function emitBuy() {
     margin-left: -80px;
     opacity: 0;
     transition: opacity 0.3s;
+    background: var(--coffee-bg-card);
+    border: 1px solid var(--coffee-border-primary);
+    color: var(--coffee-text-primary);
 
     p {
       margin: 2px 0;
@@ -482,6 +518,55 @@ function emitBuy() {
   &:hover .tooltip {
     visibility: visible;
     opacity: 1;
+  }
+}
+
+.manual-start-container {
+  margin: 8px 0;
+  text-align: center;
+}
+
+.manual-start-button {
+  background: var(--coffee-button-bg);
+  color: var(--coffee-button-text);
+  border: 2px solid var(--coffee-button-border);
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 80px;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.2);
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    filter: grayscale(50%);
+  }
+
+  &.button-pulse {
+    animation: pulse 2s infinite;
+  }
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(76, 175, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
   }
 }
 </style>

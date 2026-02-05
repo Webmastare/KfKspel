@@ -25,4 +25,9 @@ export default [
         name: "DefenseGame",
         component: () => import("@/pages/Kasper-Project/Defense.vue"),
     },
+    {
+        path: "/coffee-queen",
+        name: "CoffeeQueen",
+        component: () => import("@/pages/Kasper-Project/CoffeeQueen.vue"),
+    },
 ];
