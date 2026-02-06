@@ -11,6 +11,10 @@
           <input type="checkbox" v-model="devMode" />
           Dev Mode
         </label>
+        <label>
+          <input type="number" min="1" max="81" v-model.number="difficulty" @change="newGame" />
+          Difficulty
+        </label>
         <button @click="newGame">New Game</button>
       </div>
     </div>
@@ -27,6 +31,9 @@
               selected: isSelected(rowIndex, colIndex),
               error: cell.isError,
               highlight: shouldHighlight(cell.value),
+              'same-row': isInSameRow(rowIndex, colIndex),
+              'same-column': isInSameColumn(rowIndex, colIndex),
+              'same-box': isInSameBox(rowIndex, colIndex),
               'box-right': (colIndex + 1) % 3 === 0 && colIndex !== 8,
               'box-bottom': (rowIndex + 1) % 3 === 0 && rowIndex !== 8,
             }"
@@ -73,10 +80,12 @@ const instantCheck = ref(false)
 const devMode = ref(true)
 const gameContainer = ref<HTMLElement | null>(null)
 
+const difficulty = ref(40) // Number of holes to create
+
 // -- Core Game Logic --
 
 const newGame = () => {
-  const { full, puzzle } = generateSudoku(45) // Generate ~45 holes
+  const { full, puzzle } = generateSudoku(difficulty.value) // Generate ~45 holes
   fullSolution.value = full
 
   // Map raw numbers to rich CellState objects
@@ -108,6 +117,28 @@ const shouldHighlight = (val: number) => {
   if (!selectedCell) return false
   const selectedVal = selectedCell.value
   return selectedVal !== 0 && selectedVal === val
+}
+
+const isInSameRow = (r: number, c: number) => {
+  if (!selected.value) return false
+  return selected.value.r === r && selected.value.c !== c
+}
+
+const isInSameColumn = (r: number, c: number) => {
+  if (!selected.value) return false
+  return selected.value.c === c && selected.value.r !== r
+}
+
+const isInSameBox = (r: number, c: number) => {
+  if (!selected.value) return false
+  if (selected.value.r === r && selected.value.c === c) return false
+
+  const boxRowStart = Math.floor(selected.value.r / 3) * 3
+  const boxColStart = Math.floor(selected.value.c / 3) * 3
+  const cellBoxRowStart = Math.floor(r / 3) * 3
+  const cellBoxColStart = Math.floor(c / 3) * 3
+
+  return boxRowStart === cellBoxRowStart && boxColStart === cellBoxColStart
 }
 
 const inputNumber = (num: number) => {
@@ -352,7 +383,6 @@ onMounted(() => {
     &.fixed {
       font-weight: bold;
       color: var(--theme-modal-header);
-      background-color: var(--theme-modal-border);
       cursor: default;
     }
 
@@ -382,6 +412,12 @@ onMounted(() => {
       background-color: var(--theme-bg-elevated);
       transform: scale(1.05);
       box-shadow: var(--theme-shadow-sm);
+    }
+
+    &.same-row,
+    &.same-column,
+    &.same-box {
+      background-color: var(--theme-modal-border);
     }
 
     .cell-value {
