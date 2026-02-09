@@ -4,18 +4,23 @@
       <h1>Sudoku</h1>
       <div class="controls">
         <label>
-          <input type="checkbox" v-model="instantCheck" />
+          <input type="checkbox" v-model="instantCheck" @change="validateAllCells()" />
           Instant Feedback
         </label>
         <label>
           <input type="checkbox" v-model="devMode" />
           Dev Mode
         </label>
-        <label>
-          <input type="number" min="1" max="81" v-model.number="difficulty" @change="newGame" />
-          Difficulty
-        </label>
-        <button @click="newGame">New Game</button>
+        <div class="difficulty-control">
+          <span>Svårighetsgrad:</span>
+          <select v-model.number="difficulty" @change="newGame">
+            <option value="25">Lätt</option>
+            <option value="45" selected>Medel</option>
+            <option value="55">Svår</option>
+            <option value="81">Expert</option>
+          </select>
+        </div>
+        <button @click="newGame">Nytt Spel</button>
       </div>
     </div>
 
@@ -39,7 +44,19 @@
             }"
             @click="selectCell(rowIndex, colIndex)"
           >
-            <span class="cell-value">{{ cell.value !== 0 ? cell.value : '' }}</span>
+            <span v-if="cell.value !== 0" class="cell-value">{{ cell.value }}</span>
+            <div
+              v-else-if="cell.annotations && cell.annotations.some(Boolean)"
+              class="annotations-grid"
+            >
+              <span
+                v-for="(annotation, index) in cell.annotations"
+                :key="index"
+                class="annotation-cell"
+              >
+                {{ annotation || '' }}
+              </span>
+            </div>
             <span v-if="devMode" class="solution-hint">{{
               fullSolution[rowIndex]?.[colIndex] || ''
             }}</span>
@@ -52,6 +69,13 @@
           {{ n }}
         </button>
         <button class="clear-btn" @click="inputNumber(0)">✕</button>
+        <button
+          class="annotate-btn"
+          :class="{ active: annotateMode }"
+          @click="annotateMode = !annotateMode"
+        >
+          ✎
+        </button>
       </div>
     </div>
   </div>
@@ -67,6 +91,7 @@ interface CellState {
   value: number
   isFixed: boolean // Was this part of the initial puzzle?
   isError: boolean // Visual red flag
+  annotations: (number | null)[] // Array of 9 positions for annotations (1-9)
 }
 
 // Initialize theme store
@@ -80,11 +105,11 @@ const instantCheck = ref(false)
 const devMode = ref(true)
 const gameContainer = ref<HTMLElement | null>(null)
 
-const difficulty = ref(40) // Number of holes to create
+const annotateMode = ref(false)
+const difficulty = ref(45) // Number of holes to create
 
 // -- Core Game Logic --
-
-const newGame = () => {
+function newGame() {
   const { full, puzzle } = generateSudoku(difficulty.value) // Generate ~45 holes
   fullSolution.value = full
 
@@ -94,6 +119,7 @@ const newGame = () => {
       value: val,
       isFixed: val !== 0,
       isError: false,
+      annotations: new Array(9).fill(null),
     })),
   )
 
@@ -141,7 +167,7 @@ const isInSameBox = (r: number, c: number) => {
   return boxRowStart === cellBoxRowStart && boxColStart === cellBoxColStart
 }
 
-const inputNumber = (num: number) => {
+function inputNumber(num: number) {
   if (!selected.value) return
 
   const { r, c } = selected.value
@@ -150,21 +176,54 @@ const inputNumber = (num: number) => {
 
   if (cell.isFixed) return // Cannot edit fixed cells
 
-  cell.value = num
-
-  if (instantCheck.value) {
-    validateCellInstant(r, c)
+  if (annotateMode.value) {
+    // Annotation mode: toggle annotation
+    if (num === 0) {
+      // Clear all annotations
+      cell.annotations = new Array(9).fill(null)
+    } else {
+      // Toggle specific annotation
+      const annotationIndex = num - 1
+      if (cell.annotations[annotationIndex] === num) {
+        cell.annotations[annotationIndex] = null
+      } else {
+        cell.annotations[annotationIndex] = num
+      }
+    }
   } else {
-    // Clear error if they change the number in classic mode
-    cell.isError = false
+    // Normal mode: set cell value
+    cell.value = num
+
+    if (instantCheck.value) {
+      validateCellInstant(r, c)
+    } else {
+      // Clear error if they change the number in classic mode
+      cell.isError = false
+    }
+
+    checkWinCondition()
   }
 
-  checkWinCondition()
+  // Update save
+  saveGame()
 }
 
-const validateCellInstant = (r: number, c: number) => {
+function validateAllCells() {
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      validateCellInstant(r, c)
+    }
+  }
+}
+
+function validateCellInstant(r: number, c: number) {
   const cell = displayBoard.value[r]?.[c]
   if (!cell) return
+
+  if (!instantCheck.value) {
+    cell.isError = false
+    return
+  }
 
   if (cell.value === 0) {
     cell.isError = false
@@ -177,7 +236,7 @@ const validateCellInstant = (r: number, c: number) => {
   }
 }
 
-const checkWinCondition = () => {
+function checkWinCondition() {
   // 1. Are all cells filled?
   const allFilled = displayBoard.value.every((row) => row.every((c) => c.value !== 0))
   if (!allFilled) return
@@ -206,8 +265,7 @@ const checkWinCondition = () => {
 }
 
 // -- Keyboard Handling --
-
-const handleKeydown = (e: KeyboardEvent) => {
+function handleKeydown(e: KeyboardEvent) {
   if (!selected.value) return
 
   const key = e.key
@@ -231,9 +289,31 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 }
 
+// -- Save & Load Game --
+function saveGame() {
+  const gameState = {
+    displayBoard: displayBoard.value,
+    fullSolution: fullSolution.value,
+    difficulty: difficulty.value,
+  }
+  localStorage.setItem('sudokuGame', JSON.stringify(gameState))
+}
+
+function loadGame() {
+  const saved = localStorage.getItem('sudokuGam')
+  if (saved) {
+    const gameState = JSON.parse(saved)
+    displayBoard.value = gameState.displayBoard
+    fullSolution.value = gameState.fullSolution
+    difficulty.value = gameState.difficulty
+  } else {
+    newGame()
+  }
+}
+
 onMounted(() => {
   themeStore.init()
-  newGame()
+  loadGame()
 })
 </script>
 
@@ -299,6 +379,39 @@ onMounted(() => {
           accent-color: var(--theme-modal-header);
           width: 16px;
           height: 16px;
+        }
+      }
+
+      .difficulty-control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--theme-sidebar-bg);
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        box-shadow: var(--theme-shadow-sm);
+        color: var(--theme-sidebar-text);
+        font-weight: 500;
+        transition: all 0.2s ease;
+
+        &:hover {
+          background: var(--theme-sidebar-bg-hover);
+          color: var(--theme-sidebar-text-on-dark);
+        }
+
+        select {
+          background: var(--theme-bg-primary);
+          color: var(--theme-text-primary);
+          border: 1px solid var(--theme-modal-border);
+          border-radius: 6px;
+          padding: 4px 8px;
+          font-size: 0.9rem;
+          cursor: pointer;
+
+          &:focus {
+            outline: 2px solid var(--theme-modal-header);
+            outline-offset: 2px;
+          }
         }
       }
 
@@ -438,6 +551,25 @@ onMounted(() => {
       z-index: 1;
       opacity: 0.8;
     }
+
+    .annotations-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      width: 100%;
+      height: 100%;
+      padding: 2px;
+
+      .annotation-cell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.6rem;
+        font-weight: 500;
+        color: var(--theme-text-secondary);
+        line-height: 1;
+      }
+    }
   }
 
   .numpad {
@@ -480,6 +612,22 @@ onMounted(() => {
         &:hover {
           background: var(--theme-button-decline-hover);
           color: var(--theme-button-primary-text);
+        }
+      }
+
+      &.annotate-btn {
+        font-size: 1.5rem;
+
+        &.active {
+          background: var(--theme-modal-header);
+          color: var(--theme-button-primary-text);
+          border: 2px solid var(--theme-modal-header);
+          transform: scale(1.05);
+
+          &:hover {
+            background: var(--theme-modal-header);
+            color: var(--theme-button-primary-text);
+          }
         }
       }
     }
