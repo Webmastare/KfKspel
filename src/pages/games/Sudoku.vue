@@ -300,7 +300,7 @@ function saveGame() {
 }
 
 function loadGame() {
-  const saved = localStorage.getItem('sudokuGam')
+  const saved = localStorage.getItem('sudokuGame')
   if (saved) {
     const gameState = JSON.parse(saved)
     displayBoard.value = gameState.displayBoard
