@@ -5,11 +5,7 @@
       <div class="controls">
         <label>
           <input type="checkbox" v-model="instantCheck" @change="validateAllCells()" />
-          Instant Feedback
-        </label>
-        <label>
-          <input type="checkbox" v-model="devMode" />
-          Dev Mode
+          Kontrollera direkt
         </label>
         <div class="difficulty-control">
           <span>Svårighetsgrad:</span>
@@ -20,12 +16,17 @@
             <option value="81">Expert</option>
           </select>
         </div>
-        <button @click="newGame">Nytt Spel</button>
+        <button class="btn" @click="newGame">Nytt Spel</button>
       </div>
     </div>
 
     <div class="game-area">
       <div class="grid">
+        <div v-if="isGameOver" class="gameover">
+          <div class="won">Tjoho du klarade det!🎉</div>
+          <button class="btn" @click="newGame">Spela igen</button>
+        </div>
+
         <div v-for="(row, rowIndex) in displayBoard" :key="rowIndex" class="row">
           <div
             v-for="(cell, colIndex) in row"
@@ -102,8 +103,9 @@ const fullSolution = ref<Board>([])
 const displayBoard = ref<CellState[][]>([])
 const selected = ref<{ r: number; c: number } | null>(null)
 const instantCheck = ref(false)
-const devMode = ref(true)
+const devMode = ref(false)
 const gameContainer = ref<HTMLElement | null>(null)
+const isGameOver = ref(false)
 
 const annotateMode = ref(false)
 const difficulty = ref(45) // Number of holes to create
@@ -126,10 +128,17 @@ function newGame() {
   selected.value = null
   // Focus div to catch keyboard events immediately
   nextTick(() => gameContainer.value?.focus())
+
+  isGameOver.value = false
 }
 
 const selectCell = (r: number, c: number) => {
-  selected.value = { r, c }
+  if (selected.value?.r === r && selected.value?.c === c) {
+    // Deselect if clicking the same cell
+    selected.value = null
+  } else {
+    selected.value = { r, c }
+  }
 }
 
 const isSelected = (r: number, c: number) => {
@@ -260,7 +269,8 @@ function checkWinCondition() {
 
   if (isWon) {
     console.log('GAME WON!')
-    alert('Congratulations! You solved the Sudoku.')
+    // Game over is equivalent to winning
+    isGameOver.value = true
   }
 }
 
@@ -414,28 +424,28 @@ onMounted(() => {
           }
         }
       }
+    }
+  }
 
-      button {
-        color: var(--theme-button-primary-text);
-        padding: 0.75rem 1rem;
-        background: var(--theme-button-primary-bg);
-        border: 2px solid var(--theme-button-primary-border);
-        border-radius: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        box-shadow: var(--theme-shadow-sm);
+  .btn {
+    color: var(--theme-button-primary-text);
+    padding: 0.75rem 1rem;
+    background: var(--theme-button-primary-bg);
+    border: 2px solid var(--theme-button-primary-border);
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: var(--theme-shadow-sm);
 
-        &:hover {
-          background: var(--theme-button-primary-hover);
-          transform: translateY(-1px);
-          box-shadow: var(--theme-shadow-md);
-        }
+    &:hover {
+      background: var(--theme-button-primary-hover);
+      transform: translateY(-1px);
+      box-shadow: var(--theme-shadow-md);
+    }
 
-        &:active {
-          transform: translateY(0);
-        }
-      }
+    &:active {
+      transform: translateY(0);
     }
   }
 
@@ -447,13 +457,14 @@ onMounted(() => {
   }
 
   .grid {
+    position: relative;
     display: grid;
     grid-template-rows: repeat(9, 50px);
     border: 3px solid var(--theme-canvas-border);
     border-radius: 12px;
     overflow: hidden;
     user-select: none;
-    background: var(--theme-sodoku-bg);
+    background: var(--theme-sudoku-bg);
     box-shadow: var(--theme-shadow-lg);
     transition: all 0.3s;
   }
@@ -630,6 +641,35 @@ onMounted(() => {
           }
         }
       }
+    }
+  }
+
+  .gameover {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    pointer-events: auto;
+
+    .won {
+      color: var(--theme-button-primary-text);
+      background: var(--theme-modal-header);
+      padding: 20px 40px;
+      border-radius: 12px;
+      font-size: 1.5rem;
+      font-weight: bold;
+      box-shadow: var(--theme-shadow-lg);
+      text-shadow: var(--theme-shadow-sm);
     }
   }
 }
