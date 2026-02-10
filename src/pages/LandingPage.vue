@@ -36,6 +36,10 @@
             <router-link to="/kfkblock" class="play-btn">Spela</router-link>
           </div>
           <div class="game-card">
+            <h3>Sudoku</h3>
+            <router-link to="/sudoku" class="play-btn">Spela</router-link>
+          </div>
+          <div class="game-card">
             <h3>KfKbandvagn</h3>
             <router-link to="/kfkbandvagn" class="play-btn">Spela</router-link>
           </div>
