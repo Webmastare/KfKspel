@@ -407,7 +407,7 @@ class Animation {
   }
 
   static antal = 0
-
+  
   static GåIgnomAllaAnimationer() {
     let deSomÄrFramme = []
 

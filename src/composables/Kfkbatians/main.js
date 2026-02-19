@@ -55,6 +55,7 @@ export class card extends GameObject {
   constructor(xpos, ypos, bild, färg, nummer, offset = card.offsets) {
     super(xpos, ypos, card.kortbredd, card.korthöjd, card.baksida, offset)
 
+    this.objekttyp = 'card';
     this.actualBild = bild
     this.isActive = false
 
@@ -128,7 +129,7 @@ export class card extends GameObject {
     if (överlappare.length > 0) {
       //kollar om reglerna följs
       for (let i = 0; i < överlappare.length; i++) {
-        let objekttyp = överlappare[i].constructor.name
+        let objekttyp = överlappare[i].objekttyp;
         if (objekttyp === 'behållare') {
           let reglerFöljs = cardAction.ReglerFörBehållare(this, överlappare[i])
           if (reglerFöljs) {
@@ -142,7 +143,7 @@ export class card extends GameObject {
           } else if (överlappare.length !== i + 1) {
             //det finns fler överlappare så gör inget, ba fortsätt till nästa
           } else {
-            console.log('animation startad');
+            console.log('animation startad 1');
             this.moveTill(this.oldPosition, spawnare.cardMoveTime)
           }
         } else if (objekttyp === 'card') {
@@ -163,7 +164,7 @@ export class card extends GameObject {
           } else if (överlappare.length !== i + 1) {
             //det finns fler överlappare så gör inget, ba fortsätt till nästa
           } else {
-            console.log('animation startad');
+            console.log('animation startad 2');
             this.moveTill(this.oldPosition, spawnare.cardMoveTime)
           }
         } else {
@@ -171,7 +172,7 @@ export class card extends GameObject {
         }
       }
     } else {
-      console.log('animation startad');
+      console.log('animation startad 3');
       this.moveTill(this.oldPosition, spawnare.cardMoveTime)
     }
   }
@@ -511,6 +512,7 @@ export class behållare extends GameObject {
     this.addToInteractable();
     this.synligGör();
 
+    this.objekttyp = 'behållare';
     this.allakortdenhar = [];
     this.färg = färg;
     this.överstakortet;
