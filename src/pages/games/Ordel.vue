@@ -1050,14 +1050,14 @@ watch(selectedDate, (newDate) => {
   justify-content: center;
   gap: 10px;
   margin: 15px 0;
-  color: var(--theme-text-secondary);
+  color: #6b7280;
   font-size: 0.9rem;
 
   .spinner {
     width: 20px;
     height: 20px;
-    border: 3px solid var(--theme-bg-tertiary);
-    border-top: 3px solid var(--theme-button-primary-bg);
+    border: 3px solid #e5e7eb;
+    border-top: 3px solid #23641e;
     border-radius: 50%;
     animation: spin 1s linear infinite;
   }

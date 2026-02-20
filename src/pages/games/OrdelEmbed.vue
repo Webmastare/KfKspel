@@ -89,6 +89,13 @@ interface SubmittedRow {
   result: LetterResult[]
 }
 
+interface TodaysGameData {
+  date: string | undefined
+  guesses: SubmittedRow[]
+  completed: boolean
+  won: boolean
+}
+
 // Constants
 const WORD_LENGTH = 5
 const MAX_GUESSES = 6
@@ -96,6 +103,7 @@ const VALID_KEYS = 'qwertyuiopåasdfghjklöäzxcvbnm'
 const FLIP_DURATION = 400
 const FLIP_DELAY = 20
 const FLIP_MIDPOINT = FLIP_DURATION / 2
+const STORAGE_KEY = 'ordel-embed-progress'
 
 // Game state
 const currentWord = ref('')
@@ -207,6 +215,44 @@ function showMessage(msg: string, type: 'success' | 'error' | 'info') {
   }, 3000)
 }
 
+// Local storage functions for today's game only
+function loadTodaysGame(): TodaysGameData | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (!stored) return null
+
+    const data: TodaysGameData = JSON.parse(stored)
+    const today = todaysDate.value
+
+    // Only return data if it's for today's date
+    if (data.date === today) {
+      return data
+    }
+
+    // If stored data is for a different date, remove it
+    localStorage.removeItem(STORAGE_KEY)
+    return null
+  } catch (error) {
+    console.error("Error loading today's game:", error)
+    localStorage.removeItem(STORAGE_KEY)
+    return null
+  }
+}
+
+function saveTodaysGame(guesses: SubmittedRow[], completed: boolean, won: boolean) {
+  try {
+    const gameData: TodaysGameData = {
+      date: todaysDate.value,
+      guesses,
+      completed,
+      won,
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(gameData))
+  } catch (error) {
+    console.error("Error saving today's game:", error)
+  }
+}
+
 function updateKeyStatesFromResult(result: LetterResult[]) {
   result.forEach((letterResult: LetterResult) => {
     const letter = letterResult.letter.toUpperCase()
@@ -220,6 +266,20 @@ function updateKeyStatesFromResult(result: LetterResult[]) {
       keyStates.value.set(letter, 'absent')
     }
   })
+}
+
+function loadGameState() {
+  const savedGame = loadTodaysGame()
+  if (savedGame) {
+    // Load previous guesses and game state
+    submittedRows.value = savedGame.guesses
+    currentRow.value = savedGame.guesses.length
+    gameWon.value = savedGame.won
+    gameLost.value = savedGame.completed && !savedGame.won
+
+    // Restore keyboard states from all previous guesses
+    savedGame.guesses.forEach((row) => updateKeyStatesFromResult(row.result))
+  }
 }
 
 /**
@@ -366,6 +426,8 @@ async function handleEnter() {
       throw new Error('Invalid response format')
     }
 
+    checkingWord.value = false
+
     // Animate the row reveal
     await animateRowReveal(currentRow.value, data.result)
 
@@ -377,14 +439,19 @@ async function handleEnter() {
 
     if (won) {
       gameWon.value = true
+      saveTodaysGame(submittedRows.value, true, true)
       setTimeout(() => {
         showMessage('Great Success!', 'success')
       }, 300)
     } else if (currentRow.value >= MAX_GUESSES - 1) {
       gameLost.value = true
+      saveTodaysGame(submittedRows.value, true, false)
       setTimeout(() => {
         showMessage('Typiskt det var fel :(', 'error')
       }, 300)
+    } else {
+      // Save progress even if game is not complete
+      saveTodaysGame(submittedRows.value, false, false)
     }
 
     // Move to next row
@@ -440,6 +507,9 @@ onMounted(() => {
   if (innerApp) {
     innerApp.classList.add('no-navbar')
   }
+
+  // Load today's saved game state if it exists
+  loadGameState()
 })
 
 import { onUnmounted } from 'vue'

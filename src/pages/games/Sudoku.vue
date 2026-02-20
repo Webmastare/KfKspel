@@ -16,7 +16,7 @@
             <option value="81">Expert</option>
           </select>
         </div>
-        <button class="btn" @click="newGame">Nytt Spel</button>
+        <button class="btn newgame-btn" @click="newGame">Nytt Spel</button>
       </div>
     </div>
 
@@ -349,7 +349,8 @@ onMounted(() => {
 
   .header {
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: clamp(10px, 3vw, 20px);
+    width: 100%;
 
     h1 {
       margin: 0 0 15px 0;
@@ -453,13 +454,16 @@ onMounted(() => {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 20px;
+    gap: clamp(15px, 4vw, 20px);
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
   }
 
   .grid {
     position: relative;
     display: grid;
-    grid-template-rows: repeat(9, 50px);
+    grid-template-rows: repeat(9, 1fr);
     border: 3px solid var(--theme-canvas-border);
     border-radius: 12px;
     overflow: hidden;
@@ -467,22 +471,27 @@ onMounted(() => {
     background: var(--theme-sudoku-bg);
     box-shadow: var(--theme-shadow-lg);
     transition: all 0.3s;
+    width: min(90vw, 450px);
+    height: min(90vw, 450px);
+    aspect-ratio: 1;
   }
 
   .row {
     display: grid;
-    grid-template-columns: repeat(9, 50px);
+    grid-template-columns: repeat(9, 1fr);
   }
 
   .cell {
-    width: 50px;
-    height: 50px;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
     border-right: 1px solid var(--theme-sudoku-border);
     border-bottom: 1px solid var(--theme-sudoku-border);
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 1.5rem;
+    font-size: clamp(0.8rem, 4vw, 1.5rem);
     font-weight: 600;
     cursor: pointer;
     color: var(--theme-text-primary);
@@ -552,7 +561,7 @@ onMounted(() => {
       position: absolute;
       top: 2px;
       right: 2px;
-      font-size: 0.7rem;
+      font-size: clamp(0.4rem, 2vw, 0.7rem);
       font-weight: 400;
       color: var(--theme-warning);
       background: rgba(0, 0, 0, 0.7);
@@ -569,13 +578,13 @@ onMounted(() => {
       grid-template-rows: repeat(3, 1fr);
       width: 100%;
       height: 100%;
-      padding: 2px;
+      padding: clamp(1px, 0.5vw, 2px);
 
       .annotation-cell {
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 0.6rem;
+        font-size: clamp(0.3rem, 1.5vw, 0.6rem);
         font-weight: 500;
         color: var(--theme-text-secondary);
         line-height: 1;
@@ -670,7 +679,56 @@ onMounted(() => {
       font-weight: bold;
       box-shadow: var(--theme-shadow-lg);
       text-shadow: var(--theme-shadow-sm);
+      text-align: center;
+      word-wrap: break-word;
     }
+  }
+}
+
+// Media queries for enhanced mobile experience
+@media (max-width: 480px) {
+  .sudoku-container {
+    padding: 10px 5px;
+    gap: 15px;
+
+    .header .controls {
+      flex-direction: column;
+      gap: 10px;
+
+      label,
+      .difficulty-control,
+      .newgame-btn {
+        width: 90%;
+        justify-content: center;
+        text-align: center;
+      }
+    }
+
+    .grid {
+      width: min(95vw, 350px);
+      height: min(95vw, 350px);
+    }
+
+    .numpad {
+      max-width: min(95vw, 350px);
+      grid-template-columns: repeat(5, 1fr);
+
+      button {
+        min-height: 45px;
+      }
+    }
+  }
+}
+
+@media (max-width: 320px) {
+  .sudoku-container .grid {
+    width: 95vw;
+    height: 95vw;
+    border-width: 2px;
+  }
+
+  .sudoku-container .cell {
+    font-size: clamp(0.7rem, 4.5vw, 1rem);
   }
 }
 
