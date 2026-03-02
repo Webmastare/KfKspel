@@ -394,9 +394,11 @@ export class cardAction
 
     static LängdAvOvändlängd(superkort){
         if(superkort.haschild){
+            console.log(barnet);
+            error.vänd();
             let barnet = superkort.child;
             let antalOvända = 0;
-
+            
             while(barnet.isTurned === false){
                 antalOvända++;
                 barnet = barnet.child;
