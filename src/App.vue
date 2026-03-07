@@ -58,13 +58,14 @@ onMounted(async () => {
 body {
   font-family: 'Arial', sans-serif;
   line-height: 1.6;
-  background-color: black;
+  background-color: var(--theme-bg-primary);
 }
 
 #inner-app {
   width: 100%;
   height: calc(100vh - 3rem);
   padding-top: 3rem; /* Push content down by navbar height */
+  background-color: var(--theme-bg-primary);
 }
 
 #inner-app.no-navbar {
