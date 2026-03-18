@@ -38,8 +38,13 @@ export default [
         component: () => import("@/pages/Kasper-Project/CoffeeQueen.vue"),
     },
     {
-        path: "/sudoku",
-        name: "Sudoku",
-        component: () => import("@/pages/games/Sudoku.vue"),
+        path: "/rps",
+        name: "RockPaperScissors",
+        component: () => import("@/pages/other/RockPaperScissors.vue"),
+    },
+    {
+        path: "/kana",
+        name: "KanaGame",
+        component: () => import("@/pages/other/KanaGame.vue"),
     },
 ];

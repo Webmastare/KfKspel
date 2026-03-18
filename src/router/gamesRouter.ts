@@ -49,4 +49,19 @@ export default [
         name: "OrdelEmbed",
         component: () => import("@/pages/games/OrdelEmbed.vue"),
     },
+    {
+        path: "/sudoku",
+        name: "Sudoku",
+        component: () => import("@/pages/games/Sudoku.vue"),
+    },
+    {
+        path: "/anagram",
+        name: "Anagram",
+        component: () => import("@/pages/games/AnagramGame.vue"),
+    },
+    {
+        path: "/ordjakt",
+        name: "Ordjakt",
+        component: () => import("@/pages/games/HiddenWord.vue"),
+    },
 ];
