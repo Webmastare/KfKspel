@@ -34,8 +34,12 @@ export default [
     },
     {
         path: "/coffee-queen",
-        name: "CoffeeQueen",
-        component: () => import("@/pages/Kasper-Project/CoffeeQueen.vue"),
+        redirect: "/KfKbrygg",
+    },
+    {
+        path: "/KfKbrygg",
+        name: "KfKbrygg",
+        component: () => import("@/pages/Kasper-Project/KfKbrygg.vue"),
     },
     {
         path: "/rps",
