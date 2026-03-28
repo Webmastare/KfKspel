@@ -445,7 +445,7 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .stats-modal-overlay {
   position: fixed;
   top: 0;
@@ -472,7 +472,7 @@ onMounted(() => {
   width: min(90%, calc(100vw - 20px));
   max-width: 1200px;
   height: auto;
-  max-height: calc(100vh - 40px);
+  max-height: 85vh;
   color: var(--coffee-text-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   display: flex;
@@ -483,7 +483,6 @@ onMounted(() => {
     width: 100%;
     max-width: 100vw;
     border-radius: 8px;
-    margin-top: 0;
   }
 }
 
@@ -497,15 +496,15 @@ onMounted(() => {
   border-radius: 10px 10px 0 0;
   flex-shrink: 0;
 
+  h2 {
+    margin: 0;
+    font-size: clamp(1.2rem, 3.5vw, 1.5rem);
+    color: var(--coffee-text-secondary);
+  }
+
   @media (max-width: 768px) {
     border-radius: 6px 6px 0 0;
   }
-}
-
-.stats-header h2 {
-  margin: 0;
-  font-size: clamp(1.2rem, 3.5vw, 1.5rem);
-  color: var(--coffee-text-secondary);
 }
 
 .close-button {

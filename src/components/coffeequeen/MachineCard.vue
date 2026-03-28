@@ -612,7 +612,6 @@ function emitStart() {
 // Mobile-specific adjustments
 @media (max-width: 768px) {
   .machine-card {
-    margin: 5px;
     width: clamp(160px, 40vw, 180px);
   }
 

@@ -135,7 +135,7 @@ export interface SavedGameData {
 }
 
 // Multi-action types for inventory operations
-export type MultiActionValue = number | "10%" | "Custom%" | "Max";
+export type MultiActionValue = number | "10%" | "50%" | "Custom%" | "Max";
 
 // Upgrade system interfaces
 export interface ManagerUpgrade {
@@ -164,7 +164,7 @@ export interface UserUpgrades {
     salesManagers: Record<string, SalesManager>; // itemKey -> sales manager
 }
 
-import type { ManagerStatsManager } from '@/composables/coffeequeen/managerStatsTypes'
+import type { ManagerStatsManager } from "@/composables/coffeequeen/managerStatsTypes";
 export interface SalesManager {
     id: string;
     itemKey: ItemKey;
@@ -187,7 +187,7 @@ export interface SalesManager {
     };
     // Accumulator for smooth rate limiting
     partialItemsToSell: number; // Tracks fractional items to sell
-    partialItemsToBuy: number;  // Tracks fractional items to buy
+    partialItemsToBuy: number; // Tracks fractional items to buy
 }
 
 // Machine type categories

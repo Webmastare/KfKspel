@@ -18,7 +18,7 @@ Scaling Logic:
 - Production Time: Scales with batch size but with efficiency multipliers
 - Cost: Exponential but manageable with game progression
 """
-PLOT_DIR = Path(__file__).with_suffix("").parent / "plots"
+PLOT_DIR = Path(__file__).parent / "plots"
 PLOT_DIR.mkdir(exist_ok=True)
 
 # Base machine parameters

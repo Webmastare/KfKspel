@@ -2,6 +2,7 @@
   <div class="shop-modal-overlay" @click.self="emitClose">
     <div class="shop-modal">
       <h2>Upgrades Shop</h2>
+      <button class="top-close-button" @click="emitClose">×</button>
 
       <!-- Category Tabs -->
       <div class="category-tabs">
@@ -392,9 +393,9 @@ const emitClose = (): void => {
 .shop-modal {
   position: relative;
   padding: clamp(15px, 3vh, 20px);
-  border-radius: 10px;
+  border-radius: 20px;
   width: min(600px, calc(100vw - 20px));
-  max-height: calc(100vh - 40px);
+  max-height: 80vh;
   overflow-y: auto;
   background: var(--coffee-bg-card);
   border: 1px solid var(--coffee-border-primary);
@@ -404,12 +405,14 @@ const emitClose = (): void => {
 
   // Custom scrollbar for modal content
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 10px;
   }
 
   &::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.168);
     border-radius: 4px;
+    margin-top: 5vh;
+    margin-bottom: 5vh;
   }
 
   &::-webkit-scrollbar-thumb {
@@ -445,8 +448,7 @@ h2 {
   font-size: clamp(12px, 2.5vw, 14px);
   white-space: nowrap;
   min-height: 44px; // Touch target minimum
-  display: flex;
-  align-items: center;
+  padding: 10px;
 
   &:hover {
     background: var(--coffee-button-hover);
@@ -921,6 +923,29 @@ button {
   }
 }
 
+.top-close-button {
+  position: absolute;
+  top: 10px;
+  right: 20px;
+  background: none;
+  border: none;
+  color: var(--coffee-text-primary);
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  cursor: pointer;
+  padding: 0;
+  width: clamp(25px, 6vw, 30px);
+  height: clamp(25px, 6vw, 30px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
 .close-button {
   display: block;
   margin: clamp(15px, 3vh, 20px) auto 0;
@@ -943,18 +968,15 @@ button {
   }
 
   .shop-modal {
-    width: 100%;
-    max-width: 100vw;
-    border-radius: 8px;
-    margin-top: 0;
+    max-width: 90vw;
   }
 
   .category-tabs {
     gap: 5px;
 
     .tab-button {
-      flex: 1;
-      min-width: 0;
+      flex: 1 1;
+      max-width: 200px;
       font-size: 12px;
       padding: 8px 4px;
     }
@@ -988,7 +1010,7 @@ button {
 @media (max-width: 480px) {
   .shop-modal {
     padding: 12px;
-    border-radius: 6px;
+    border-radius: 10px;
   }
 
   h2 {

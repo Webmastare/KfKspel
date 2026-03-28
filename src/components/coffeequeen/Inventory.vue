@@ -2,6 +2,8 @@
   <div class="shop-modal-overlay" @click.self="emitClose">
     <div class="shop-modal">
       <h2>Inventory</h2>
+      <button class="top-close-button" @click="emitClose">×</button>
+
       <div class="multi-action">
         <p>Buy/Sell</p>
         <div class="multi-action-controls">
@@ -217,6 +219,8 @@ const getBuyQuantity = (key: string): number => {
     return maxPossible
   } else if (props.multiAction === '10%') {
     return Math.floor(maxPossible * 0.1)
+  } else if (props.multiAction === '50%') {
+    return Math.floor(maxPossible * 0.5)
   } else if (props.multiAction === 'Custom%') {
     return Math.floor(maxPossible * (props.customPercentage / 100))
   }
@@ -233,6 +237,8 @@ const getSellQuantity = (key: string): number => {
     return available
   } else if (props.multiAction === '10%') {
     return Math.floor(available * 0.1)
+  } else if (props.multiAction === '50%') {
+    return Math.floor(available * 0.5)
   } else if (props.multiAction === 'Custom%') {
     return Math.floor(available * (props.customPercentage / 100))
   }
@@ -274,11 +280,12 @@ const canSellQuantity = (key: string): boolean => {
   return !!(item && item.amount > 0)
 }
 
-const multiActionOptions: MultiActionValue[] = [1, 10, '10%', 'Custom%', 'Max']
+const multiActionOptions: MultiActionValue[] = [1, 10, '10%', '50%', 'Max'] // Removed 'Custom%' for now
 
 const getMultiActionDisplay = (): string => {
   if (props.multiAction === 'Max') return 'Max'
   if (props.multiAction === '10%') return '10%'
+  if (props.multiAction === '50%') return '50%'
   if (props.multiAction === 'Custom%') return `${props.customPercentage}%`
   return `${props.multiAction}x`
 }
@@ -544,7 +551,7 @@ const saveManagerSettings = (itemKey: string): void => {
   padding: clamp(15px, 3vh, 20px);
   border-radius: 10px;
   width: min(500px, calc(100vw - 20px));
-  max-height: calc(100vh - 40px);
+  max-height: 80vh;
   overflow-y: auto;
   background: var(--coffee-bg-card);
   border: 1px solid var(--coffee-border-primary);
@@ -552,13 +559,16 @@ const saveManagerSettings = (itemKey: string): void => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   margin: auto 0;
 
+  // Custom scrollbar for modal content
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 10px;
   }
 
   &::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.168);
     border-radius: 4px;
+    margin-top: 5vh;
+    margin-bottom: 5vh;
   }
 
   &::-webkit-scrollbar-thumb {
@@ -568,12 +578,13 @@ const saveManagerSettings = (itemKey: string): void => {
 }
 
 .multi-action {
-  position: absolute;
+  /*position: absolute;
   top: clamp(15px, 3vh, 20px);
-  right: clamp(15px, 3vh, 20px);
+  left: clamp(15px, 3vh, 20px);*/
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   text-align: center;
   z-index: 10;
@@ -643,9 +654,7 @@ const saveManagerSettings = (itemKey: string): void => {
 h2 {
   text-align: center;
   margin-top: 0;
-  margin-bottom: clamp(15px, 3vh, 20px);
   font-size: clamp(1.2rem, 4vw, 1.5rem);
-  margin-right: 140px; // Space for multi-action controls
 }
 
 .shop-items {
@@ -746,6 +755,29 @@ button {
     background-color: #a0a0a0;
     border-color: #666;
     cursor: not-allowed;
+  }
+}
+
+.top-close-button {
+  position: absolute;
+  top: 10px;
+  right: 20px;
+  background: none;
+  border: none;
+  color: var(--coffee-text-primary);
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  cursor: pointer;
+  padding: 0;
+  width: clamp(25px, 6vw, 30px);
+  height: clamp(25px, 6vw, 30px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.1);
   }
 }
 

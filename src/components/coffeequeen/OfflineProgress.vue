@@ -665,11 +665,7 @@ onMounted(() => {
   }
 
   .offline-progress-modal {
-    width: 100%;
-    max-width: 100vw;
-    border-radius: 10px;
-    margin-top: 0;
-    text-align: left;
+    max-width: 90vw;
 
     h2 {
       text-align: center;
