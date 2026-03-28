@@ -1,12 +1,14 @@
 <template>
-  <Navbar
-    v-if="!hideNavbarRoutes.includes($route.name)"
-    class="navbar"
-    @updateAuthMode="authMode = $event"
-  />
-  <Auth class="auth-form" v-show="authMode !== ''" :mode="authMode" @close="authMode = ''" />
-  <div id="inner-app">
-    <RouterView />
+  <div class="outer-wrapper">
+    <Navbar
+      v-if="!hideNavbarRoutes.includes($route.name)"
+      class="navbar"
+      @updateAuthMode="authMode = $event"
+    />
+    <Auth class="auth-form" v-show="authMode !== ''" :mode="authMode" @close="authMode = ''" />
+    <div id="inner-app">
+      <RouterView />
+    </div>
   </div>
 </template>
 
@@ -61,15 +63,22 @@ body {
   background-color: var(--theme-bg-primary);
 }
 
+.outer-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
 #inner-app {
+  position: relative;
   width: 100%;
-  height: calc(100vh - 3rem);
-  padding-top: 3rem; /* Push content down by navbar height */
+  /*height: calc(100vh - 3rem);*/
+  margin-top: 3rem; /* Push content down by navbar height */
   background-color: var(--theme-bg-primary);
 }
 
 #inner-app.no-navbar {
   height: 100vh;
-  padding-top: 0; /* Remove navbar padding when navbar is hidden */
+  margin-top: 0; /* Remove navbar margin when navbar is hidden */
 }
 </style>
