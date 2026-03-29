@@ -1050,7 +1050,15 @@ h1 {
   display: flex;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch; // Smooth scrolling on iOS
-  scroll-snap-type: x mandatory;
+  padding: 10px 0;
+  gap: clamp(8px, 2vw, 15px);
+  flex-wrap: nowrap; // Prevent wrapping for horizontal scroll
+
+  &::before,
+  &::after {
+    content: '';
+    flex: 1 0 auto;
+  }
 
   &::-webkit-scrollbar {
     height: 8px;
@@ -1065,11 +1073,6 @@ h1 {
     background: var(--coffee-border-secondary);
     border-radius: 4px;
   }
-
-  padding: 10px 0;
-  gap: clamp(8px, 2vw, 15px);
-  justify-content: center;
-  flex-wrap: nowrap; // Prevent wrapping for horizontal scroll
 
   > * {
     flex-shrink: 0; // Prevent items from shrinking
