@@ -121,10 +121,10 @@ import ProductionStats from '@/components/coffeequeen/ProductionStats.vue'
 import {
   calculateBatchSize,
   calculateProductionTime,
-  calculateEfficiencyBonus,
   calculateSpeedUpgradeCost,
   calculateEfficiencyUpgradeCost,
 } from '@/components/coffeequeen/coffee-upgrade-calculations'
+import { simulateGameStep } from '@/components/coffeequeen/coffee-simulation'
 import {
   saveToLocalStorage,
   loadFromLocalStorage,
@@ -198,6 +198,7 @@ let saveTimeoutId: number | null = null
 let hasUnsavedChanges = false
 let hasSignificantChanges = false // Track important changes like purchases, upgrades
 let lastBucketUpdate = 0 // OPTIMIZATION: Track when we last updated buckets
+const gameSpeedMultiplier = ref<number>(1)
 
 // Computed properties for display
 const allMachinesForDisplay = computed(() => {
@@ -755,131 +756,7 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
   }
 }
 
-// Sales Manager Processing
-function processSalesManagers(deltaTimeMS: number) {
-  if (!user.value.upgrades.salesManagers) return
-
-  for (const itemKey in user.value.upgrades.salesManagers) {
-    const manager = user.value.upgrades.salesManagers[itemKey as ItemKey]
-    if (!manager || manager.level === 0) continue
-
-    const inventoryItem = user.value.inventory[itemKey as ItemKey]
-    if (!inventoryItem) continue
-
-    const levelConfig = getSalesManagerLevelConfig(manager.level)
-    if (!levelConfig) continue
-
-    // Handle auto-sell
-    if (manager.settings.autoSellEnabled && levelConfig.features.canSell) {
-      const sellThreshold = manager.settings.sellThreshold || (manager.level === 1 ? 90 : 80)
-      const currentPercentage = (inventoryItem.amount / inventoryItem.capacity) * 100
-
-      if (currentPercentage >= sellThreshold && inventoryItem.amount > 0) {
-        const itemsAboveThreshold =
-          inventoryItem.amount - Math.floor((sellThreshold / 100) * inventoryItem.capacity)
-
-        // Add to accumulator based on sell rate and time elapsed
-        if (levelConfig.sellRate === -1) {
-          manager.partialItemsToSell += itemsAboveThreshold // Unlimited rate - sell all above threshold
-        } else {
-          manager.partialItemsToSell += (levelConfig.sellRate * deltaTimeMS) / 1000
-        }
-
-        // Only process when we have at least 1 full item to sell
-        const itemsToSell = Math.floor(manager.partialItemsToSell)
-        if (itemsToSell > 0) {
-          const actualItemsToSell = Math.min(itemsToSell, itemsAboveThreshold, inventoryItem.amount)
-
-          if (actualItemsToSell > 0) {
-            const sellPrice = inventoryItem.basePrice * inventoryItem.sellMultiplier
-            const totalEarned = actualItemsToSell * sellPrice
-
-            // Execute the sale
-            inventoryItem.amount -= actualItemsToSell
-            user.value.money += totalEarned
-
-            // Update statistics
-            manager.statistics.totalItemsSold += actualItemsToSell
-            manager.statistics.totalMoneyEarned += totalEarned
-            manager.statistics.lastActionTime = Date.now()
-
-            // Record timeseries data
-            recordManagerSellAction(manager, actualItemsToSell, totalEarned)
-
-            // Subtract sold items from accumulator (keep remainder)
-            manager.partialItemsToSell = Math.max(
-              0,
-              Math.min(1, manager.partialItemsToSell - actualItemsToSell),
-            )
-
-            // Mark for save
-            markUnsavedChanges()
-          }
-        }
-      }
-    }
-
-    // Handle auto-buy
-    if (manager.settings.autoBuyEnabled && levelConfig.features.canBuy && manager.level >= 3) {
-      const buyThreshold = manager.settings.buyThreshold || 10
-      const currentPercentage = (inventoryItem.amount / inventoryItem.capacity) * 100
-
-      if (currentPercentage <= buyThreshold && inventoryItem.amount < inventoryItem.capacity) {
-        const buyPrice = inventoryItem.cost
-        const availableSpace = inventoryItem.capacity - inventoryItem.amount
-
-        // Add to accumulator based on buy rate and time elapsed
-        if (levelConfig.sellRate === -1) {
-          // Unlimited rate - use a high rate for accumulation
-          manager.partialItemsToBuy += (1000 * deltaTimeMS) / 1000 // 1000 items/second for "unlimited"
-        } else {
-          manager.partialItemsToBuy += (levelConfig.sellRate * deltaTimeMS) / 1000
-        }
-
-        // Only process when we have at least 1 full item to buy
-        const itemsToBuy = Math.floor(manager.partialItemsToBuy)
-
-        if (itemsToBuy > 0) {
-          const maxAffordable = Math.floor(user.value.money / buyPrice)
-          const spaceBelowThreshold = Math.max(
-            0,
-            Math.floor((buyThreshold / 100) * inventoryItem.capacity) - inventoryItem.amount,
-          )
-          const actualItemsToBuy = Math.min(
-            itemsToBuy,
-            maxAffordable,
-            availableSpace,
-            spaceBelowThreshold,
-          )
-
-          if (actualItemsToBuy > 0 && user.value.money >= buyPrice * actualItemsToBuy) {
-            const totalCost = actualItemsToBuy * buyPrice
-
-            // Execute the purchase
-            inventoryItem.amount += actualItemsToBuy
-            user.value.money -= totalCost
-
-            // Update statistics
-            manager.statistics.totalItemsBought += actualItemsToBuy
-            manager.statistics.totalMoneySpent += totalCost
-            manager.statistics.lastActionTime = Date.now()
-
-            // Record timeseries data
-            recordManagerBuyAction(manager, actualItemsToBuy, totalCost)
-
-            // Subtract bought items from accumulator (keep remainder)
-            manager.partialItemsToBuy -= actualItemsToBuy
-
-            // Mark for save
-            markUnsavedChanges()
-          }
-        }
-      }
-    }
-  }
-}
-
-// Enhanced game loop with separate efficiency progress
+// Unified game loop driven by shared simulation core.
 function updateGame(timestamp: number) {
   if (!lastTimestamp) {
     lastTimestamp = timestamp
@@ -887,199 +764,41 @@ function updateGame(timestamp: number) {
 
   const deltaTime = timestamp - lastTimestamp
   lastTimestamp = timestamp
-  const elapsedMS = deltaTime
+  const elapsedMS = deltaTime * gameSpeedMultiplier.value
 
-  // Update all owned machines
-  for (const machineKey in user.value.machines) {
-    const machine = user.value.machines[machineKey]
-    const machineConf = machinesConfig.value[machineKey as MachineKey]
-
-    if (!machine || !machine.isOwned || !machineConf || (machine.isManual && !machine.isRunning))
-      continue
-
-    // Check if the machine is active
-    if (!machine.isActive) {
-      const batchSize =
-        machine.batchSize || calculateBatchSize(machineConf.baseBatchSize, machine.speedUpgrade)
-      const usesItemKey = machineConf.uses as ItemKey
-      const usesInventory = usesItemKey ? user.value.inventory[usesItemKey] : null
-      const availableAmount = usesInventory?.amount || 0
-
-      // Check if we have enough input materials
-      const hasEnoughInputs = usesInventory ? availableAmount >= batchSize : true // No inputs needed
-
-      // Check if there's enough space in output inventory
-      const producesItemKey = machineConf.produces as ItemKey
-      let outputInventory = user.value.inventory[producesItemKey]
-
-      // If output inventory doesn't exist, create it with proper capacity
-      if (!outputInventory) {
-        const itemInfo = itemData.value[producesItemKey]
-        user.value.inventory[producesItemKey] = {
-          name: itemInfo.name,
-          icon: itemInfo.icon,
-          amount: 0,
-          cost: itemInfo.cost,
-          basePrice: itemInfo.basePrice,
-          sellMultiplier: itemInfo.sellMultiplier,
-          capacity: calculateItemCapacity(producesItemKey),
-        }
-        outputInventory = user.value.inventory[producesItemKey]
-      }
-
-      const hasInventorySpace = outputInventory.amount + batchSize <= outputInventory.capacity
-
-      // Reactivate machine if all conditions are met
-      if (hasEnoughInputs && hasInventorySpace) {
-        machine.isActive = true
-        // Item consumption will occur when production completes
-        // Progress percent is set to 0 when production is completed
-      } else {
-        continue // Skip to next machine if not active
-      }
-    }
-
-    if (machine.progressPercent < 1) {
-      // Calculate progress per millisecond based on current production time
-      const progressPerMS = 1 / machine.productionTime // Progress per millisecond
-      const progressThisFrame = elapsedMS * progressPerMS
-
-      // Update progress
-      machine.progressPercent += progressThisFrame
-
-      // Update efficiency progress gradually during production (separate from normal production)
-      if (machine.efficiencyUpgrade > 0) {
-        const totalEfficiencyBonus = calculateEfficiencyBonus(machine.efficiencyUpgrade)
-        const efficiencyGainThisFrame = totalEfficiencyBonus * progressThisFrame
-        machine.efficiencyProgress += efficiencyGainThisFrame
-
-        // Check if we've accumulated enough for bonus items (can produce at any time)
-        if (machine.efficiencyProgress >= 1) {
-          const numberOfBonusItems = Math.floor(machine.efficiencyProgress) * machine.batchSize
-          const producesItemKey = machineConf.produces as ItemKey
-
-          // Ensure inventory item exists
-          if (!user.value.inventory[producesItemKey]) {
-            const itemInfo = itemData.value[producesItemKey]
-            user.value.inventory[producesItemKey] = {
-              name: itemInfo.name,
-              icon: itemInfo.icon,
-              amount: 0,
-              cost: itemInfo.cost,
-              basePrice: itemInfo.basePrice,
-              sellMultiplier: itemInfo.sellMultiplier,
-              capacity: calculateItemCapacity(producesItemKey),
-            }
+  const simulationResult = simulateGameStep(
+    user.value,
+    machinesConfig.value,
+    itemData.value,
+    elapsedMS,
+    {
+      hooks: {
+        onProduced: ({ itemKey, amount, source }) => {
+          if (source === 'bonus') {
+            recordBonusProduction(itemKey, amount)
+          } else {
+            recordProduction(itemKey, amount)
           }
-
-          // Check if adding bonus items would exceed capacity
-          const inventoryItem = user.value.inventory[producesItemKey]!
-          const availableSpace = inventoryItem.capacity - inventoryItem.amount
-          const itemsToAdd = Math.min(numberOfBonusItems, availableSpace)
-
-          if (itemsToAdd > 0) {
-            inventoryItem.amount += itemsToAdd
-            machine.itemsProduced += itemsToAdd // Track total items produced
-            machine.bonusItems += itemsToAdd // Track bonus items separately
-
-            // Record bonus production in stats
-            recordBonusProduction(producesItemKey, itemsToAdd)
+        },
+        onManagerSell: ({ itemKey, items, money }) => {
+          const manager = user.value.upgrades.salesManagers[itemKey]
+          if (manager) {
+            recordManagerSellAction(manager, items, money)
           }
-
-          // If we couldn't add all bonus items due to capacity or that the inventory is full after production, pause the machine
-          if (itemsToAdd < numberOfBonusItems || inventoryItem.amount >= inventoryItem.capacity) {
-            machine.isActive = false
-            machine.isRunning = false
+        },
+        onManagerBuy: ({ itemKey, items, money }) => {
+          const manager = user.value.upgrades.salesManagers[itemKey]
+          if (manager) {
+            recordManagerBuyAction(manager, items, money)
           }
+        },
+      },
+    },
+  )
 
-          machine.efficiencyProgress -= Math.floor(machine.efficiencyProgress) // Reset efficiency progress for next cycle
-        }
-      }
-
-      if (machine.progressPercent >= 1) {
-        // Production complete - produce main items based on batch size
-        const batchSize = machine.batchSize || 1
-        const producesItemKey = machineConf.produces as ItemKey
-
-        // Ensure inventory item exists
-        if (!user.value.inventory[producesItemKey]) {
-          const itemInfo = itemData.value[producesItemKey]
-          user.value.inventory[producesItemKey] = {
-            name: itemInfo.name,
-            icon: itemInfo.icon,
-            amount: 0,
-            cost: itemInfo.cost,
-            basePrice: itemInfo.basePrice,
-            sellMultiplier: itemInfo.sellMultiplier,
-            capacity: calculateItemCapacity(producesItemKey),
-          }
-        }
-
-        // Check if adding batch would exceed capacity
-        const inventoryItem = user.value.inventory[producesItemKey]!
-        const availableSpace = inventoryItem.capacity - inventoryItem.amount
-        const itemsToAdd = Math.min(batchSize, availableSpace)
-
-        if (itemsToAdd > 0) {
-          inventoryItem.amount += itemsToAdd
-          machine.itemsProduced += itemsToAdd // Track items produced
-
-          // Record regular production in stats
-          recordProduction(producesItemKey, itemsToAdd)
-        }
-
-        // If we couldn't add all items due to capacity or that the inventory is full after production, pause the machine
-        if (itemsToAdd < batchSize || inventoryItem.amount >= inventoryItem.capacity) {
-          machine.isActive = false
-          machine.isRunning = false
-        }
-
-        user.value.experience += batchSize // Experience based on batch size
-
-        // Check for level up
-        if (user.value.experience >= user.value.nextLevelExperience) {
-          user.value.level++
-          user.value.experience -= user.value.nextLevelExperience
-          user.value.nextLevelExperience = Math.ceil(user.value.nextLevelExperience * 1.2)
-        }
-
-        // Reset for next production cycle and consume resources
-        machine.progressPercent = 0 // Reset progress immediately
-
-        const usesItemKey = machineConf.uses as ItemKey
-        const usesInventory = usesItemKey ? user.value.inventory[usesItemKey] : null
-        const availableAmount = usesInventory?.amount || 0
-        let canProduce = true
-
-        if (availableAmount >= batchSize) {
-          if (usesInventory) {
-            usesInventory.amount -= batchSize // Consume batch amount
-          }
-          // Machine can continue running with fresh cycle
-        } else if (machineConf.uses != null && machineConf.uses !== '') {
-          console.log(`Not enough ${machineConf.uses} to produce ${machineConf.produces}.`)
-          canProduce = false
-        }
-
-        // Reset production progress and handle manual vs automated
-        if (machine.isManual) {
-          // Manual machines stop after one batch of normal production
-          machine.isRunning = false
-          machine.isActive = false
-        } else {
-          // Automated machines continue if they have resources
-          if (!canProduce) {
-            machine.isActive = false
-          }
-        }
-
-        markUnsavedChanges()
-      }
-    }
+  if (simulationResult.didChangeState) {
+    markUnsavedChanges()
   }
-
-  // Process Sales Managers
-  processSalesManagers(elapsedMS)
 
   // Periodic saves
   if (hasUnsavedChanges && shouldSaveToLocalStorage()) {
