@@ -122,6 +122,7 @@ export interface LoadGameResult {
 
 export interface SavedGameData {
     userName: string;
+    saveId?: string;
     money: number;
     level: number;
     experience: number;

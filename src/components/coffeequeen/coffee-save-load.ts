@@ -165,12 +165,29 @@ function ensureSummaryItem(
 
 // --- SAVE/LOAD LOGIC ---
 
+interface SaveIndexEntry {
+    id: string;
+    name: string;
+    lastSaved: string;
+}
+
+interface SaveIndex {
+    version: 1;
+    saves: SaveIndexEntry[];
+}
+
+const KFKBRYGG_SAVE_PREFIX = "kfkbrygg_save_";
+const KFKBRYGG_INDEX_KEY = "kfkbrygg_saves_index_v1";
+const KFKBRYGG_ACTIVE_SAVE_KEY = "kfkbrygg_active_save_id";
+
+const LEGACY_COFFEEQUEEN_PREFIX = "coffeeQueen_";
+
 /**
  * Saves the current game state to localStorage.
  */
 export function saveToLocalStorage(
     user: User,
-    userId: string = "guest",
+    saveId: string,
     userName: string = "Guest",
 ): void {
     try {
@@ -185,6 +202,7 @@ export function saveToLocalStorage(
 
         const gameData: SavedGameData = {
             userName: userName,
+            saveId,
             money: user.money,
             level: user.level,
             experience: user.experience,
@@ -195,7 +213,12 @@ export function saveToLocalStorage(
             productionStats: productionStats,
             lastSaved: new Date().toISOString(),
         };
-        localStorage.setItem(`coffeeQueen_${userId}`, JSON.stringify(gameData));
+        localStorage.setItem(
+            getSaveStorageKey(saveId),
+            JSON.stringify(gameData),
+        );
+        updateSaveIndex(saveId, userName, gameData.lastSaved);
+        setActiveSaveId(saveId);
         console.log("Data saved to localStorage with production stats:", {
             statsExists: !!productionStats,
             bucketCounts: productionStats
@@ -224,14 +247,16 @@ export function saveToLocalStorage(
  * Loads game state from a localStorage key and calculates offline progress.
  */
 export function loadFromLocalStorage(
-    key: string,
+    saveId: string,
     machinesConfig: Record<MachineKey, MachineConfig>,
     itemData: Record<ItemKey, ItemData>,
 ): LoadGameResult | null {
     try {
-        const savedData = localStorage.getItem(key);
+        const key = resolveSaveStorageKey(saveId);
+        const savedData = key ? localStorage.getItem(key) : null;
         if (savedData) {
             const gameData: SavedGameData = JSON.parse(savedData);
+            gameData.saveId = saveId;
 
             // Ensure upgrades exist for backward compatibility
             if (!gameData.upgrades) {
@@ -305,21 +330,17 @@ export function loadFromLocalStorage(
                             "📈 Production stats restored from localStorage:",
                             {
                                 bucketCounts: {
-                                    tenSeconds:
-                                        statsManagerRef.value.tenSeconds
-                                            ?.length || "none",
-                                    oneMinute:
-                                        statsManagerRef.value.oneMinute
-                                            ?.length || "none",
-                                    tenMinutes:
-                                        statsManagerRef.value.tenMinutes
-                                            ?.length || "none",
+                                    tenSeconds: statsManagerRef.value.tenSeconds
+                                        ?.length || "none",
+                                    oneMinute: statsManagerRef.value.oneMinute
+                                        ?.length || "none",
+                                    tenMinutes: statsManagerRef.value.tenMinutes
+                                        ?.length || "none",
                                     oneHour:
                                         statsManagerRef.value.oneHour?.length ||
                                         "none",
-                                    tenHours:
-                                        statsManagerRef.value.tenHours
-                                            ?.length || "none",
+                                    tenHours: statsManagerRef.value.tenHours
+                                        ?.length || "none",
                                     hundredHours:
                                         statsManagerRef.value.hundredHours
                                             ?.length || "none",
@@ -356,9 +377,8 @@ export function loadFromLocalStorage(
                                 tenHours:
                                     statsManagerRef.value.tenHours?.length ||
                                     "none",
-                                hundredHours:
-                                    statsManagerRef.value.hundredHours
-                                        ?.length || "none",
+                                hundredHours: statsManagerRef.value.hundredHours
+                                    ?.length || "none",
                                 allTime:
                                     statsManagerRef.value.allTime?.length ||
                                     "none",
@@ -457,26 +477,266 @@ export function loadFromLocalStorage(
  * Retrieves all saved games from localStorage.
  */
 export function displayLocalSaves(): SavedGameData[] {
+    const index = readSaveIndex();
     const allItems: SavedGameData[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith("coffeeQueen_")) {
-            try {
-                const savedData = localStorage.getItem(key);
-                if (savedData) {
-                    const gameData: SavedGameData = JSON.parse(savedData);
-                    gameData.itemKey = key; // Add the key for loading later
-                    allItems.push(gameData);
-                }
-            } catch (error) {
-                console.error(
-                    `Failed to parse saved data for key: ${key}`,
-                    error,
-                );
-            }
+
+    for (const entry of index.saves) {
+        const key = getSaveStorageKey(entry.id);
+        try {
+            const savedData = localStorage.getItem(key);
+            if (!savedData) continue;
+
+            const gameData: SavedGameData = JSON.parse(savedData);
+            gameData.itemKey = entry.id;
+            gameData.saveId = entry.id;
+            gameData.userName = entry.name || gameData.userName || "Guest";
+            allItems.push(gameData);
+        } catch (error) {
+            console.error(
+                `Failed to parse saved data for key: ${key}`,
+                error,
+            );
         }
     }
-    return allItems;
+
+    return allItems.sort((a, b) => {
+        const aTime = Date.parse(a.lastSaved || "") || 0;
+        const bTime = Date.parse(b.lastSaved || "") || 0;
+        return bTime - aTime;
+    });
+}
+
+export function initializeKfKbryggSaveSystem(
+    defaultSaveName = "Guest",
+): string {
+    migrateLegacyCoffeeQueenSavesToKfKbrygg();
+
+    const index = readSaveIndex();
+    if (index.saves.length === 0) {
+        const saveId = createSaveId();
+        const user = createNewUser();
+        saveToLocalStorage(user, saveId, normalizeSaveName(defaultSaveName));
+        return saveId;
+    }
+
+    const active = getActiveSaveId();
+    const activeExists = active &&
+        index.saves.some((save) => save.id === active);
+    if (active && activeExists) {
+        return active;
+    }
+
+    const firstSave = index.saves[0];
+    if (firstSave) {
+        setActiveSaveId(firstSave.id);
+        return firstSave.id;
+    }
+
+    const fallbackSaveId = createSaveId();
+    saveToLocalStorage(
+        createNewUser(),
+        fallbackSaveId,
+        normalizeSaveName(defaultSaveName),
+    );
+    return fallbackSaveId;
+}
+
+export function createNewLocalSave(saveName: string): string {
+    const saveId = createSaveId();
+    saveToLocalStorage(createNewUser(), saveId, normalizeSaveName(saveName));
+    return saveId;
+}
+
+export function renameLocalSave(saveId: string, newName: string): boolean {
+    const normalized = normalizeSaveName(newName);
+    const index = readSaveIndex();
+    const target = index.saves.find((save) => save.id === saveId);
+    if (!target) return false;
+
+    target.name = normalized;
+    writeSaveIndex(index);
+
+    const key = getSaveStorageKey(saveId);
+    const raw = localStorage.getItem(key);
+    if (raw) {
+        try {
+            const gameData: SavedGameData = JSON.parse(raw);
+            gameData.userName = normalized;
+            gameData.saveId = saveId;
+            localStorage.setItem(key, JSON.stringify(gameData));
+        } catch (error) {
+            console.error("Failed to rename save payload:", error);
+        }
+    }
+
+    return true;
+}
+
+export function deleteLocalSave(saveId: string): void {
+    const key = getSaveStorageKey(saveId);
+    localStorage.removeItem(key);
+
+    const index = readSaveIndex();
+    index.saves = index.saves.filter((save) => save.id !== saveId);
+    writeSaveIndex(index);
+
+    const active = getActiveSaveId();
+    if (active === saveId) {
+        if (index.saves[0]) {
+            setActiveSaveId(index.saves[0].id);
+        } else {
+            localStorage.removeItem(KFKBRYGG_ACTIVE_SAVE_KEY);
+        }
+    }
+}
+
+export function getActiveSaveId(): string | null {
+    return localStorage.getItem(KFKBRYGG_ACTIVE_SAVE_KEY);
+}
+
+export function setActiveSaveId(saveId: string): void {
+    localStorage.setItem(KFKBRYGG_ACTIVE_SAVE_KEY, saveId);
+}
+
+/**
+ * Legacy migration block:
+ * Moves old coffeeQueen_* save keys to the new kfkbrygg save-slot format,
+ * updates the index, and removes old keys after successful migration.
+ */
+export function migrateLegacyCoffeeQueenSavesToKfKbrygg(): void {
+    const index = readSaveIndex();
+    const legacyKeys: string[] = [];
+
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(LEGACY_COFFEEQUEEN_PREFIX)) {
+            legacyKeys.push(key);
+        }
+    }
+
+    if (legacyKeys.length === 0) {
+        return;
+    }
+
+    for (const legacyKey of legacyKeys) {
+        const raw = localStorage.getItem(legacyKey);
+        if (!raw) continue;
+
+        try {
+            const gameData: SavedGameData = JSON.parse(raw);
+            const legacyId =
+                legacyKey.slice(LEGACY_COFFEEQUEEN_PREFIX.length) || "legacy";
+
+            let newSaveId = `legacy_${slugifyId(legacyId)}`;
+            while (
+                localStorage.getItem(getSaveStorageKey(newSaveId)) ||
+                index.saves.some((save) => save.id === newSaveId)
+            ) {
+                newSaveId = `${newSaveId}_${Math.floor(Math.random() * 1000)}`;
+            }
+
+            const migratedName = normalizeSaveName(
+                gameData.userName || `Migrated ${legacyId}`,
+            );
+            gameData.userName = migratedName;
+            gameData.saveId = newSaveId;
+
+            localStorage.setItem(
+                getSaveStorageKey(newSaveId),
+                JSON.stringify(gameData),
+            );
+            index.saves.push({
+                id: newSaveId,
+                name: migratedName,
+                lastSaved: gameData.lastSaved || new Date().toISOString(),
+            });
+
+            if (!getActiveSaveId() && legacyId === "guest") {
+                setActiveSaveId(newSaveId);
+            }
+
+            // Remove old key once migrated.
+            localStorage.removeItem(legacyKey);
+        } catch (error) {
+            console.error(
+                `Failed to migrate legacy save key ${legacyKey}:`,
+                error,
+            );
+        }
+    }
+
+    writeSaveIndex(index);
+}
+
+function readSaveIndex(): SaveIndex {
+    const raw = localStorage.getItem(KFKBRYGG_INDEX_KEY);
+    if (!raw) {
+        return { version: 1, saves: [] };
+    }
+
+    try {
+        const parsed = JSON.parse(raw) as SaveIndex;
+        if (!parsed || !Array.isArray(parsed.saves)) {
+            return { version: 1, saves: [] };
+        }
+        return { version: 1, saves: parsed.saves };
+    } catch {
+        return { version: 1, saves: [] };
+    }
+}
+
+function writeSaveIndex(index: SaveIndex): void {
+    localStorage.setItem(KFKBRYGG_INDEX_KEY, JSON.stringify(index));
+}
+
+function updateSaveIndex(
+    saveId: string,
+    name: string,
+    lastSaved: string,
+): void {
+    const index = readSaveIndex();
+    const existing = index.saves.find((save) => save.id === saveId);
+    if (existing) {
+        existing.name = normalizeSaveName(name);
+        existing.lastSaved = lastSaved;
+    } else {
+        index.saves.push({
+            id: saveId,
+            name: normalizeSaveName(name),
+            lastSaved,
+        });
+    }
+    writeSaveIndex(index);
+}
+
+function resolveSaveStorageKey(saveIdOrKey: string): string | null {
+    if (!saveIdOrKey) return null;
+    if (saveIdOrKey.startsWith(KFKBRYGG_SAVE_PREFIX)) {
+        return saveIdOrKey;
+    }
+    const key = getSaveStorageKey(saveIdOrKey);
+    return key;
+}
+
+function getSaveStorageKey(saveId: string): string {
+    return `${KFKBRYGG_SAVE_PREFIX}${saveId}`;
+}
+
+function createSaveId(): string {
+    return `save_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+}
+
+function normalizeSaveName(name: string): string {
+    const trimmed = (name || "").trim();
+    return trimmed.length > 0 ? trimmed.slice(0, 40) : "Guest";
+}
+
+function slugifyId(value: string): string {
+    const slug = value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    return slug || "legacy";
 }
 
 /**

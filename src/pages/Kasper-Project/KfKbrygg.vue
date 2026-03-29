@@ -83,6 +83,9 @@
       :storage-type="loadedDataStorageType"
       @close="showLoadDataOverlay = false"
       @load-data="loadGame"
+      @create-new-save="createNewGame"
+      @rename-save="renameSave"
+      @delete-save="deleteSave"
     />
 
     <!-- Offline Progress Modal -->
@@ -145,6 +148,12 @@ import {
   displayLocalSaves,
   createNewUser,
   setStatsManagerReference,
+  initializeKfKbryggSaveSystem,
+  createNewLocalSave,
+  renameLocalSave,
+  deleteLocalSave,
+  getActiveSaveId,
+  setActiveSaveId,
 } from '@/components/coffeequeen/coffee-save-load'
 import { useThemeStore } from '@/stores/theme'
 import {
@@ -195,6 +204,8 @@ const customPercentage = ref<number>(25)
 const showLoadDataOverlay = ref<boolean>(false)
 const loadedData = ref<SavedGameData[]>([])
 const loadedDataStorageType = ref<string>('')
+const activeSaveId = ref<string>('')
+const activeSaveName = ref<string>('Guest')
 
 // Offline progress state
 const showOfflineProgress = ref<boolean>(false)
@@ -603,6 +614,47 @@ function openLoadDataOverlay() {
   showLoadDataOverlay.value = true
 }
 
+function createNewGame(saveName: string) {
+  const newSaveId = createNewLocalSave(saveName)
+  activeSaveId.value = newSaveId
+  activeSaveName.value = saveName.trim() || 'Guest'
+  loadGame(newSaveId)
+  loadedData.value = displayLocalSaves()
+}
+
+function renameSave(payload: { saveId: string; newName: string }) {
+  const { saveId, newName } = payload
+  const didRename = renameLocalSave(saveId, newName)
+  if (!didRename) return
+
+  if (activeSaveId.value === saveId) {
+    activeSaveName.value = newName.trim() || 'Guest'
+  }
+
+  loadedData.value = displayLocalSaves()
+}
+
+function deleteSave(saveId: string) {
+  const wasActiveSave = activeSaveId.value === saveId
+  deleteLocalSave(saveId)
+
+  const saves = displayLocalSaves()
+  loadedData.value = saves
+
+  if (!wasActiveSave) {
+    return
+  }
+
+  const nextActiveSaveId = getActiveSaveId()
+  if (nextActiveSaveId) {
+    loadGame(nextActiveSaveId)
+    return
+  }
+
+  const fallbackSaveId = createNewLocalSave('Guest')
+  loadGame(fallbackSaveId)
+}
+
 function handleUpgrade({
   machineKey,
   upgradeType,
@@ -654,18 +706,29 @@ function upgradeMachine(machineKey: MachineKey, upgradeType: string) {
 // Save to localStorage
 function saveToLocalStorageNow() {
   console.log('💾 Saving game state...')
-  saveToLocalStorage(user.value, 'guest', 'Guest')
+  if (!activeSaveId.value) {
+    activeSaveId.value = initializeKfKbryggSaveSystem(activeSaveName.value)
+  }
+
+  saveToLocalStorage(user.value, activeSaveId.value, activeSaveName.value)
   // Reset significant changes flag after saving
   hasSignificantChanges = false
   // Production stats are now automatically included in the save
 }
 
-function loadGame(itemKey: string) {
-  const result = loadFromLocalStorage(itemKey, machinesConfig.value, itemData.value)
+function loadGame(saveId: string) {
+  const result = loadFromLocalStorage(saveId, machinesConfig.value, itemData.value)
   console.log('Result of load:', result)
   if (result) {
+    activeSaveId.value = saveId
+    setActiveSaveId(saveId)
+
     // Load the game data
     user.value = result.gameData
+    const matchingSave = displayLocalSaves().find(
+      (save) => (save.saveId || save.itemKey) === saveId,
+    )
+    activeSaveName.value = matchingSave?.userName?.trim() || activeSaveName.value || 'Guest'
 
     // Time offline
     const currentTime = Date.now()
@@ -844,8 +907,9 @@ onMounted(async () => {
   // Set up user reference for stats integration
   setUserReference(user.value)
 
-  // Try to load existing save
-  loadGame('coffeeQueen_guest')
+  // Initialize save slots (includes migration from legacy coffeeQueen keys)
+  const initialSaveId = initializeKfKbryggSaveSystem('Guest')
+  loadGame(initialSaveId)
 
   // Setup event listeners
   document.addEventListener('visibilitychange', handleVisibilityChange)

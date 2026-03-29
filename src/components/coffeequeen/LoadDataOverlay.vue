@@ -1,10 +1,28 @@
 <template>
   <div class="load-data-overlay" @click.self="emitClose">
     <div class="data-modal">
-      <h2>Found Data in Local Storage</h2>
+      <h2>KfKbrygg Saves</h2>
+
+      <div class="new-save-section">
+        <input v-model="newSaveName" type="text" placeholder="New save name" maxlength="40" />
+        <button @click="requestCreateNewSave">Start New Game</button>
+      </div>
+
+      <div v-if="confirmingNewSave" class="confirm-box">
+        <p>Start a new game from scratch as "{{ normalizedNewSaveName }}"?</p>
+        <div class="confirm-actions">
+          <button class="confirm" @click="confirmCreateNewSave">Yes, I am sure</button>
+          <button class="cancel" @click="cancelCreateNewSave">Cancel</button>
+        </div>
+      </div>
+
       <div class="data-wrapper">
-        <div v-for="(item, index) in loadedData" :key="index" class="data-item">
-          <p>User: {{ item.userName }}</p>
+        <div
+          v-for="(item, index) in loadedData"
+          :key="item.saveId || item.itemKey || `save-${index}`"
+          class="data-item"
+        >
+          <p>Save: {{ item.userName }}</p>
           <p>Saved at: {{ formatDate(item.lastSaved) }}</p>
           <p>Money: ${{ item.money.toFixed(2) }}</p>
           <div class="level-container">
@@ -22,7 +40,25 @@
             <div class="level-text">{{ item.level }}</div>
           </div>
 
-          <button @click="emitLoadData(item)">Load</button>
+          <div class="actions-row">
+            <button @click="emitLoadData(item)">Load</button>
+            <button class="secondary" @click="startRename(item)">Edit</button>
+            <button class="danger" @click="requestDelete(item)">Delete</button>
+          </div>
+
+          <div v-if="renamingSaveId === (item.saveId || item.itemKey)" class="rename-row">
+            <input v-model="renameValue" type="text" maxlength="40" />
+            <button class="confirm" @click="confirmRename(item)">Save Name</button>
+            <button class="cancel" @click="cancelRename">Cancel</button>
+          </div>
+
+          <div v-if="deletingSaveId === (item.saveId || item.itemKey)" class="confirm-box inline">
+            <p>Delete "{{ item.userName }}" permanently?</p>
+            <div class="confirm-actions">
+              <button class="danger" @click="confirmDelete(item)">Yes, delete</button>
+              <button class="cancel" @click="cancelDelete">Cancel</button>
+            </div>
+          </div>
         </div>
       </div>
       <button class="close-button" @click="emitClose">Close</button>
@@ -31,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { SavedGameData } from '@/components/coffeequeen/types'
 
 interface Props {
@@ -41,13 +77,26 @@ interface Props {
 
 interface Emits {
   (e: 'close'): void
-  (e: 'loadData', key: string): void
+  (e: 'loadData', saveId: string): void
+  (e: 'createNewSave', saveName: string): void
+  (e: 'renameSave', payload: { saveId: string; newName: string }): void
+  (e: 'deleteSave', saveId: string): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const circumference = 2 * Math.PI * 45
+const newSaveName = ref<string>('Guest')
+const confirmingNewSave = ref<boolean>(false)
+const renamingSaveId = ref<string | null>(null)
+const renameValue = ref<string>('')
+const deletingSaveId = ref<string | null>(null)
+
+const normalizedNewSaveName = computed(() => {
+  const trimmed = newSaveName.value.trim()
+  return trimmed.length > 0 ? trimmed : 'Guest'
+})
 
 // Format date function
 const formatDate = (isoString: string): string => {
@@ -82,9 +131,60 @@ const emitClose = (): void => {
 }
 
 const emitLoadData = (item: SavedGameData): void => {
-  if (item.itemKey) {
-    emit('loadData', item.itemKey)
+  const saveId = item.saveId || item.itemKey
+  if (saveId) {
+    emit('loadData', saveId)
   }
+}
+
+const requestCreateNewSave = (): void => {
+  confirmingNewSave.value = true
+}
+
+const confirmCreateNewSave = (): void => {
+  emit('createNewSave', normalizedNewSaveName.value)
+  confirmingNewSave.value = false
+}
+
+const cancelCreateNewSave = (): void => {
+  confirmingNewSave.value = false
+}
+
+const startRename = (item: SavedGameData): void => {
+  const saveId = item.saveId || item.itemKey
+  if (!saveId) return
+
+  renamingSaveId.value = saveId
+  renameValue.value = item.userName
+}
+
+const confirmRename = (item: SavedGameData): void => {
+  const saveId = item.saveId || item.itemKey
+  if (!saveId) return
+
+  const nextName = renameValue.value.trim() || 'Guest'
+  emit('renameSave', { saveId, newName: nextName })
+  renamingSaveId.value = null
+}
+
+const cancelRename = (): void => {
+  renamingSaveId.value = null
+}
+
+const requestDelete = (item: SavedGameData): void => {
+  deletingSaveId.value = item.saveId || item.itemKey || null
+}
+
+const confirmDelete = (item: SavedGameData): void => {
+  const saveId = item.saveId || item.itemKey
+  if (!saveId) return
+
+  emit('deleteSave', saveId)
+  deletingSaveId.value = null
+}
+
+const cancelDelete = (): void => {
+  deletingSaveId.value = null
 }
 </script>
 
@@ -128,6 +228,23 @@ const emitLoadData = (item: SavedGameData): void => {
     }
   }
 
+  .new-save-section {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+
+    input {
+      flex: 1;
+      min-height: 40px;
+      border-radius: 6px;
+      border: 1px solid var(--coffee-border-primary);
+      padding: 0 10px;
+      font-family: inherit;
+      background: var(--coffee-bg-secondary);
+      color: var(--coffee-text-primary);
+    }
+  }
+
   .data-wrapper {
     display: flex;
     flex-direction: column;
@@ -160,7 +277,55 @@ const emitLoadData = (item: SavedGameData): void => {
       @media (max-width: 768px) {
         padding: 12px;
       }
+
+      .actions-row {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .rename-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+        width: 100%;
+
+        input {
+          flex: 1;
+          min-height: 38px;
+          border-radius: 6px;
+          border: 1px solid var(--coffee-border-primary);
+          padding: 0 8px;
+          font-family: inherit;
+          background: var(--coffee-bg-primary);
+          color: var(--coffee-text-primary);
+        }
+      }
     }
+  }
+
+  .confirm-box {
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background: var(--coffee-bg-secondary);
+    border: 1px solid var(--coffee-border-primary);
+
+    &.inline {
+      margin-top: 10px;
+      margin-bottom: 0;
+    }
+
+    p {
+      margin: 0 0 8px;
+    }
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
   }
 
   button {
@@ -184,6 +349,34 @@ const emitLoadData = (item: SavedGameData): void => {
       background-color: #a0a0a0;
       border-color: #666;
       cursor: not-allowed;
+    }
+
+    &.secondary {
+      background-color: #607d8b;
+      border-color: #546e7a;
+
+      &:hover {
+        background-color: #546e7a;
+      }
+    }
+
+    &.danger {
+      background-color: #f44336;
+      border-color: #d32f2f;
+
+      &:hover {
+        background-color: #d32f2f;
+      }
+    }
+
+    &.confirm {
+      background-color: #2e7d32;
+      border-color: #1b5e20;
+    }
+
+    &.cancel {
+      background-color: #616161;
+      border-color: #424242;
     }
   }
 
