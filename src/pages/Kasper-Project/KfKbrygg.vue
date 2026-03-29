@@ -15,6 +15,20 @@
       <button @click="openLoadDataOverlay">Load Game</button>
     </div>
 
+    <div class="speed-controls">
+      <span class="speed-controls__label">Speed</span>
+      <div class="speed-controls__buttons">
+        <button
+          v-for="speed in speedOptions"
+          :key="`speed-${speed}`"
+          :class="{ active: gameSpeedMultiplier === speed }"
+          @click="setGameSpeed(speed)"
+        >
+          {{ speed }}x
+        </button>
+      </div>
+    </div>
+
     <!-- Machines Container -->
     <div class="machines-container">
       <div v-for="(group, type) in groupedMachines" :key="type" class="machine-row-container">
@@ -199,6 +213,7 @@ let hasUnsavedChanges = false
 let hasSignificantChanges = false // Track important changes like purchases, upgrades
 let lastBucketUpdate = 0 // OPTIMIZATION: Track when we last updated buckets
 const gameSpeedMultiplier = ref<number>(1)
+const speedOptions = [1, 2, 3, 10, 100]
 
 // Computed properties for display
 const allMachinesForDisplay = computed(() => {
@@ -347,6 +362,10 @@ function updateInventoryMultiAction(newValue: MultiActionValue) {
 
 function updateCustomPercentage(newValue: number) {
   customPercentage.value = newValue
+}
+
+function setGameSpeed(speed: number) {
+  gameSpeedMultiplier.value = speed
 }
 
 function updateManagerSettings(payload: {
@@ -909,6 +928,44 @@ h1 {
   }
 }
 
+.speed-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: clamp(18px, 4vw, 30px);
+}
+
+.speed-controls__label {
+  color: var(--coffee-text-secondary);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: clamp(0.9rem, 2vw, 1rem);
+  font-weight: bold;
+}
+
+.speed-controls__buttons {
+  display: flex;
+  gap: 8px;
+
+  button {
+    background: var(--coffee-button-bg);
+    color: var(--coffee-button-text);
+    border: 2px solid var(--coffee-button-border);
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: bold;
+    min-width: 52px;
+    transition: all 0.2s ease;
+
+    &.active {
+      transform: translateY(-1px);
+      box-shadow: 0 0 0 2px var(--coffee-text-secondary);
+    }
+  }
+}
+
 .machines-container {
   margin-bottom: clamp(80px, 12vh, 120px); // Space for overlay
 }
@@ -973,6 +1030,11 @@ h1 {
       width: 100%;
       max-width: 280px;
     }
+  }
+
+  .speed-controls {
+    flex-direction: column;
+    gap: 8px;
   }
 }
 
