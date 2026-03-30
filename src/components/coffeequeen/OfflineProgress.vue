@@ -117,6 +117,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import type { OfflineProductionSummary, ItemData, ItemKey } from '@/components/coffeequeen/types'
+import { formatCompactNumber } from '@/components/coffeequeen/number-format'
 
 interface Props {
   offlineTime: number
@@ -193,7 +194,7 @@ const formatNetChange = (item: any) => {
 
 // Function to format money values
 const formatMoney = (amount: number) => {
-  return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  return `$${formatCompactNumber(amount)}`
 }
 
 // Function to format money change with sign

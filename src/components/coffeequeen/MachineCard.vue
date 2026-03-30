@@ -49,7 +49,7 @@
             <p>Efficiency:</p>
             <div
               class="efficiency-bar-fill"
-              :class="{ 'high-speed': isHighSpeedMode }"
+              :class="{ 'high-speed': isHighSpeedModeEfficiency }"
               :style="{ width: efficiencyProgressBarWidth }"
             ></div>
           </div>
@@ -61,7 +61,7 @@
               Speed: {{ machine.speedUpgrade }}
             </button>
             <div class="tooltip">
-              <p>Cost: ${{ machine.speedUpgradeCost }}</p>
+              <p>Cost: ${{ formatCompactNumber(machine.speedUpgradeCost) }}</p>
               <p>Current: {{ (machine.productionTime / 1000).toFixed(2) }}s</p>
               <p>Next: {{ (nextSpeedTime / 1000).toFixed(2) }}s</p>
             </div>
@@ -71,7 +71,7 @@
               Efficiency: {{ machine.efficiencyUpgrade }}
             </button>
             <div class="tooltip">
-              <p>Cost: ${{ machine.efficiencyUpgradeCost }}</p>
+              <p>Cost: ${{ formatCompactNumber(machine.efficiencyUpgradeCost) }}</p>
               <p>Current: {{ getEfficiency(false) }}</p>
               <p>Next: {{ getEfficiency(true) }}</p>
             </div>
@@ -86,7 +86,7 @@
         <p>Batch Size: {{ machine.batchSize }}</p>
       </div>
       <div class="buy-section">
-        <p>Cost: ${{ machine.cost }}</p>
+        <p>Cost: ${{ formatCompactNumber(machine.cost) }}</p>
         <p>Requires Level: {{ machine.levelRequired }}</p>
         <button @click="emitBuy" :disabled="!canAffordMachine || !levelMet">
           <span v-if="!levelMet">Level {{ machine.levelRequired }} Required</span>
@@ -106,6 +106,7 @@ import {
   calculateBatchSize,
 } from '@/components/coffeequeen/coffee-upgrade-calculations'
 import { machineDataList } from '@/components/coffeequeen/data-machines'
+import { formatCompactNumber } from '@/components/coffeequeen/number-format'
 
 interface Props {
   machine: UserMachine
@@ -145,6 +146,11 @@ const calculateProductionTimeLeft = () => {
 
 const efficiencyProgressBarWidth = computed(() => {
   if (!props.machine.isOwned) return '0%'
+  if (
+    props.machine.productionTime / calculateEfficiencyBonus(props.machine.efficiencyUpgrade) <
+    100
+  )
+    return '100%'
   const progress = Math.max(0, Math.min(1, props.machine.efficiencyProgress))
   return `${progress * 100}%`
 })
@@ -152,6 +158,12 @@ const efficiencyProgressBarWidth = computed(() => {
 // Check if machine is in high-speed mode (< 0.1 seconds production time)
 const isHighSpeedMode = computed(() => {
   return props.machine.isOwned && props.machine.productionTime < 100
+})
+const isHighSpeedModeEfficiency = computed(() => {
+  return (
+    props.machine.isOwned &&
+    props.machine.productionTime / calculateEfficiencyBonus(props.machine.efficiencyUpgrade) < 100
+  )
 })
 
 const nextSpeedTime = computed(() => {
@@ -447,8 +459,8 @@ function emitStart() {
       #00cc00 75%,
       #00cc00
     );
-    background-size: 20px 20px;
-    animation: diagonal-move 0.5s linear infinite;
+    background-size: 30px 30px;
+    animation: diagonal-move 0.6s linear infinite;
     transition: none;
   }
 }
@@ -470,8 +482,8 @@ function emitStart() {
       #ffb300 75%,
       #ffb300
     );
-    background-size: 20px 20px;
-    animation: diagonal-move 0.5s linear infinite;
+    background-size: 30px 30px;
+    animation: diagonal-move 0.6s linear infinite;
     transition: none;
   }
 }
@@ -481,7 +493,7 @@ function emitStart() {
     background-position: 0 0;
   }
   100% {
-    background-position: 20px 20px;
+    background-position: 30px 0px;
   }
 }
 

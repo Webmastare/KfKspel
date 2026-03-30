@@ -48,7 +48,7 @@
 
           <div class="upgrade-actions">
             <div class="price-display">
-              <span>${{ upgrade.cost.toLocaleString() }}</span>
+              <span>${{ formatCompactNumber(upgrade.cost) }}</span>
             </div>
             <button
               @click="emitBuyUpgrade(upgrade.id)"
@@ -79,7 +79,7 @@
 
           <div class="upgrade-actions">
             <div class="price-display">
-              <span>${{ upgrade.cost.toLocaleString() }}</span>
+              <span>${{ formatCompactNumber(upgrade.cost) }}</span>
             </div>
             <button
               @click="emitBuyUpgrade(upgrade.id)"
@@ -194,10 +194,9 @@
                   <div class="price-display">
                     <span
                       >${{
-                        getUpgradeCost(
-                          itemKey,
-                          getNextAvailableLevel(itemKey)!.level,
-                        ).toLocaleString()
+                        formatCompactNumber(
+                          getUpgradeCost(itemKey, getNextAvailableLevel(itemKey)!.level),
+                        )
                       }}</span
                     >
                   </div>
@@ -252,6 +251,7 @@ import {
 } from '@/components/coffeequeen/data-upgrades'
 import { machineDataList } from '@/components/coffeequeen/data-machines'
 import { itemDataList } from '@/components/coffeequeen/data-items'
+import { formatCompactNumber } from '@/components/coffeequeen/number-format'
 
 interface Props {
   userMoney: number

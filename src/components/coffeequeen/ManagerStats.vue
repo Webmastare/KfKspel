@@ -70,16 +70,19 @@
             </div>
             <div class="stat-card positive">
               <div class="stat-title">Cash Generated</div>
-              <div class="stat-value">${{ summaryStats.totalCashGenerated.toFixed(0) }}</div>
+              <div class="stat-value">
+                ${{ formatCompactNumber(summaryStats.totalCashGenerated) }}
+              </div>
             </div>
             <div class="stat-card negative">
               <div class="stat-title">Cash Spent</div>
-              <div class="stat-value">${{ summaryStats.totalCashSpent.toFixed(0) }}</div>
+              <div class="stat-value">${{ formatCompactNumber(summaryStats.totalCashSpent) }}</div>
             </div>
             <div class="stat-card" :class="summaryStats.netCash >= 0 ? 'positive' : 'negative'">
               <div class="stat-title">Net Profit</div>
               <div class="stat-value">
-                ${{ summaryStats.netCash >= 0 ? '+' : '' }}{{ summaryStats.netCash.toFixed(0) }}
+                ${{ summaryStats.netCash >= 0 ? '+' : ''
+                }}{{ formatCompactNumber(summaryStats.netCash) }}
               </div>
             </div>
           </div>
@@ -100,19 +103,19 @@
             <div class="stat-card positive">
               <div class="stat-title">Total Cash Earned</div>
               <div class="stat-value">
-                ${{ salesManager.statistics.totalMoneyEarned.toFixed(0) }}
+                ${{ formatCompactNumber(salesManager.statistics.totalMoneyEarned) }}
               </div>
             </div>
             <div class="stat-card negative">
               <div class="stat-title">Total Cash Spent</div>
               <div class="stat-value">
-                ${{ salesManager.statistics.totalMoneySpent.toFixed(0) }}
+                ${{ formatCompactNumber(salesManager.statistics.totalMoneySpent) }}
               </div>
             </div>
             <div class="stat-card" :class="netProfit >= 0 ? 'positive' : 'negative'">
               <div class="stat-title">Net All-Time Profit</div>
               <div class="stat-value">
-                ${{ netProfit >= 0 ? '+' : '' }}{{ netProfit.toFixed(0) }}
+                ${{ netProfit >= 0 ? '+' : '' }}{{ formatCompactNumber(netProfit) }}
               </div>
             </div>
           </div>
@@ -136,6 +139,7 @@ import {
 } from '@/composables/coffeequeen/managerStatsManager'
 import { ManagerChartRenderer } from '@/composables/coffeequeen/managerChartRenderer'
 import type { timeStamp } from 'console'
+import { formatCompactNumber } from '@/components/coffeequeen/number-format'
 
 interface Props {
   salesManager: SalesManager

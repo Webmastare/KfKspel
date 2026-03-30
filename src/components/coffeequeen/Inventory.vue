@@ -28,8 +28,10 @@
           <div class="item-details">
             <h3>{{ item.name }}</h3>
             <p>
-              Amount: {{ item.amount }}/{{ item.capacity }} || Buy: ${{ item.cost.toFixed(2) }} |
-              Sell: ${{ getSellPrice(item) }}
+              Amount: {{ item.amount }}/{{ item.capacity }} || Buy: ${{
+                formatCompactNumber(item.cost)
+              }}
+              | Sell: ${{ formatCompactNumber(getSellPrice(item)) }}
             </p>
 
             <!-- Manager Status Indicator -->
@@ -123,13 +125,13 @@
                 <button @click="emitBuy(key)" :disabled="!canAffordQuantity(key)">
                   Buy {{ getBuyQuantity(key) }}x
                 </button>
-                <p class="price-display">Cost: ${{ getBuyPrice(key).toFixed(2) }}</p>
+                <p class="price-display">Cost: ${{ formatCompactNumber(getBuyPrice(key)) }}</p>
               </div>
               <div class="action-group">
                 <button @click="emitSell(key)" :disabled="!canSellQuantity(key)">
                   Sell {{ getSellQuantity(key) }}x
                 </button>
-                <p class="price-display">Value: ${{ getSellValue(key).toFixed(2) }}</p>
+                <p class="price-display">Value: ${{ formatCompactNumber(getSellValue(key)) }}</p>
               </div>
             </div>
           </div>
@@ -158,6 +160,7 @@ import type {
   ItemData,
 } from '@/components/coffeequeen/types'
 import ManagerStats from './ManagerStats.vue'
+import { formatCompactNumber } from '@/components/coffeequeen/number-format'
 
 interface Props {
   inventory: Record<string, InventoryItem>
@@ -252,11 +255,11 @@ const getBuyPrice = (key: string): number => {
   return Math.round(getBuyQuantity(key) * item.cost * 100) / 100
 }
 
-const getSellPrice = (item: InventoryItem): string => {
+const getSellPrice = (item: InventoryItem): number => {
   if (item.sellMultiplier) {
-    return (item.cost * item.sellMultiplier).toFixed(2)
+    return item.cost * item.sellMultiplier
   }
-  return (item.cost * 0.8).toFixed(2) // Fallback to 80% if no sellMultiplier
+  return item.cost * 0.8 // Fallback to 80% if no sellMultiplier
 }
 
 const getSellValue = (key: string): number => {

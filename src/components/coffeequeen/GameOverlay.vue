@@ -1,7 +1,7 @@
 <template>
   <div class="game-overlay">
     <div class="stats-container">
-      <div class="money">Money: ${{ Math.floor(user.money) }}</div>
+      <div class="money">Money: ${{ formatCompactNumber(user.money) }}</div>
       <div class="inventory">
         <div v-for="item in inventory" :key="item.name" class="inventory-item">
           <img v-if="item.icon" :src="item.icon" :alt="item.name" class="item-icon" />
@@ -29,6 +29,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { User, InventoryItem } from '@/components/coffeequeen/types'
+import { formatCompactNumber } from '@/components/coffeequeen/number-format'
 
 interface Props {
   user: User

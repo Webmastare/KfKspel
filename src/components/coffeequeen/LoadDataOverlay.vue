@@ -24,7 +24,7 @@
         >
           <p>Save: {{ item.userName }}</p>
           <p>Saved at: {{ formatDate(item.lastSaved) }}</p>
-          <p>Money: ${{ item.money.toFixed(2) }}</p>
+          <p>Money: ${{ formatCompactNumber(item.money) }}</p>
           <div class="level-container">
             <svg class="level-circle" viewBox="0 0 100 100">
               <circle class="bg" cx="50" cy="50" r="45"></circle>
@@ -69,6 +69,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { SavedGameData } from '@/components/coffeequeen/types'
+import { formatCompactNumber } from '@/components/coffeequeen/number-format'
 
 interface Props {
   loadedData: SavedGameData[]
