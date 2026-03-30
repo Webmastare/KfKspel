@@ -16,7 +16,8 @@ coverage
 *.local
 .env
 Notes.md
-kfkbrygg-sim/
+local-testing/kfkbrygg-sim/outputs
+local-testing/kfkbrygg-sim/plots
 
 /cypress/videos/
 /cypress/screenshots/
