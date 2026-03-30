@@ -25,7 +25,7 @@ export function setStatsManagerReference(statsManager: any) {
 /**
  * Simulates game progress for the time the user was offline using time-stepped simulation.
  */
-function simulateOfflineProgress(
+export function simulateOfflineProgress(
     user: User,
     machinesConfig: Record<MachineKey, MachineConfig>,
     itemData: Record<ItemKey, ItemData>,
@@ -212,6 +212,8 @@ export function saveToLocalStorage(
             upgrades: user.upgrades,
             productionStats: productionStats,
             lastSaved: new Date().toISOString(),
+            lastActiveAt: user.lastActiveAt || user.lastSaved ||
+                new Date().toISOString(),
         };
         localStorage.setItem(
             getSaveStorageKey(saveId),
@@ -433,14 +435,21 @@ export function loadFromLocalStorage(
 
             // Calculate offline progress
             const now = new Date();
-            const lastSaved = new Date(gameData.lastSaved || now);
-            let offlineTimeMS = now.getTime() - lastSaved.getTime();
+            const activityAnchor = new Date(
+                gameData.lastActiveAt || gameData.lastSaved || now,
+            );
+            let offlineTimeMS = now.getTime() - activityAnchor.getTime();
 
-            // Cap offline time to 1 hour (3,600,000 ms)
+            // Cap offline simulation to 1 hour (3,600,000 ms)
             const maxIdleTimeMS = 3600 * 1000;
-            if (offlineTimeMS > maxIdleTimeMS) {
-                offlineTimeMS = maxIdleTimeMS;
+            if (offlineTimeMS < 0 || Number.isNaN(offlineTimeMS)) {
+                offlineTimeMS = 0;
             }
+
+            const simulatedOfflineTimeMS = Math.min(
+                offlineTimeMS,
+                maxIdleTimeMS,
+            );
 
             let offlineProductionSummary: OfflineProductionSummary = {};
             let offlineExperienceGained = 0;
@@ -455,7 +464,7 @@ export function loadFromLocalStorage(
                     gameData,
                     machinesConfig,
                     itemData,
-                    offlineTimeMS,
+                    simulatedOfflineTimeMS,
                 );
                 offlineProductionSummary = result.productionSummary;
                 offlineExperienceGained = result.totalExperienceGained;
@@ -463,6 +472,8 @@ export function loadFromLocalStorage(
 
             return {
                 gameData,
+                offlineTimeMS,
+                simulatedOfflineTimeMS,
                 offlineProductionSummary,
                 offlineExperienceGained,
             };
@@ -756,6 +767,7 @@ export function createNewUser(): User {
             salesManagers: {},
         },
         lastSaved: new Date().toISOString(),
+        lastActiveAt: new Date().toISOString(),
         productionStats: null,
     };
 }

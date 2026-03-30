@@ -3,6 +3,9 @@
     <div class="offline-progress-modal">
       <h2>Welcome Back!</h2>
       <p>You were away for {{ formatTime(offlineTime) }}.</p>
+      <p v-if="simulatedTime < offlineTime">
+        Simulated for {{ formatTime(simulatedTime) }} (capped)
+      </p>
       <p>While you were away, your machines produced:</p>
       <div v-if="Object.keys(summary).length > 0" class="production-summary">
         <ul>
@@ -121,6 +124,7 @@ import { formatCompactNumber } from '@/components/coffeequeen/number-format'
 
 interface Props {
   offlineTime: number
+  simulatedTime: number
   summary: OfflineProductionSummary
   experience: number
   itemData: Record<ItemKey, ItemData>

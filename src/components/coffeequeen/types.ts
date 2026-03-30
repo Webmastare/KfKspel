@@ -72,6 +72,7 @@ export interface User {
     inventory: Record<string, InventoryItem>;
     upgrades: UserUpgrades;
     lastSaved: string;
+    lastActiveAt?: string;
     productionStats?: any; // Production statistics data
 }
 
@@ -116,6 +117,8 @@ export interface OfflineProductionSummary {
 
 export interface LoadGameResult {
     gameData: User;
+    offlineTimeMS: number;
+    simulatedOfflineTimeMS: number;
     offlineProductionSummary: OfflineProductionSummary;
     offlineExperienceGained: number;
 }
@@ -131,6 +134,7 @@ export interface SavedGameData {
     inventory: Record<string, InventoryItem>;
     upgrades: UserUpgrades;
     lastSaved: string;
+    lastActiveAt?: string;
     itemKey?: string;
     productionStats?: any; // Production statistics data
 }

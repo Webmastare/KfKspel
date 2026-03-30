@@ -92,6 +92,7 @@
     <OfflineProgress
       v-if="showOfflineProgress"
       :offlineTime="offlineTime"
+      :simulatedTime="offlineSimulatedTime"
       :summary="offlineProductionSummary"
       :experience="offlineExperienceGained"
       :item-data="itemData"
@@ -116,6 +117,7 @@ import type {
   MachineKey,
   MachineType,
   SavedGameData,
+  OfflineProductionSummary,
 } from '@/components/coffeequeen/types'
 import { machineDataList } from '@/components/coffeequeen/data-machines'
 import { itemDataList } from '@/components/coffeequeen/data-items'
@@ -154,6 +156,7 @@ import {
   deleteLocalSave,
   getActiveSaveId,
   setActiveSaveId,
+  simulateOfflineProgress,
 } from '@/components/coffeequeen/coffee-save-load'
 import { useThemeStore } from '@/stores/theme'
 import {
@@ -210,7 +213,8 @@ const activeSaveName = ref<string>('Guest')
 // Offline progress state
 const showOfflineProgress = ref<boolean>(false)
 const offlineTime = ref<number>(0)
-const offlineProductionSummary = ref<any>({})
+const offlineSimulatedTime = ref<number>(0)
+const offlineProductionSummary = ref<OfflineProductionSummary>({})
 const offlineExperienceGained = ref<number>(0)
 
 // Save management
@@ -223,6 +227,7 @@ let saveTimeoutId: number | null = null
 let hasUnsavedChanges = false
 let hasSignificantChanges = false // Track important changes like purchases, upgrades
 let lastBucketUpdate = 0 // OPTIMIZATION: Track when we last updated buckets
+let hiddenAtTimestamp: number | null = null
 const gameSpeedMultiplier = ref<number>(1)
 const speedOptions = [1, 2, 3, 10, 100]
 
@@ -710,10 +715,36 @@ function saveToLocalStorageNow() {
     activeSaveId.value = initializeKfKbryggSaveSystem(activeSaveName.value)
   }
 
+  const nowIso = new Date().toISOString()
+  user.value.lastSaved = nowIso
+  if (!user.value.lastActiveAt) {
+    user.value.lastActiveAt = nowIso
+  }
+
   saveToLocalStorage(user.value, activeSaveId.value, activeSaveName.value)
-  // Reset significant changes flag after saving
+  lastLocalStorageSave = Date.now()
+  hasUnsavedChanges = false
   hasSignificantChanges = false
   // Production stats are now automatically included in the save
+}
+
+function applyOfflineCatchup(timeAwayMS: number): void {
+  const cappedAwayMS = Math.min(Math.max(timeAwayMS, 0), 3600 * 1000)
+  if (cappedAwayMS <= 1000) return
+
+  const result = simulateOfflineProgress(
+    user.value,
+    machinesConfig.value,
+    itemData.value,
+    cappedAwayMS,
+  )
+  offlineTime.value = Math.max(timeAwayMS, 0)
+  offlineSimulatedTime.value = cappedAwayMS
+  offlineProductionSummary.value = result.productionSummary
+  offlineExperienceGained.value = result.totalExperienceGained
+  showOfflineProgress.value = true
+
+  markUnsavedChanges()
 }
 
 function loadGame(saveId: string) {
@@ -731,11 +762,7 @@ function loadGame(saveId: string) {
     activeSaveName.value = matchingSave?.userName?.trim() || activeSaveName.value || 'Guest'
 
     // Time offline
-    const currentTime = Date.now()
-    const timeOffline = currentTime - Date.parse(result.gameData.lastSaved)
-    console.log(
-      `You were offline for ${timeOffline / 1000} seconds, ${currentTime}, ${Date.parse(result.gameData.lastSaved)}`,
-    )
+    user.value.lastActiveAt = new Date().toISOString()
 
     // Migrate old save data - add missing properties to machines
     for (const machineKey in user.value.machines) {
@@ -777,11 +804,12 @@ function loadGame(saveId: string) {
       }
     }
 
-    // Show offline progress if there was any
-    offlineTime.value = timeOffline
+    // Show offline progress only for meaningful offline sessions
+    offlineTime.value = result.offlineTimeMS
+    offlineSimulatedTime.value = result.simulatedOfflineTimeMS
     offlineProductionSummary.value = result.offlineProductionSummary
     offlineExperienceGained.value = result.offlineExperienceGained
-    showOfflineProgress.value = true
+    showOfflineProgress.value = result.offlineTimeMS > 1000
 
     showLoadDataOverlay.value = false
     console.log('Game loaded successfully')
@@ -804,42 +832,41 @@ function shouldSaveToLocalStorage() {
   return Date.now() - lastLocalStorageSave > SAVE_INTERVALS.localStorage
 }
 
-// Check if there are significant unsaved changes (not just production data)
-function hasSignificantUnsavedChanges(): boolean {
-  // Show warning if there are significant changes (purchases, upgrades, etc.)
-  // that haven't been saved yet, OR if it's been a very long time since last save
-  const timeSinceLastSave = Date.now() - lastLocalStorageSave
-  const veryLongTime = 10 * 60 * 1000 // 10 minutes
-
-  return hasSignificantChanges || (hasUnsavedChanges && timeSinceLastSave > veryLongTime)
-}
-
 // Page visibility change handler
 function handleVisibilityChange() {
   isPageVisible = !document.hidden
-  if (!isPageVisible && hasUnsavedChanges) {
-    // Save when page becomes hidden
+  if (!isPageVisible) {
+    hiddenAtTimestamp = Date.now()
+    user.value.lastActiveAt = new Date(hiddenAtTimestamp).toISOString()
     saveToLocalStorageNow()
+    return
   }
+
+  const now = Date.now()
+  if (hiddenAtTimestamp) {
+    applyOfflineCatchup(now - hiddenAtTimestamp)
+    hiddenAtTimestamp = null
+  }
+  user.value.lastActiveAt = new Date(now).toISOString()
+  lastTimestamp = null
 }
 
 // Beforeunload handler for emergency saves
-function handleBeforeUnload(event: BeforeUnloadEvent) {
+function handleBeforeUnload() {
   // Always save any pending changes
   if (hasUnsavedChanges) {
     saveToLocalStorageNow()
-  }
-
-  // Only show warning for significant unsaved changes
-  // (Don't warn users about minor production data that auto-saves every 30 seconds)
-  if (hasSignificantUnsavedChanges()) {
-    event.preventDefault()
-    event.returnValue = ''
   }
 }
 
 // Unified game loop driven by shared simulation core.
 function updateGame(timestamp: number) {
+  if (!isPageVisible) {
+    lastTimestamp = timestamp
+    animationFrameId = requestAnimationFrame(updateGame)
+    return
+  }
+
   if (!lastTimestamp) {
     lastTimestamp = timestamp
   }
@@ -885,9 +912,6 @@ function updateGame(timestamp: number) {
   // Periodic saves
   if (hasUnsavedChanges && shouldSaveToLocalStorage()) {
     saveToLocalStorageNow()
-    lastLocalStorageSave = Date.now()
-    hasUnsavedChanges = false
-    hasSignificantChanges = false
   }
 
   // This prevents massive performance issues from bucket operations on every frame
@@ -969,6 +993,8 @@ h1 {
   padding: 0 clamp(10px, 2vw, 0px);
 
   button {
+    flex: 1 1;
+    max-width: 250px;
     background: var(--coffee-button-bg);
     color: var(--coffee-button-text);
     border: 2px solid var(--coffee-button-border);
@@ -1089,14 +1115,8 @@ h1 {
   }
 
   .controls {
-    flex-direction: column;
     align-items: center;
     gap: 10px;
-
-    button {
-      width: 100%;
-      max-width: 280px;
-    }
   }
 
   .speed-controls {
