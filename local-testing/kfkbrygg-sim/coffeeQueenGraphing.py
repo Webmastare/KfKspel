@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import math
+from datetime import datetime as date
 from pathlib import Path
 
 from coffeequeen_sim_data import (
@@ -13,7 +14,8 @@ from coffeequeen_sim_data import (
     calculate_target_upgrade_time_seconds,
 )
 
-PLOT_DIR = Path(__file__).parent / "plots"
+timestamp = date.now().strftime("%Y%m%d_%H%M%S")
+PLOT_DIR = Path(__file__).parent / "plots" / f"plots_{timestamp}"
 PLOT_DIR.mkdir(exist_ok=True)
 
 # Base machine parameters
@@ -93,7 +95,7 @@ def marginal_money_gain_for_next_upgrade(speed_level, efficiency_level, upgrade_
 
 def make_target_time_curve_plot():
     """Plot configured target buy-time curve used by payback anchored pricing."""
-    max_level = int(GAME_SETTINGS["timeCurveMaxLevel"])
+    max_level = int(GAME_SETTINGS["maxLevel"])
     levels = np.arange(1, max_level + 1, 1)
     speed_minutes = np.array([calculate_target_upgrade_time_seconds(int(level), "speed") for level in levels]) / 60.0
     efficiency_minutes = np.array([calculate_target_upgrade_time_seconds(int(level), "efficiency") for level in levels]) / 60.0
@@ -185,7 +187,7 @@ def make_speed_progression_plot():
     ax2.grid(True, alpha=0.3)
     
     # Production times
-    ax3.plot(speedUpgrades, productionTimes, 'g-', linewidth=2)
+    ax3.semilogy(speedUpgrades, productionTimes, 'g-', linewidth=2)
     ax3.set_title('Production Time vs Speed Upgrades')
     ax3.set_xlabel('Speed Upgrades')
     ax3.set_ylabel('Production Time (seconds)')
@@ -510,7 +512,7 @@ def main() -> None:
     print(
         "Target time curve: "
         f"{GAME_SETTINGS['timeCurveStartSeconds']:.0f}s -> "
-        f"{GAME_SETTINGS['timeCurveEndSeconds'] / 60.0:.0f}m by level {GAME_SETTINGS['timeCurveMaxLevel']}"
+        f"{GAME_SETTINGS['timeCurveEndSeconds'] / 60.0:.0f}m by level {GAME_SETTINGS['maxLevel']}"
     )
     print(
         "Cost references: "

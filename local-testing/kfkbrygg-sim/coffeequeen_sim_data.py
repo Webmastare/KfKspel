@@ -49,14 +49,23 @@ def calculate_speed_multiplier(speed_upgrade: int) -> float:
     if speed_upgrade == 0:
         return 1.0
 
-    w = min(0.5 / math.exp(-(0.01 * speed_upgrade)), 0.8)
-    lin_improvement = (speed_upgrade * GAME_SETTINGS["speedBaseMultiplier"]) ** (speed_upgrade ** 0.12)
-    log_improvement = (math.log(speed_upgrade + 1) / math.log(1.5)) * GAME_SETTINGS["speedDiminishingFactor"]
-    exp_improvement = (
-        GAME_SETTINGS["speedIncrement"]
-        / min(GAME_SETTINGS["speedIncrement"], 1.000025**speed_upgrade)
-    ) ** speed_upgrade - (1 + speed_upgrade * 0.2)
-    return 1 + lin_improvement + w * log_improvement + exp_improvement
+    k = GAME_SETTINGS["speedExponentK"]
+    power = GAME_SETTINGS["speedShapePower"]
+    tail_growth = GAME_SETTINGS["speedTailGrowthPerLevel"]
+    max_multiplier = GAME_SETTINGS["speedMaxMultiplier"]
+    max_level = GAME_SETTINGS["maxLevel"]
+
+    normalized = min(speed_upgrade / max_level, 1.0)
+
+    nominator = math.exp(k * (normalized**power)) - 1.0
+    denominator = math.exp(k) - 1.0
+    curve_multiplier = nominator / denominator if denominator > 0 else normalized
+    multiplier = 1.0 + (max_multiplier - 1.0) * curve_multiplier
+
+    if speed_upgrade > max_level:
+        multiplier *= tail_growth ** (speed_upgrade - max_level)
+
+    return multiplier
 
 
 def calculate_efficiency_bonus(efficiency_upgrade: int) -> float:
@@ -104,7 +113,7 @@ def calculate_items_per_second(
 def calculate_target_upgrade_time_seconds(next_level: int, upgrade_type: str = "speed") -> float:
     """Target time-to-buy curve used by payback anchored upgrade costs."""
     clamped_level = max(1, next_level)
-    max_level = max(1, int(GAME_SETTINGS["timeCurveMaxLevel"]))
+    max_level = max(1, int(GAME_SETTINGS["maxLevel"]))
     normalized = min(clamped_level / max_level, 1.0)
 
     k = float(GAME_SETTINGS["timeCurveExponentK"])
@@ -269,11 +278,24 @@ STARTING_STATE = {
 
 
 GAME_SETTINGS = {
+    "maxLevel": 500,
+
     "speedBaseMultiplier": 0.4,
     "speedDiminishingFactor": 0.5,
     "speedIncrement": 1.037,
 
+    "speedMaxMultiplier": 400_000.0,
+    "speedExponentK": 8.0,
+    "speedShapePower": 1.2,
+    "speedTailGrowthPerLevel": 1.02,
+
     "batchSizeThreshold": [25, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+    "batchTimeEfficiency": 0.9,
+    
+    "efficiencyMaxMultiplier": 50000.0,
+    "efficiencyExponentK": 8.0,
+    "efficiencyShapePower": 1.2,
+    "efficiencyTailGrowthPerLevel": 1.02,
     
     "efficiencyPerUnit": 0.1,
     "efficiencyDiminishingFactor": 0.5,
@@ -281,7 +303,6 @@ GAME_SETTINGS = {
     # Target time curve for payback-anchored upgrade pricing.
     "timeCurveStartSeconds": 45.0,
     "timeCurveEndSeconds": 600_000,
-    "timeCurveMaxLevel": 500,
     "timeCurveExponentK": 5.0, # Higher k means slower initial growth and faster late-game growth.
     "timeCurveShapePower": 1.5, # Higher power means more of the curve's growth happens in the late game.
     "timeCurveTailGrowthPerLevel": 1.008, # After max level, each additional level increases target time by this factor.
@@ -299,8 +320,6 @@ GAME_SETTINGS = {
     "minUpgradeTimeSeconds": 10.0,
     "minUpgradeCost": 1.0,
     "upgradeCostFloorFraction": 0.0,
-
-    "batchTimeEfficiency": 0.9,
 }
 
 
