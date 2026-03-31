@@ -71,9 +71,17 @@ export interface User {
     machines: Record<string, UserMachine>;
     inventory: Record<string, InventoryItem>;
     upgrades: UserUpgrades;
+    speedupBuffer: SpeedupBufferState;
     lastSaved: string;
     lastActiveAt?: string;
     productionStats?: any; // Production statistics data
+}
+
+export interface SpeedupBufferState {
+    currentSeconds: number;
+    maxSeconds: number;
+    onlineRefillIntervalSeconds: number;
+    offlineRefillIntervalSeconds: number;
 }
 
 export interface GameSettings {
@@ -121,6 +129,7 @@ export interface LoadGameResult {
     simulatedOfflineTimeMS: number;
     offlineProductionSummary: OfflineProductionSummary;
     offlineExperienceGained: number;
+    offlineSpeedupRefilledSeconds: number;
 }
 
 export interface SavedGameData {
@@ -133,6 +142,7 @@ export interface SavedGameData {
     machines: Record<string, UserMachine>;
     inventory: Record<string, InventoryItem>;
     upgrades: UserUpgrades;
+    speedupBuffer: SpeedupBufferState;
     lastSaved: string;
     lastActiveAt?: string;
     itemKey?: string;

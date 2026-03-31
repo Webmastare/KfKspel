@@ -15,19 +15,18 @@
       <button @click="openLoadDataOverlay">Load Game</button>
     </div>
 
-    <div class="speed-controls">
-      <span class="speed-controls__label">Speed</span>
-      <div class="speed-controls__buttons">
-        <button
-          v-for="speed in speedOptions"
-          :key="`speed-${speed}`"
-          :class="{ active: gameSpeedMultiplier === speed }"
-          @click="setGameSpeed(speed)"
-        >
-          {{ speed }}x
-        </button>
-      </div>
-    </div>
+    <SpeedupPanel
+      :current-speed="gameSpeedMultiplier"
+      :speed-options="speedOptions"
+      :buffer-current-seconds="speedupCurrentSeconds"
+      :buffer-max-seconds="speedupMaxSeconds"
+      :buffer-fill-percent="speedupBufferFillPercent"
+      :seconds-until-full="speedupSecondsUntilFull"
+      :online-refill-interval-seconds="user.speedupBuffer.onlineRefillIntervalSeconds"
+      :offline-refill-interval-seconds="user.speedupBuffer.offlineRefillIntervalSeconds"
+      @set-speed="setGameSpeed"
+      @consume-time-travel="consumeTimeTravel"
+    />
 
     <!-- Machines Container -->
     <div class="machines-container">
@@ -96,6 +95,10 @@
       :summary="offlineProductionSummary"
       :experience="offlineExperienceGained"
       :item-data="itemData"
+      :mode="offlineModalMode"
+      :speedup-refilled-seconds="offlineSpeedupRefilled"
+      :speedup-buffer-current-seconds="speedupCurrentSeconds"
+      :speedup-buffer-max-seconds="speedupMaxSeconds"
       @close="showOfflineProgress = false"
     />
 
@@ -115,7 +118,6 @@ import type {
   MultiActionValue,
   ItemKey,
   MachineKey,
-  MachineType,
   SavedGameData,
   OfflineProductionSummary,
 } from '@/components/coffeequeen/types'
@@ -132,6 +134,7 @@ import {
 } from '@/components/coffeequeen/data-upgrades'
 import MachineCard from '@/components/coffeequeen/MachineCard.vue'
 import GameOverlay from '@/components/coffeequeen/GameOverlay.vue'
+import SpeedupPanel from '@/components/coffeequeen/SpeedupPanel.vue'
 import Inventory from '@/components/coffeequeen/Inventory.vue'
 import Shop from '@/components/coffeequeen/Shop.vue'
 import LoadDataOverlay from '@/components/coffeequeen/LoadDataOverlay.vue'
@@ -143,6 +146,7 @@ import {
   calculateSpeedUpgradeCost,
   calculateEfficiencyUpgradeCost,
 } from '@/components/coffeequeen/coffee-upgrade-calculations'
+import { clampSpeedupBuffer, refillSpeedupBuffer } from '@/components/coffeequeen/speedup-buffer'
 import { simulateGameStep } from '@/components/coffeequeen/coffee-simulation'
 import {
   saveToLocalStorage,
@@ -216,6 +220,8 @@ const offlineTime = ref<number>(0)
 const offlineSimulatedTime = ref<number>(0)
 const offlineProductionSummary = ref<OfflineProductionSummary>({})
 const offlineExperienceGained = ref<number>(0)
+const offlineSpeedupRefilled = ref<number>(0)
+const offlineModalMode = ref<'offline' | 'timeTravel'>('offline')
 
 // Save management
 const SAVE_INTERVALS = {
@@ -230,6 +236,20 @@ let lastBucketUpdate = 0 // OPTIMIZATION: Track when we last updated buckets
 let hiddenAtTimestamp: number | null = null
 const gameSpeedMultiplier = ref<number>(1)
 const speedOptions = [1, 2, 3, 10, 100]
+
+const speedupCurrentSeconds = computed(() =>
+  Math.max(0, user.value.speedupBuffer?.currentSeconds || 0),
+)
+const speedupMaxSeconds = computed(() => Math.max(1, user.value.speedupBuffer?.maxSeconds || 1))
+const speedupBufferFillPercent = computed(() =>
+  Math.min(100, (speedupCurrentSeconds.value / speedupMaxSeconds.value) * 100),
+)
+const speedupSecondsUntilFull = computed(() => {
+  const missing = speedupMaxSeconds.value - speedupCurrentSeconds.value
+  if (missing <= 0) return 0
+
+  return Math.ceil(missing * user.value.speedupBuffer.onlineRefillIntervalSeconds)
+})
 
 // Computed properties for display
 const allMachinesForDisplay = computed(() => {
@@ -381,7 +401,59 @@ function updateCustomPercentage(newValue: number) {
 }
 
 function setGameSpeed(speed: number) {
+  if (!canSelectSpeed(speed)) {
+    return
+  }
   gameSpeedMultiplier.value = speed
+}
+
+function canSelectSpeed(speed: number) {
+  if (speed <= 1) return true
+  return speedupCurrentSeconds.value > 0
+}
+
+function refillSpeedup(awayMS: number, offline: boolean): number {
+  if (awayMS <= 0) return 0
+
+  user.value.speedupBuffer = clampSpeedupBuffer(user.value.speedupBuffer)
+  const refillInterval = offline
+    ? user.value.speedupBuffer.offlineRefillIntervalSeconds
+    : user.value.speedupBuffer.onlineRefillIntervalSeconds
+
+  const refillResult = refillSpeedupBuffer(user.value.speedupBuffer, awayMS / 1000, refillInterval)
+  user.value.speedupBuffer = clampSpeedupBuffer(refillResult.nextState)
+
+  if (refillResult.addedSeconds > 0) {
+    markUnsavedChanges()
+  }
+
+  return refillResult.addedSeconds
+}
+
+function consumeTimeTravel(secondsToConsume: number) {
+  const clampedSeconds = Math.max(0, Math.floor(secondsToConsume))
+  if (clampedSeconds <= 0 || speedupCurrentSeconds.value < clampedSeconds) return
+
+  user.value.speedupBuffer.currentSeconds -= clampedSeconds
+  user.value.speedupBuffer = clampSpeedupBuffer(user.value.speedupBuffer)
+
+  const simulatedTimeMS = clampedSeconds * 1000
+  const result = simulateOfflineProgress(
+    user.value,
+    machinesConfig.value,
+    itemData.value,
+    simulatedTimeMS,
+  )
+
+  offlineModalMode.value = 'timeTravel'
+  offlineTime.value = simulatedTimeMS
+  offlineSimulatedTime.value = simulatedTimeMS
+  offlineProductionSummary.value = result.productionSummary
+  offlineExperienceGained.value = result.totalExperienceGained
+  offlineSpeedupRefilled.value = 0
+  showOfflineProgress.value = true
+
+  markUnsavedChanges(true)
 }
 
 function updateManagerSettings(payload: {
@@ -729,6 +801,7 @@ function saveToLocalStorageNow() {
 }
 
 function applyOfflineCatchup(timeAwayMS: number): void {
+  const addedBufferSeconds = refillSpeedup(timeAwayMS, true)
   const cappedAwayMS = Math.min(Math.max(timeAwayMS, 0), 3600 * 1000)
   if (cappedAwayMS <= 1000) return
 
@@ -742,6 +815,8 @@ function applyOfflineCatchup(timeAwayMS: number): void {
   offlineSimulatedTime.value = cappedAwayMS
   offlineProductionSummary.value = result.productionSummary
   offlineExperienceGained.value = result.totalExperienceGained
+  offlineSpeedupRefilled.value = addedBufferSeconds
+  offlineModalMode.value = 'offline'
   showOfflineProgress.value = true
 
   markUnsavedChanges()
@@ -763,6 +838,7 @@ function loadGame(saveId: string) {
 
     // Time offline
     user.value.lastActiveAt = new Date().toISOString()
+    user.value.speedupBuffer = clampSpeedupBuffer(user.value.speedupBuffer)
 
     // Migrate old save data - add missing properties to machines
     for (const machineKey in user.value.machines) {
@@ -809,6 +885,8 @@ function loadGame(saveId: string) {
     offlineSimulatedTime.value = result.simulatedOfflineTimeMS
     offlineProductionSummary.value = result.offlineProductionSummary
     offlineExperienceGained.value = result.offlineExperienceGained
+    offlineSpeedupRefilled.value = result.offlineSpeedupRefilledSeconds
+    offlineModalMode.value = 'offline'
     showOfflineProgress.value = result.offlineTimeMS > 1000
 
     showLoadDataOverlay.value = false
@@ -873,7 +951,28 @@ function updateGame(timestamp: number) {
 
   const deltaTime = timestamp - lastTimestamp
   lastTimestamp = timestamp
-  const elapsedMS = deltaTime * gameSpeedMultiplier.value
+  refillSpeedup(deltaTime, false)
+
+  const availableSpeedupSeconds = speedupCurrentSeconds.value
+  const deltaSeconds = deltaTime / 1000
+  let extraSimulatedSeconds = 0
+
+  if (gameSpeedMultiplier.value > 1 && deltaSeconds > 0) {
+    const requestedExtraSeconds = (gameSpeedMultiplier.value - 1) * deltaSeconds
+    extraSimulatedSeconds = Math.min(requestedExtraSeconds, availableSpeedupSeconds)
+    user.value.speedupBuffer.currentSeconds -= extraSimulatedSeconds
+    user.value.speedupBuffer = clampSpeedupBuffer(user.value.speedupBuffer)
+
+    if (extraSimulatedSeconds > 0) {
+      markUnsavedChanges()
+    }
+
+    if (extraSimulatedSeconds < requestedExtraSeconds) {
+      gameSpeedMultiplier.value = 1
+    }
+  }
+
+  const elapsedMS = deltaTime + extraSimulatedSeconds * 1000
 
   const simulationResult = simulateGameStep(
     user.value,
@@ -1018,44 +1117,6 @@ h1 {
   }
 }
 
-.speed-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-bottom: clamp(18px, 4vw, 30px);
-}
-
-.speed-controls__label {
-  color: var(--coffee-text-secondary);
-  font-family: 'Courier New', Courier, monospace;
-  font-size: clamp(0.9rem, 2vw, 1rem);
-  font-weight: bold;
-}
-
-.speed-controls__buttons {
-  display: flex;
-  gap: 8px;
-
-  button {
-    background: var(--coffee-button-bg);
-    color: var(--coffee-button-text);
-    border: 2px solid var(--coffee-button-border);
-    padding: 6px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-family: 'Courier New', Courier, monospace;
-    font-weight: bold;
-    min-width: 52px;
-    transition: all 0.2s ease;
-
-    &.active {
-      transform: translateY(-1px);
-      box-shadow: 0 0 0 2px var(--coffee-text-secondary);
-    }
-  }
-}
-
 .machines-container {
   margin-bottom: clamp(80px, 12vh, 120px); // Space for overlay
 }
@@ -1117,11 +1178,6 @@ h1 {
   .controls {
     align-items: center;
     gap: 10px;
-  }
-
-  .speed-controls {
-    flex-direction: column;
-    gap: 8px;
   }
 }
 

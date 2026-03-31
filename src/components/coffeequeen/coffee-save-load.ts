@@ -10,6 +10,11 @@ import type {
 } from "./types";
 import { calculateInventoryMultiplier } from "./data-upgrades";
 import { simulateGameStep } from "./coffee-simulation";
+import {
+    clampSpeedupBuffer,
+    createDefaultSpeedupBufferState,
+    refillSpeedupBuffer,
+} from "./speedup-buffer";
 
 import { normalizeBucketsForAllTimeScales } from "@/composables/coffeequeen/statsManager";
 
@@ -210,6 +215,9 @@ export function saveToLocalStorage(
             machines: user.machines,
             inventory: user.inventory,
             upgrades: user.upgrades,
+            speedupBuffer: clampSpeedupBuffer(
+                user.speedupBuffer || createDefaultSpeedupBufferState(),
+            ),
             productionStats: productionStats,
             lastSaved: new Date().toISOString(),
             lastActiveAt: user.lastActiveAt || user.lastSaved ||
@@ -277,6 +285,14 @@ export function loadFromLocalStorage(
             // Ensure sales managers exist for backward compatibility
             if (!gameData.upgrades.salesManagers) {
                 gameData.upgrades.salesManagers = {};
+            }
+
+            if (!gameData.speedupBuffer) {
+                gameData.speedupBuffer = createDefaultSpeedupBufferState();
+            } else {
+                gameData.speedupBuffer = clampSpeedupBuffer(
+                    gameData.speedupBuffer,
+                );
             }
 
             // Migrate sales managers to include accumulator properties
@@ -470,12 +486,20 @@ export function loadFromLocalStorage(
                 offlineExperienceGained = result.totalExperienceGained;
             }
 
+            const refillResult = refillSpeedupBuffer(
+                gameData.speedupBuffer,
+                offlineTimeMS / 1000,
+                gameData.speedupBuffer.offlineRefillIntervalSeconds,
+            );
+            gameData.speedupBuffer = clampSpeedupBuffer(refillResult.nextState);
+
             return {
                 gameData,
                 offlineTimeMS,
                 simulatedOfflineTimeMS,
                 offlineProductionSummary,
                 offlineExperienceGained,
+                offlineSpeedupRefilledSeconds: refillResult.addedSeconds,
             };
         }
     } catch (error) {
@@ -766,6 +790,7 @@ export function createNewUser(): User {
             inventory: {},
             salesManagers: {},
         },
+        speedupBuffer: createDefaultSpeedupBufferState(),
         lastSaved: new Date().toISOString(),
         lastActiveAt: new Date().toISOString(),
         productionStats: null,

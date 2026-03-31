@@ -51,6 +51,7 @@
               <span>${{ formatCompactNumber(upgrade.cost) }}</span>
             </div>
             <button
+              class="shop-button"
               @click="emitBuyUpgrade(upgrade.id)"
               :disabled="!canAffordManagerUpgrade(upgrade) || isManagerUpgradePurchased(upgrade.id)"
             >
@@ -82,6 +83,7 @@
               <span>${{ formatCompactNumber(upgrade.cost) }}</span>
             </div>
             <button
+              class="shop-button"
               @click="emitBuyUpgrade(upgrade.id)"
               :disabled="
                 !canAffordInventoryUpgrade(upgrade) || isInventoryUpgradePurchased(upgrade.id)
@@ -201,6 +203,7 @@
                     >
                   </div>
                   <button
+                    class="shop-button"
                     @click.stop="
                       emitBuySalesManager(itemKey, getNextAvailableLevel(itemKey)!.level)
                     "
@@ -451,7 +454,7 @@ h2 {
   padding: 10px;
 
   &:hover {
-    background: var(--coffee-button-hover);
+    background: #45a049;
     transform: translateY(-1px);
   }
 
@@ -571,7 +574,7 @@ h2 {
   color: var(--coffee-text-secondary);
 }
 
-button {
+.shop-button {
   padding: clamp(6px, 1.5vh, 8px) clamp(12px, 3vw, 16px);
   border-radius: 5px;
   cursor: pointer;

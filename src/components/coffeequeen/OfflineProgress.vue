@@ -1,12 +1,29 @@
 <template>
   <div class="offline-progress-overlay" @click.self="$emit('close')">
     <div class="offline-progress-modal">
-      <h2>Welcome Back!</h2>
-      <p>You were away for {{ formatTime(offlineTime) }}.</p>
-      <p v-if="simulatedTime < offlineTime">
-        Simulated for {{ formatTime(simulatedTime) }} (capped)
+      <h2>{{ mode === 'timeTravel' ? 'Time Travel Summary' : 'Offline Progress Summary' }}</h2>
+      <p v-if="mode === 'timeTravel'">You skipped {{ formatDurationMs(simulatedTime) }}.</p>
+      <p v-else>You were away for {{ formatDurationMs(offlineTime) }}.</p>
+      <p v-if="mode === 'offline' && simulatedTime < offlineTime">
+        Simulated for {{ formatDurationMs(simulatedTime) }} (capped)
       </p>
-      <p>While you were away, your machines produced:</p>
+      <div v-if="mode === 'offline'" class="speedup-summary">
+        <p>
+          Speedup generated while away:
+          <strong>{{ formatDuration(speedupRefilledSeconds) }}</strong>
+        </p>
+        <p>
+          Buffer now: {{ formatDuration(speedupBufferCurrentSeconds) }} /
+          {{ formatDuration(speedupBufferMaxSeconds) }}
+        </p>
+      </div>
+      <p>
+        {{
+          mode === 'timeTravel'
+            ? 'During the skipped time, your machines produced:'
+            : 'While you were away, your machines produced:'
+        }}
+      </p>
       <div v-if="Object.keys(summary).length > 0" class="production-summary">
         <ul>
           <li v-for="(item, key) in detailedSummary" :key="key" class="production-item">
@@ -102,7 +119,13 @@
         </ul>
       </div>
       <div v-else>
-        <p>No new items were produced while you were away.</p>
+        <p>
+          {{
+            mode === 'timeTravel'
+              ? 'No new items were produced during the skipped time.'
+              : 'No new items were produced while you were away.'
+          }}
+        </p>
       </div>
       <p>
         You gained <strong>{{ experience.toLocaleString() }}</strong> experience!
@@ -120,7 +143,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import type { OfflineProductionSummary, ItemData, ItemKey } from '@/components/coffeequeen/types'
-import { formatCompactNumber } from '@/components/coffeequeen/number-format'
+import {
+  formatCompactNumber,
+  formatDuration,
+  formatDurationMs,
+} from '@/components/coffeequeen/number-format'
 
 interface Props {
   offlineTime: number
@@ -128,6 +155,10 @@ interface Props {
   summary: OfflineProductionSummary
   experience: number
   itemData: Record<ItemKey, ItemData>
+  mode: 'offline' | 'timeTravel'
+  speedupRefilledSeconds: number
+  speedupBufferCurrentSeconds: number
+  speedupBufferMaxSeconds: number
 }
 
 interface Emits {
@@ -271,21 +302,6 @@ const getManagerNetClass = (item: any) => {
   return 'neutral'
 }
 
-// Function to format time in a human-readable way
-const formatTime = (ms: number): string => {
-  const seconds = Math.floor(ms / 1000)
-  const mins = Math.floor(seconds / 60)
-  const hrs = Math.floor(mins / 60)
-  const days = Math.floor(hrs / 24)
-
-  const formatted = []
-  if (days > 0) formatted.push(`${days}d`)
-  if (hrs > 0) formatted.push(`${hrs % 24}h`)
-  if (mins > 0) formatted.push(`${mins % 60}m`)
-  formatted.push(`${seconds % 60}s`)
-  return formatted.join(' ')
-}
-
 const detailedSummary = computed(() => {
   const details: Record<string, any> = {}
 
@@ -350,21 +366,24 @@ onMounted(() => {
   color: var(--coffee-text-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   margin: auto 0;
-  max-height: calc(100vh - 40px);
+  max-height: 80vh;
   overflow-y: auto;
 
+  // Custom scrollbar for modal content
   &::-webkit-scrollbar {
-    width: 6px;
+    width: 10px;
   }
 
   &::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.168);
+    border-radius: 4px;
+    margin-top: 5vh;
+    margin-bottom: 5vh;
   }
 
   &::-webkit-scrollbar-thumb {
     background: var(--coffee-border-secondary);
-    border-radius: 3px;
+    border-radius: 4px;
   }
 
   h2 {
@@ -607,6 +626,19 @@ onMounted(() => {
           }
         }
       }
+    }
+  }
+
+  .speedup-summary {
+    margin: 8px 0 10px;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid var(--coffee-border-primary);
+    background: rgba(255, 255, 255, 0.04);
+
+    p {
+      margin: 6px 0;
+      font-size: clamp(0.82rem, 2.2vw, 0.98rem);
     }
   }
 

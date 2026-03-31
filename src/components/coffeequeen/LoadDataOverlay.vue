@@ -49,14 +49,14 @@
           <div v-if="renamingSaveId === (item.saveId || item.itemKey)" class="rename-row">
             <input v-model="renameValue" type="text" maxlength="40" />
             <button class="confirm" @click="confirmRename(item)">Save Name</button>
-            <button class="cancel" @click="cancelRename">Cancel</button>
+            <button class="secondary" @click="cancelRename">Cancel</button>
           </div>
 
           <div v-if="deletingSaveId === (item.saveId || item.itemKey)" class="confirm-box inline">
             <p>Delete "{{ item.userName }}" permanently?</p>
             <div class="confirm-actions">
               <button class="danger" @click="confirmDelete(item)">Yes, delete</button>
-              <button class="cancel" @click="cancelDelete">Cancel</button>
+              <button class="secondary" @click="cancelDelete">Cancel</button>
             </div>
           </div>
         </div>
@@ -368,16 +368,6 @@ const cancelDelete = (): void => {
       &:hover {
         background-color: #d32f2f;
       }
-    }
-
-    &.confirm {
-      background-color: #2e7d32;
-      border-color: #1b5e20;
-    }
-
-    &.cancel {
-      background-color: #616161;
-      border-color: #424242;
     }
   }
 
