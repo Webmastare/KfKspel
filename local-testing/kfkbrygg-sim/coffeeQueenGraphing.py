@@ -510,9 +510,14 @@ def main() -> None:
     print(f"Base Production Time: {BASE_PRODUCTION_TIME_MS / 1000:.0f}s")
     print(f"Batch Threshold Levels: {GAME_SETTINGS['batchSizeThreshold']}")
     print(
-        "Target time curve: "
-        f"{GAME_SETTINGS['timeCurveStartSeconds']:.0f}s -> "
-        f"{GAME_SETTINGS['timeCurveEndSeconds'] / 60.0:.0f}m by level {GAME_SETTINGS['maxLevel']}"
+        "Speed time curve: "
+        f"{GAME_SETTINGS['speedTimeCurveStartSeconds']:.0f}s -> "
+        f"{GAME_SETTINGS['speedTimeCurveEndSeconds'] / 60.0:.0f}m by level {GAME_SETTINGS['maxLevel']}"
+    )
+    print(
+        "Efficiency time curve: "
+        f"{GAME_SETTINGS['efficiencyTimeCurveStartSeconds']:.0f}s -> "
+        f"{GAME_SETTINGS['efficiencyTimeCurveEndSeconds'] / 60.0:.0f}m by level {GAME_SETTINGS['maxLevel']}"
     )
     print(
         "Cost references: "

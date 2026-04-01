@@ -33,6 +33,32 @@ class SimTuning:
     sell_interval_seconds: float = 1.0
 
 
+def _exp_curve_multiplier(
+    level: int,
+    max_level: int,
+    exponent_k: float,
+    shape_power: float,
+    max_multiplier: float,
+    tail_growth_per_level: float,
+) -> float:
+    """Shared exponential curve used by speed/efficiency upgrade scaling."""
+    if level <= 0:
+        return 1.0
+
+    clamped_max_level = max(1, int(max_level))
+    normalized = min(level / clamped_max_level, 1.0)
+
+    numerator = math.exp(exponent_k * (normalized**shape_power)) - 1.0
+    denominator = math.exp(exponent_k) - 1.0
+    curve_progress = numerator / denominator if denominator > 0 else normalized
+    multiplier = 1.0 + (max_multiplier - 1.0) * curve_progress
+
+    if level > clamped_max_level:
+        multiplier *= tail_growth_per_level ** (level - clamped_max_level)
+
+    return multiplier
+
+
 def calculate_batch_size(initial_batch_size: float, speed_upgrade: int) -> int:
     """Calculate batch size from shared speed thresholds."""
     thresholds_passed = 0
@@ -46,37 +72,27 @@ def calculate_batch_size(initial_batch_size: float, speed_upgrade: int) -> int:
 
 def calculate_speed_multiplier(speed_upgrade: int) -> float:
     """Calculate speed multiplier using the same formula as the simulator."""
-    if speed_upgrade == 0:
-        return 1.0
-
-    k = GAME_SETTINGS["speedExponentK"]
-    power = GAME_SETTINGS["speedShapePower"]
-    tail_growth = GAME_SETTINGS["speedTailGrowthPerLevel"]
-    max_multiplier = GAME_SETTINGS["speedMaxMultiplier"]
-    max_level = GAME_SETTINGS["maxLevel"]
-
-    normalized = min(speed_upgrade / max_level, 1.0)
-
-    nominator = math.exp(k * (normalized**power)) - 1.0
-    denominator = math.exp(k) - 1.0
-    curve_multiplier = nominator / denominator if denominator > 0 else normalized
-    multiplier = 1.0 + (max_multiplier - 1.0) * curve_multiplier
-
-    if speed_upgrade > max_level:
-        multiplier *= tail_growth ** (speed_upgrade - max_level)
-
-    return multiplier
+    return _exp_curve_multiplier(
+        level=speed_upgrade,
+        max_level=int(GAME_SETTINGS["maxLevel"]),
+        exponent_k=float(GAME_SETTINGS["speedExponentK"]),
+        shape_power=float(GAME_SETTINGS["speedShapePower"]),
+        max_multiplier=float(GAME_SETTINGS["speedMaxMultiplier"]),
+        tail_growth_per_level=float(GAME_SETTINGS["speedTailGrowthPerLevel"]),
+    )
 
 
 def calculate_efficiency_bonus(efficiency_upgrade: int) -> float:
-    """Calculate efficiency bonus using the same formula as the simulator."""
-    if efficiency_upgrade == 0:
-        return 0.0
-
-    w = min(0.3 / math.exp(-(0.01 * efficiency_upgrade)), 0.8)
-    lin_improvement = (efficiency_upgrade * GAME_SETTINGS["efficiencyPerUnit"]) ** 1.1
-    log_improvement = GAME_SETTINGS["efficiencyDiminishingFactor"] * math.log(efficiency_upgrade + 1)
-    return lin_improvement + w * log_improvement
+    """Calculate additive efficiency bonus using the same curve shape as speed."""
+    multiplier = _exp_curve_multiplier(
+        level=efficiency_upgrade,
+        max_level=int(GAME_SETTINGS["maxLevel"]),
+        exponent_k=float(GAME_SETTINGS["efficiencyExponentK"]),
+        shape_power=float(GAME_SETTINGS["efficiencyShapePower"]),
+        max_multiplier=float(GAME_SETTINGS["efficiencyMaxMultiplier"]),
+        tail_growth_per_level=float(GAME_SETTINGS["efficiencyTailGrowthPerLevel"]),
+    )
+    return max(0.0, multiplier - 1.0)
 
 
 def calculate_production_time_seconds(
@@ -116,17 +132,22 @@ def calculate_target_upgrade_time_seconds(next_level: int, upgrade_type: str = "
     max_level = max(1, int(GAME_SETTINGS["maxLevel"]))
     normalized = min(clamped_level / max_level, 1.0)
 
-    k = float(GAME_SETTINGS["timeCurveExponentK"])
-    power = float(GAME_SETTINGS["timeCurveShapePower"])
-    start_seconds = float(GAME_SETTINGS["timeCurveStartSeconds"])
-    end_seconds = float(GAME_SETTINGS["timeCurveEndSeconds"])
+    if upgrade_type == "efficiency":
+        prefix = "efficiencyTimeCurve"
+    else:
+        prefix = "speedTimeCurve"
+
+    k = float(GAME_SETTINGS[f"{prefix}ExponentK"])
+    power = float(GAME_SETTINGS[f"{prefix}ShapePower"])
+    start_seconds = float(GAME_SETTINGS[f"{prefix}StartSeconds"])
+    end_seconds = float(GAME_SETTINGS[f"{prefix}EndSeconds"])
 
     numerator = math.exp(k * (normalized**power)) - 1.0 # e^(k * (x^p)) - 1
     denominator = math.exp(k) - 1.0
     curve_progress = numerator / denominator if denominator > 0 else normalized
     target_seconds = start_seconds + (end_seconds - start_seconds) * curve_progress
 
-    tail_growth = float(GAME_SETTINGS["timeCurveTailGrowthPerLevel"])
+    tail_growth = float(GAME_SETTINGS[f"{prefix}TailGrowthPerLevel"])
     if clamped_level > max_level:
         target_seconds *= tail_growth ** (clamped_level - max_level)
 
@@ -136,7 +157,7 @@ def calculate_target_upgrade_time_seconds(next_level: int, upgrade_type: str = "
         target_seconds *= float(GAME_SETTINGS["speedTargetTimeMultiplier"])
 
     if upgrade_type == "speed" and clamped_level in GAME_SETTINGS["batchSizeThreshold"]:
-        target_seconds *= float(GAME_SETTINGS["batchThresholdTimeDiscount"])
+        target_seconds *= float(GAME_SETTINGS["batchTimeEfficiency"])
 
     return max(float(GAME_SETTINGS["minUpgradeTimeSeconds"]), target_seconds)
 
@@ -280,10 +301,6 @@ STARTING_STATE = {
 GAME_SETTINGS = {
     "maxLevel": 500,
 
-    "speedBaseMultiplier": 0.4,
-    "speedDiminishingFactor": 0.5,
-    "speedIncrement": 1.037,
-
     "speedMaxMultiplier": 400_000.0,
     "speedExponentK": 8.0,
     "speedShapePower": 1.2,
@@ -292,25 +309,29 @@ GAME_SETTINGS = {
     "batchSizeThreshold": [25, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
     "batchTimeEfficiency": 0.9,
     
-    "efficiencyMaxMultiplier": 50000.0,
-    "efficiencyExponentK": 8.0,
-    "efficiencyShapePower": 1.2,
-    "efficiencyTailGrowthPerLevel": 1.02,
-    
-    "efficiencyPerUnit": 0.1,
-    "efficiencyDiminishingFactor": 0.5,
+    "efficiencyMaxMultiplier": 1000.0,
+    "efficiencyExponentK": 2.0,
+    "efficiencyShapePower": 1.05,
+    "efficiencyTailGrowthPerLevel": 1.07,
 
-    # Target time curve for payback-anchored upgrade pricing.
-    "timeCurveStartSeconds": 45.0,
-    "timeCurveEndSeconds": 600_000,
-    "timeCurveExponentK": 5.0, # Higher k means slower initial growth and faster late-game growth.
-    "timeCurveShapePower": 1.5, # Higher power means more of the curve's growth happens in the late game.
-    "timeCurveTailGrowthPerLevel": 1.008, # After max level, each additional level increases target time by this factor.
+    # Target time curves for payback-anchored upgrade pricing.
+    # Speed curve.
+    "speedTimeCurveStartSeconds": 45.0,
+    "speedTimeCurveEndSeconds": 600_000,
+    "speedTimeCurveExponentK": 5.0, # Higher k means slower initial growth and faster late-game growth.
+    "speedTimeCurveShapePower": 1.5, # Higher power means more of the curve's growth happens in the late game.
+    "speedTimeCurveTailGrowthPerLevel": 1.008, # After max level, each additional level increases target time by this factor.
+
+    # Efficiency curve (separate from speed to allow independent balancing while keeping deterministic costs).
+    "efficiencyTimeCurveStartSeconds": 90.0,
+    "efficiencyTimeCurveEndSeconds": 600_000_000,
+    "efficiencyTimeCurveExponentK": 10.0,
+    "efficiencyTimeCurveShapePower": 1.9,
+    "efficiencyTimeCurveTailGrowthPerLevel": 1.012,
 
     # Multipliers multiply the target time curve by some factor, altering time from the baseline curve by that factor.
     "speedTargetTimeMultiplier": 1.0,
-    "efficiencyTargetTimeMultiplier": 1.0,
-    "batchThresholdTimeDiscount": 0.8,
+    "efficiencyTargetTimeMultiplier": 2.0,
     
     # Reference counterpart levels used when pricing each stat's upgrade curve.
     "speedCostReferenceEfficiencyLevel": 0,
