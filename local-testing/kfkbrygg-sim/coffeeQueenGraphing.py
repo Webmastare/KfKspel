@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import math
 from datetime import datetime as date
 from pathlib import Path
@@ -503,6 +504,72 @@ def make_cost_analysis_plot():
     
     plt.tight_layout()
     save_and_close(fig, "cost_analysis.png", dpi=150)
+
+def make_csv_matrix():
+    """Make csv matricies with number of speed upgrades as columns and efficiency upgrades as rows"""
+
+    speed_cost_mat = []
+    speed_pbt_mat = []
+    eff_cost_mat = []
+    eff_pbt_mat = []
+    ips_mat = []
+
+    for speed_up in range(0,500):
+        speed_cost_mat.append([])
+        speed_pbt_mat.append([])
+        eff_cost_mat.append([])
+        eff_pbt_mat.append([])
+        ips_mat.append([])
+        for eff_up in range(0,500):
+            speed_cost = calculate_speed_upgrade_cost(
+                MACHINE_BASE_COST,
+                speed_up,
+                initial_batch_size=BASE_BATCH_SIZE,
+                current_efficiency_upgrade=eff_up,
+                base_production_time_ms=BASE_PRODUCTION_TIME_MS,
+                item_value_multiplier=ITEM_SELL_PRICE,
+            )
+            eff_cost = calculate_efficiency_upgrade_cost(
+                MACHINE_BASE_COST,
+                eff_up,
+                initial_batch_size=BASE_BATCH_SIZE,
+                current_speed_upgrade=speed_up,
+                base_production_time_ms=BASE_PRODUCTION_TIME_MS,
+                item_value_multiplier=ITEM_SELL_PRICE,
+            )
+            ips = calculate_items_per_second(
+                initial_batch_size=BASE_BATCH_SIZE,
+                speed_upgrade=speed_up,
+                efficiency_upgrade=eff_up,
+                base_production_time_ms=BASE_PRODUCTION_TIME_MS
+            )
+            money_ps = ips * ITEM_SELL_PRICE
+            speed_pbt = speed_cost / money_ps
+            eff_pbt = eff_cost / money_ps
+
+            eff_cost_mat[speed_up].append(eff_cost)
+            eff_pbt_mat[speed_up].append(eff_pbt)
+
+            speed_cost_mat[speed_up].append(speed_cost)
+            speed_pbt_mat[speed_up].append(speed_pbt)
+
+            ips_mat[speed_up].append(ips)
+    
+    # Make dfs with the list
+    speed_cost_df = pd.DataFrame(speed_cost_mat)
+    speed_pbt_df = pd.DataFrame(speed_pbt_mat)
+    eff_cost_df = pd.DataFrame(eff_cost_mat)
+    eff_pbt_df = pd.DataFrame(eff_pbt_mat)
+    ips_df = pd.DataFrame(ips_mat)
+
+    save_path = PLOT_DIR
+    speed_cost_df.to_csv(PLOT_DIR / "speed_cost.csv")
+    speed_pbt_df.to_csv(PLOT_DIR / "speed_payback_time.csv")
+    eff_cost_df.to_csv(PLOT_DIR / "eff_cost.csv")
+    eff_pbt_df.to_csv(PLOT_DIR / "eff_payback_time.csv")
+    ips_df.to_csv(PLOT_DIR / "ips.csv")
+    
+
     
 def main() -> None:
     """Generate console summary and all analysis visualizations."""
@@ -542,6 +609,8 @@ def main() -> None:
     make_money_and_upgrade_time_plot()
     make_cost_analysis_plot()
     make_beginning_progression_plot()
+
+    make_csv_matrix()
 
 
 if __name__ == "__main__":

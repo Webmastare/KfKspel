@@ -128,9 +128,8 @@ def calculate_items_per_second(
 
 def calculate_target_upgrade_time_seconds(next_level: int, upgrade_type: str = "speed") -> float:
     """Target time-to-buy curve used by payback anchored upgrade costs."""
-    clamped_level = max(1, next_level)
     max_level = max(1, int(GAME_SETTINGS["maxLevel"]))
-    normalized = min(clamped_level / max_level, 1.0)
+    normalized = min(next_level / max_level, 1.0)
 
     if upgrade_type == "efficiency":
         prefix = "efficiencyTimeCurve"
@@ -148,15 +147,15 @@ def calculate_target_upgrade_time_seconds(next_level: int, upgrade_type: str = "
     target_seconds = start_seconds + (end_seconds - start_seconds) * curve_progress
 
     tail_growth = float(GAME_SETTINGS[f"{prefix}TailGrowthPerLevel"])
-    if clamped_level > max_level:
-        target_seconds *= tail_growth ** (clamped_level - max_level)
+    if next_level > max_level:
+        target_seconds *= tail_growth ** (next_level - max_level)
 
     if upgrade_type == "efficiency":
         target_seconds *= float(GAME_SETTINGS["efficiencyTargetTimeMultiplier"])
     else:
         target_seconds *= float(GAME_SETTINGS["speedTargetTimeMultiplier"])
 
-    if upgrade_type == "speed" and clamped_level in GAME_SETTINGS["batchSizeThreshold"]:
+    if upgrade_type == "speed" and next_level in GAME_SETTINGS["batchSizeThreshold"]:
         target_seconds *= float(GAME_SETTINGS["batchTimeEfficiency"])
 
     return max(float(GAME_SETTINGS["minUpgradeTimeSeconds"]), target_seconds)
@@ -174,13 +173,13 @@ def calculate_speed_upgrade_cost(
     current_ips = calculate_items_per_second(
         initial_batch_size,
         current_speed_upgrade,
-        current_efficiency_upgrade,
+        0, # Efficiency is held constant when calculating speed upgrade cost to maintain consistent relative pricing and avoid circular dependencies.
         base_production_time_ms,
     )
     next_ips = calculate_items_per_second(
         initial_batch_size,
         current_speed_upgrade + 1,
-        current_efficiency_upgrade,
+        0,
         base_production_time_ms,
     )
     delta_income_per_second = (next_ips - current_ips) * max(0.0, item_value_multiplier)
@@ -214,13 +213,13 @@ def calculate_efficiency_upgrade_cost(
     """Calculate next efficiency upgrade cost using payback anchoring with affordability floor."""
     current_ips = calculate_items_per_second(
         initial_batch_size,
-        current_speed_upgrade,
+        0, # Speed is held constant when calculating efficiency upgrade cost to maintain consistent relative pricing and avoid circular dependencies.
         current_eff_upgrade,
         base_production_time_ms,
     )
     next_ips = calculate_items_per_second(
         initial_batch_size,
-        current_speed_upgrade,
+        0,
         current_eff_upgrade + 1,
         base_production_time_ms,
     )
@@ -331,7 +330,7 @@ GAME_SETTINGS = {
 
     # Multipliers multiply the target time curve by some factor, altering time from the baseline curve by that factor.
     "speedTargetTimeMultiplier": 1.0,
-    "efficiencyTargetTimeMultiplier": 2.0,
+    "efficiencyTargetTimeMultiplier": 1.0,
     
     # Reference counterpart levels used when pricing each stat's upgrade curve.
     "speedCostReferenceEfficiencyLevel": 0,
