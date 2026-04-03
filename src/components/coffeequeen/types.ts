@@ -85,24 +85,42 @@ export interface SpeedupBufferState {
 }
 
 export interface GameSettings {
-    // Speed upgrade parameters
-    speedBaseMultiplier: number;
-    speedDiminishingFactor: number;
-    speedIncrement: number;
+    maxLevel: number;
+
+    speedMaxMultiplier: number;
+    speedExponentK: number;
+    speedShapePower: number;
+    speedTailGrowthPerLevel: number;
+
     batchSizeThreshold: number[];
-
-    // Efficiency parameters
-    efficiencyPerUnit: number;
-    efficiencyDiminishingFactor: number;
-
-    // Cost scaling
-    speedCostBase: number;
-    speedCostAcceleration: number;
-    efficiencyCostBase: number;
-    efficiencyCostAcceleration: number;
-
-    // Production time scaling
     batchTimeEfficiency: number;
+
+    efficiencyMaxMultiplier: number;
+    efficiencyExponentK: number;
+    efficiencyShapePower: number;
+    efficiencyTailGrowthPerLevel: number;
+
+    speedTimeCurveStartSeconds: number;
+    speedTimeCurveEndSeconds: number;
+    speedTimeCurveExponentK: number;
+    speedTimeCurveShapePower: number;
+    speedTimeCurveTailGrowthPerLevel: number;
+
+    efficiencyTimeCurveStartSeconds: number;
+    efficiencyTimeCurveEndSeconds: number;
+    efficiencyTimeCurveExponentK: number;
+    efficiencyTimeCurveShapePower: number;
+    efficiencyTimeCurveTailGrowthPerLevel: number;
+
+    speedTargetTimeMultiplier: number;
+    efficiencyTargetTimeMultiplier: number;
+
+    speedCostReferenceEfficiencyLevel: number;
+    efficiencyCostReferenceSpeedLevel: number;
+    targetAffordabilityFloorFraction: number;
+    minUpgradeTimeSeconds: number;
+    minUpgradeCost: number;
+    upgradeCostFloorFraction: number;
 }
 
 export interface ProductionCalculation {

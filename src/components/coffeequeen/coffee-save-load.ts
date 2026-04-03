@@ -15,6 +15,7 @@ import {
     createDefaultSpeedupBufferState,
     refillSpeedupBuffer,
 } from "./speedup-buffer";
+import { refreshMachineDerivedValues } from "./coffee-machine-derived";
 
 import { normalizeBucketsForAllTimeScales } from "@/composables/coffeequeen/statsManager";
 
@@ -185,8 +186,6 @@ const KFKBRYGG_SAVE_PREFIX = "kfkbrygg_save_";
 const KFKBRYGG_INDEX_KEY = "kfkbrygg_saves_index_v1";
 const KFKBRYGG_ACTIVE_SAVE_KEY = "kfkbrygg_active_save_id";
 
-const LEGACY_COFFEEQUEEN_PREFIX = "coffeeQueen_";
-
 /**
  * Saves the current game state to localStorage.
  */
@@ -268,46 +267,16 @@ export function loadFromLocalStorage(
             const gameData: SavedGameData = JSON.parse(savedData);
             gameData.saveId = saveId;
 
-            // Ensure upgrades exist for backward compatibility
-            if (!gameData.upgrades) {
-                gameData.upgrades = {
-                    managers: {},
-                    inventory: {},
-                    salesManagers: {},
-                };
+            // Recalculate machine derived values using the current balancing model.
+            for (const machineKey in gameData.machines) {
+                const machine = gameData.machines[machineKey];
+                const config = machinesConfig[machineKey as MachineKey];
+                if (!machine || !config) continue;
+
+                refreshMachineDerivedValues(machine, config, itemData);
             }
 
-            // Ensure inventory upgrades exist for backward compatibility
-            if (!gameData.upgrades.inventory) {
-                gameData.upgrades.inventory = {};
-            }
-
-            // Ensure sales managers exist for backward compatibility
-            if (!gameData.upgrades.salesManagers) {
-                gameData.upgrades.salesManagers = {};
-            }
-
-            if (!gameData.speedupBuffer) {
-                gameData.speedupBuffer = createDefaultSpeedupBufferState();
-            } else {
-                gameData.speedupBuffer = clampSpeedupBuffer(
-                    gameData.speedupBuffer,
-                );
-            }
-
-            // Migrate sales managers to include accumulator properties
-            for (const itemKey in gameData.upgrades.salesManagers) {
-                const manager = gameData.upgrades.salesManagers[itemKey];
-                if (manager) {
-                    // Add accumulator properties if they don't exist
-                    if (typeof manager.partialItemsToSell !== "number") {
-                        manager.partialItemsToSell = 0;
-                    }
-                    if (typeof manager.partialItemsToBuy !== "number") {
-                        manager.partialItemsToBuy = 0;
-                    }
-                }
-            }
+            gameData.speedupBuffer = clampSpeedupBuffer(gameData.speedupBuffer);
 
             // Restore production stats to stats manager if available
             if (
@@ -544,8 +513,6 @@ export function displayLocalSaves(): SavedGameData[] {
 export function initializeKfKbryggSaveSystem(
     defaultSaveName = "Guest",
 ): string {
-    migrateLegacyCoffeeQueenSavesToKfKbrygg();
-
     const index = readSaveIndex();
     if (index.saves.length === 0) {
         const saveId = createSaveId();
@@ -633,76 +600,6 @@ export function setActiveSaveId(saveId: string): void {
     localStorage.setItem(KFKBRYGG_ACTIVE_SAVE_KEY, saveId);
 }
 
-/**
- * Legacy migration block:
- * Moves old coffeeQueen_* save keys to the new kfkbrygg save-slot format,
- * updates the index, and removes old keys after successful migration.
- */
-export function migrateLegacyCoffeeQueenSavesToKfKbrygg(): void {
-    const index = readSaveIndex();
-    const legacyKeys: string[] = [];
-
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(LEGACY_COFFEEQUEEN_PREFIX)) {
-            legacyKeys.push(key);
-        }
-    }
-
-    if (legacyKeys.length === 0) {
-        return;
-    }
-
-    for (const legacyKey of legacyKeys) {
-        const raw = localStorage.getItem(legacyKey);
-        if (!raw) continue;
-
-        try {
-            const gameData: SavedGameData = JSON.parse(raw);
-            const legacyId =
-                legacyKey.slice(LEGACY_COFFEEQUEEN_PREFIX.length) || "legacy";
-
-            let newSaveId = `legacy_${slugifyId(legacyId)}`;
-            while (
-                localStorage.getItem(getSaveStorageKey(newSaveId)) ||
-                index.saves.some((save) => save.id === newSaveId)
-            ) {
-                newSaveId = `${newSaveId}_${Math.floor(Math.random() * 1000)}`;
-            }
-
-            const migratedName = normalizeSaveName(
-                gameData.userName || `Migrated ${legacyId}`,
-            );
-            gameData.userName = migratedName;
-            gameData.saveId = newSaveId;
-
-            localStorage.setItem(
-                getSaveStorageKey(newSaveId),
-                JSON.stringify(gameData),
-            );
-            index.saves.push({
-                id: newSaveId,
-                name: migratedName,
-                lastSaved: gameData.lastSaved || new Date().toISOString(),
-            });
-
-            if (!getActiveSaveId() && legacyId === "guest") {
-                setActiveSaveId(newSaveId);
-            }
-
-            // Remove old key once migrated.
-            localStorage.removeItem(legacyKey);
-        } catch (error) {
-            console.error(
-                `Failed to migrate legacy save key ${legacyKey}:`,
-                error,
-            );
-        }
-    }
-
-    writeSaveIndex(index);
-}
-
 function readSaveIndex(): SaveIndex {
     const raw = localStorage.getItem(KFKBRYGG_INDEX_KEY);
     if (!raw) {
@@ -764,14 +661,6 @@ function createSaveId(): string {
 function normalizeSaveName(name: string): string {
     const trimmed = (name || "").trim();
     return trimmed.length > 0 ? trimmed.slice(0, 40) : "Guest";
-}
-
-function slugifyId(value: string): string {
-    const slug = value
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "_")
-        .replace(/^_+|_+$/g, "");
-    return slug || "legacy";
 }
 
 /**

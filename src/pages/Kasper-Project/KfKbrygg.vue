@@ -140,12 +140,7 @@ import Shop from '@/components/coffeequeen/Shop.vue'
 import LoadDataOverlay from '@/components/coffeequeen/LoadDataOverlay.vue'
 import OfflineProgress from '@/components/coffeequeen/OfflineProgress.vue'
 import ProductionStats from '@/components/coffeequeen/ProductionStats.vue'
-import {
-  calculateBatchSize,
-  calculateProductionTime,
-  calculateSpeedUpgradeCost,
-  calculateEfficiencyUpgradeCost,
-} from '@/components/coffeequeen/coffee-upgrade-calculations'
+import { refreshMachineDerivedValues } from '@/components/coffeequeen/coffee-machine-derived'
 import { clampSpeedupBuffer, refillSpeedupBuffer } from '@/components/coffeequeen/speedup-buffer'
 import { simulateGameStep } from '@/components/coffeequeen/coffee-simulation'
 import {
@@ -251,6 +246,42 @@ const speedupSecondsUntilFull = computed(() => {
   return Math.ceil(missing * user.value.speedupBuffer.onlineRefillIntervalSeconds)
 })
 
+function createMachineState(
+  machineKey: MachineKey,
+  config: MachineConfig,
+  isOwned = false,
+): UserMachine {
+  const machine: UserMachine = {
+    key: machineKey,
+    name: config.name,
+    type: config.type,
+    icon: config.icon,
+    cost: config.cost,
+    levelRequired: config.levelRequired,
+    baseBatchSize: config.baseBatchSize,
+    batchSize: config.baseBatchSize,
+    productionTime: config.productionTime,
+    uses: config.uses,
+    produces: config.produces,
+    isOwned,
+    isActive: false,
+    isManual: true,
+    isRunning: false,
+    progressPercent: 0,
+    efficiencyProgress: 0,
+    speedUpgrade: 0,
+    efficiencyUpgrade: 0,
+    speedUpgradeCost: 0,
+    efficiencyUpgradeCost: 0,
+    lastUpdateTime: Date.now(),
+    itemsProduced: 0,
+    bonusItems: 0,
+  }
+
+  refreshMachineDerivedValues(machine, config, itemData.value)
+  return machine
+}
+
 // Computed properties for display
 const allMachinesForDisplay = computed(() => {
   const allMachines: UserMachine[] = []
@@ -261,35 +292,9 @@ const allMachinesForDisplay = computed(() => {
 
     if (user.value.machines[machineKey]) {
       machine = user.value.machines[machineKey]
+      refreshMachineDerivedValues(machine, config, itemData.value)
     } else {
-      // Create default machine state
-      machine = {
-        key: machineKey,
-        name: config.name,
-        type: config.type,
-        icon: config.icon,
-        cost: config.cost,
-        levelRequired: config.levelRequired,
-        baseBatchSize: config.baseBatchSize,
-        batchSize: config.baseBatchSize,
-        productionTime: config.productionTime,
-        uses: config.uses,
-        produces: config.produces,
-        isOwned: false,
-        isActive: false,
-        isManual: true,
-        isRunning: false,
-        progressPercent: 0,
-        efficiencyProgress: 0,
-        speedUpgrade: 0,
-        efficiencyUpgrade: 0,
-        speedUpgradeCost: calculateSpeedUpgradeCost(config.cost, 0),
-        efficiencyUpgradeCost: calculateEfficiencyUpgradeCost(config.cost, 0),
-        lastUpdateTime: Date.now(),
-
-        itemsProduced: 0,
-        bonusItems: 0,
-      }
+      machine = createMachineState(machineKey, config)
     }
 
     // Check if automation manager is purchased for this machine
@@ -492,35 +497,7 @@ function buyMachine(machineKey: MachineKey) {
   if (user.value.money >= config.cost && user.value.level >= config.levelRequired) {
     user.value.money -= config.cost
 
-    // Create the machine instance
-    user.value.machines[machineKey] = {
-      key: machineKey,
-      name: config.name,
-      type: config.type,
-      icon: config.icon,
-      cost: config.cost,
-      levelRequired: config.levelRequired,
-      baseBatchSize: config.baseBatchSize,
-      batchSize: config.baseBatchSize,
-      productionTime: config.productionTime,
-      uses: config.uses,
-      produces: config.produces,
-      // Initial state
-      isOwned: true,
-      isActive: false, // Start as inactive (red status) for manual machines
-      isManual: true, // All machines start as manual
-      isRunning: false, // Not currently producing
-      progressPercent: 0,
-      efficiencyProgress: 0,
-      speedUpgrade: 0,
-      efficiencyUpgrade: 0,
-      speedUpgradeCost: calculateSpeedUpgradeCost(config.cost, 0),
-      efficiencyUpgradeCost: calculateEfficiencyUpgradeCost(config.cost, 0),
-      lastUpdateTime: Date.now(),
-
-      itemsProduced: 0, // Property to track items produced
-      bonusItems: 0, // Property to track bonus items produced
-    }
+    user.value.machines[machineKey] = createMachineState(machineKey, config, true)
 
     markUnsavedChanges(true)
   }
@@ -754,14 +731,10 @@ function upgradeMachine(machineKey: MachineKey, upgradeType: string) {
       user.value.money -= upgradeCost
       machine.speedUpgrade++
 
-      // Recalculate machine properties
-      machine.batchSize = calculateBatchSize(machine.baseBatchSize, machine.speedUpgrade)
-      machine.productionTime = calculateProductionTime(
-        machine.baseBatchSize,
-        machine.speedUpgrade,
-        machinesConfig.value[machineKey].productionTime,
-      )
-      machine.speedUpgradeCost = calculateSpeedUpgradeCost(machine.cost, machine.speedUpgrade)
+      const machineConfig = machinesConfig.value[machineKey]
+      if (machineConfig) {
+        refreshMachineDerivedValues(machine, machineConfig, itemData.value)
+      }
 
       markUnsavedChanges(true)
     }
@@ -770,10 +743,11 @@ function upgradeMachine(machineKey: MachineKey, upgradeType: string) {
     if (user.value.money >= upgradeCost) {
       user.value.money -= upgradeCost
       machine.efficiencyUpgrade++
-      machine.efficiencyUpgradeCost = calculateEfficiencyUpgradeCost(
-        machine.cost,
-        machine.efficiencyUpgrade,
-      )
+
+      const machineConfig = machinesConfig.value[machineKey]
+      if (machineConfig) {
+        refreshMachineDerivedValues(machine, machineConfig, itemData.value)
+      }
 
       markUnsavedChanges(true)
     }
@@ -840,31 +814,13 @@ function loadGame(saveId: string) {
     user.value.lastActiveAt = new Date().toISOString()
     user.value.speedupBuffer = clampSpeedupBuffer(user.value.speedupBuffer)
 
-    // Migrate old save data - add missing properties to machines
     for (const machineKey in user.value.machines) {
       const machine = user.value.machines[machineKey]
-      if (machine) {
-        if (machine.isManual === undefined) {
-          machine.isManual = true // Default to manual for old saves
-        }
-        if (machine.isRunning === undefined) {
-          machine.isRunning = false
-        }
+      const typedMachineKey = machineKey as MachineKey
+      const machineConfig = machinesConfig.value[typedMachineKey]
+      if (machine && machineConfig) {
+        refreshMachineDerivedValues(machine, machineConfig, itemData.value)
       }
-    }
-
-    // Migrate inventory items - ensure they have capacity
-    for (const itemKey in user.value.inventory) {
-      const item = user.value.inventory[itemKey]
-      if (item && item.capacity === undefined) {
-        // Old save without capacity - calculate it
-        item.capacity = calculateItemCapacity(itemKey as ItemKey)
-      }
-    }
-
-    // Ensure inventory upgrades exist for backward compatibility
-    if (!user.value.upgrades.inventory) {
-      user.value.upgrades.inventory = {}
     }
 
     // Update all inventory capacities in case new upgrades were added
