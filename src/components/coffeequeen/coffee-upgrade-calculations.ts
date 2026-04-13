@@ -1,7 +1,8 @@
 import type { GameSettings, ProductionCalculation } from "./types";
 
 const gameSettings: GameSettings = {
-    maxLevel: 500,
+    maxSpeedLevel: 500,
+    maxEfficiencyLevel: 200,
 
     speedMaxMultiplier: 400000,
     speedExponentK: 8,
@@ -13,7 +14,7 @@ const gameSettings: GameSettings = {
 
     efficiencyMaxMultiplier: 20,
     efficiencyExponentK: 2,
-    efficiencyShapePower: 1.05,
+    efficiencyShapePower: 1.25,
     efficiencyTailGrowthPerLevel: 1.07,
 
     speedTimeCurveStartSeconds: 45,
@@ -94,7 +95,7 @@ export function calculateBatchSize(
 export function calculateSpeedMultiplier(speedUpgrade: number): number {
     return expCurveMultiplier(
         speedUpgrade,
-        gameSettings.maxLevel,
+        gameSettings.maxSpeedLevel,
         gameSettings.speedExponentK,
         gameSettings.speedShapePower,
         gameSettings.speedMaxMultiplier,
@@ -125,7 +126,7 @@ export function calculateProductionTime(
 export function calculateEfficiencyBonus(efficiencyUpgrade: number): number {
     const multiplier = expCurveMultiplier(
         efficiencyUpgrade,
-        gameSettings.maxLevel,
+        gameSettings.maxEfficiencyLevel,
         gameSettings.efficiencyExponentK,
         gameSettings.efficiencyShapePower,
         gameSettings.efficiencyMaxMultiplier,
@@ -157,10 +158,10 @@ export function calculateItemsPerSecond(
 }
 
 export function calculateTargetUpgradeTimeSeconds(
+    maxLevel: number,
     nextLevel: number,
     upgradeType: UpgradeType = "speed",
 ): number {
-    const maxLevel = Math.max(1, Math.floor(gameSettings.maxLevel));
     const normalized = Math.min(nextLevel / maxLevel, 1);
 
     const isEfficiency = upgradeType === "efficiency";
@@ -275,6 +276,7 @@ export function calculateSpeedUpgradeCost(
     }
 
     const targetSeconds = calculateTargetUpgradeTimeSeconds(
+        gameSettings.maxSpeedLevel,
         currentSpeedUpgrade + 1,
         "speed",
     );
@@ -328,6 +330,7 @@ export function calculateEfficiencyUpgradeCost(
     }
 
     const targetSeconds = calculateTargetUpgradeTimeSeconds(
+        gameSettings.maxEfficiencyLevel,
         currentEfficiencyUpgrade + 1,
         "efficiency",
     );

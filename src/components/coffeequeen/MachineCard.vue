@@ -58,20 +58,23 @@
         <div class="upgrade-buttons">
           <div class="upgrade-button-container">
             <button @click="emitUpgrade('speed')" :disabled="!canAffordSpeedUpgrade">
-              Speed: {{ machine.speedUpgrade }}
+              Speed: {{ machine.speedUpgrade }} (+{{ speedUpgradePlan.count }})
             </button>
             <div class="tooltip">
-              <p>Cost: ${{ formatCompactNumber(machine.speedUpgradeCost) }}</p>
+              <p>Cost: ${{ formatCompactNumber(speedUpgradePlan.totalCost) }}</p>
+              <p>Buy Count: {{ speedUpgradePlan.count }}</p>
               <p>Current: {{ (machine.productionTime / 1000).toFixed(2) }}s</p>
               <p>Next: {{ (nextSpeedTime / 1000).toFixed(2) }}s</p>
+              <p>Batch Size: {{ machine.batchSize }} -> {{ nextSpeedBatchSize }}</p>
             </div>
           </div>
           <div class="upgrade-button-container">
             <button @click="emitUpgrade('efficiency')" :disabled="!canAffordEfficiencyUpgrade">
-              Efficiency: {{ machine.efficiencyUpgrade }}
+              Efficiency: {{ machine.efficiencyUpgrade }} (+{{ efficiencyUpgradePlan.count }})
             </button>
             <div class="tooltip">
-              <p>Cost: ${{ formatCompactNumber(machine.efficiencyUpgradeCost) }}</p>
+              <p>Cost: ${{ formatCompactNumber(efficiencyUpgradePlan.totalCost) }}</p>
+              <p>Buy Count: {{ efficiencyUpgradePlan.count }}</p>
               <p>Current: {{ getEfficiency(false) }}</p>
               <p>Next: {{ getEfficiency(true) }}</p>
             </div>
@@ -105,13 +108,19 @@ import {
   calculateEfficiencyBonus,
   calculateBatchSize,
 } from '@/components/coffeequeen/coffee-upgrade-calculations'
+import {
+  getUpgradePurchasePlan,
+  type UpgradeBulkAmount,
+} from '@/components/coffeequeen/coffee-machine-derived'
 import { machineDataList } from '@/components/coffeequeen/data-machines'
+import { itemDataList } from '@/components/coffeequeen/data-items'
 import { formatCompactNumber } from '@/components/coffeequeen/number-format'
 
 interface Props {
   machine: UserMachine
   userMoney: number
   userLevel: number
+  upgradeBulkAmount: UpgradeBulkAmount
 }
 
 interface Emits {
@@ -166,6 +175,46 @@ const isHighSpeedModeEfficiency = computed(() => {
   )
 })
 
+const speedUpgradePlan = computed(() => {
+  if (!props.machine.isOwned) {
+    return { count: 0, totalCost: 0 }
+  }
+
+  const machineConfig = machineDataList[props.machine.key as MachineKey]
+  if (!machineConfig) {
+    return { count: 0, totalCost: 0 }
+  }
+
+  return getUpgradePurchasePlan(
+    props.machine,
+    machineConfig,
+    itemDataList,
+    'speed',
+    props.upgradeBulkAmount,
+    props.userMoney,
+  )
+})
+
+const efficiencyUpgradePlan = computed(() => {
+  if (!props.machine.isOwned) {
+    return { count: 0, totalCost: 0 }
+  }
+
+  const machineConfig = machineDataList[props.machine.key as MachineKey]
+  if (!machineConfig) {
+    return { count: 0, totalCost: 0 }
+  }
+
+  return getUpgradePurchasePlan(
+    props.machine,
+    machineConfig,
+    itemDataList,
+    'efficiency',
+    props.upgradeBulkAmount,
+    props.userMoney,
+  )
+})
+
 const nextSpeedTime = computed(() => {
   if (!props.machine.isOwned) return 0
 
@@ -175,14 +224,23 @@ const nextSpeedTime = computed(() => {
 
   return calculateProductionTime(
     props.machine.baseBatchSize,
-    props.machine.speedUpgrade + 1,
+    props.machine.speedUpgrade + speedUpgradePlan.value.count,
     baseProductionTime,
+  )
+})
+
+const nextSpeedBatchSize = computed(() => {
+  if (!props.machine.isOwned) return props.machine.batchSize
+  return calculateBatchSize(
+    props.machine.baseBatchSize,
+    props.machine.speedUpgrade + speedUpgradePlan.value.count,
   )
 })
 
 const getEfficiency = (next: boolean): string => {
   if (!props.machine.isOwned) return '0%'
-  const efficiencyLevel = props.machine.efficiencyUpgrade + (next ? 1 : 0)
+  const levelsToAdd = next ? efficiencyUpgradePlan.value.count : 0
+  const efficiencyLevel = props.machine.efficiencyUpgrade + levelsToAdd
   const efficiencyBonus = calculateEfficiencyBonus(efficiencyLevel)
   return (efficiencyBonus * 100).toFixed(1) + '%'
 }
@@ -205,10 +263,10 @@ const getMachineEfficiencyRate = () => {
 }
 
 const canAffordSpeedUpgrade = computed(
-  () => props.machine.isOwned && props.userMoney >= props.machine.speedUpgradeCost,
+  () => props.machine.isOwned && speedUpgradePlan.value.count > 0,
 )
 const canAffordEfficiencyUpgrade = computed(
-  () => props.machine.isOwned && props.userMoney >= props.machine.efficiencyUpgradeCost,
+  () => props.machine.isOwned && efficiencyUpgradePlan.value.count > 0,
 )
 
 // For buying the machine

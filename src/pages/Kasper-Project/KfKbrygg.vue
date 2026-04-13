@@ -13,6 +13,7 @@
       <button @click="showShop = !showShop">{{ showShop ? 'Close' : 'Open' }} Shop</button>
       <button @click="showStats = !showStats">{{ showStats ? 'Close' : 'Open' }} Statistics</button>
       <button @click="openLoadDataOverlay">Load Game</button>
+      <button @click="cycleUpgradeBulkAmount">Upgrade Buy: {{ getUpgradeBulkDisplay() }}</button>
     </div>
 
     <SpeedupPanel
@@ -39,6 +40,7 @@
             :machine="machine"
             :user-money="user.money"
             :user-level="user.level"
+            :upgrade-bulk-amount="upgradeBulkAmount"
             @upgrade-machine="handleUpgrade"
             @buy-machine="buyMachine"
             @start-machine="startMachine"
@@ -140,7 +142,10 @@ import Shop from '@/components/coffeequeen/Shop.vue'
 import LoadDataOverlay from '@/components/coffeequeen/LoadDataOverlay.vue'
 import OfflineProgress from '@/components/coffeequeen/OfflineProgress.vue'
 import ProductionStats from '@/components/coffeequeen/ProductionStats.vue'
-import { refreshMachineDerivedValues } from '@/components/coffeequeen/coffee-machine-derived'
+import {
+  getUpgradePurchasePlan,
+  refreshMachineDerivedValues,
+} from '@/components/coffeequeen/coffee-machine-derived'
 import { clampSpeedupBuffer, refillSpeedupBuffer } from '@/components/coffeequeen/speedup-buffer'
 import { simulateGameStep } from '@/components/coffeequeen/coffee-simulation'
 import {
@@ -231,6 +236,8 @@ let lastBucketUpdate = 0 // OPTIMIZATION: Track when we last updated buckets
 let hiddenAtTimestamp: number | null = null
 const gameSpeedMultiplier = ref<number>(1)
 const speedOptions = [1, 2, 3, 10, 100]
+const upgradeBulkOptions = [1, 5, 10, 25, 'Max'] as const
+const upgradeBulkAmount = ref<(typeof upgradeBulkOptions)[number]>(1)
 
 const speedupCurrentSeconds = computed(() =>
   Math.max(0, user.value.speedupBuffer?.currentSeconds || 0),
@@ -245,6 +252,16 @@ const speedupSecondsUntilFull = computed(() => {
 
   return Math.ceil(missing * user.value.speedupBuffer.onlineRefillIntervalSeconds)
 })
+
+function getUpgradeBulkDisplay(): string {
+  return upgradeBulkAmount.value === 'Max' ? 'Max' : `${upgradeBulkAmount.value}x`
+}
+
+function cycleUpgradeBulkAmount() {
+  const currentIndex = upgradeBulkOptions.findIndex((option) => option === upgradeBulkAmount.value)
+  const nextIndex = (currentIndex + 1) % upgradeBulkOptions.length
+  upgradeBulkAmount.value = upgradeBulkOptions[nextIndex] ?? 1
+}
 
 function createMachineState(
   machineKey: MachineKey,
@@ -723,35 +740,31 @@ function upgradeMachine(machineKey: MachineKey, upgradeType: string) {
   const machine = user.value.machines[machineKey]
   if (!machine) return
 
-  let upgradeCost = 0
+  if (upgradeType !== 'speed' && upgradeType !== 'efficiency') return
 
+  const machineConfig = machinesConfig.value[machineKey]
+  if (!machineConfig) return
+
+  const purchasePlan = getUpgradePurchasePlan(
+    machine,
+    machineConfig,
+    itemData.value,
+    upgradeType,
+    upgradeBulkAmount.value,
+    user.value.money,
+  )
+
+  if (purchasePlan.count <= 0 || purchasePlan.totalCost > user.value.money) return
+
+  user.value.money -= purchasePlan.totalCost
   if (upgradeType === 'speed') {
-    upgradeCost = machine.speedUpgradeCost
-    if (user.value.money >= upgradeCost) {
-      user.value.money -= upgradeCost
-      machine.speedUpgrade++
-
-      const machineConfig = machinesConfig.value[machineKey]
-      if (machineConfig) {
-        refreshMachineDerivedValues(machine, machineConfig, itemData.value)
-      }
-
-      markUnsavedChanges(true)
-    }
-  } else if (upgradeType === 'efficiency') {
-    upgradeCost = machine.efficiencyUpgradeCost
-    if (user.value.money >= upgradeCost) {
-      user.value.money -= upgradeCost
-      machine.efficiencyUpgrade++
-
-      const machineConfig = machinesConfig.value[machineKey]
-      if (machineConfig) {
-        refreshMachineDerivedValues(machine, machineConfig, itemData.value)
-      }
-
-      markUnsavedChanges(true)
-    }
+    machine.speedUpgrade += purchasePlan.count
+  } else {
+    machine.efficiencyUpgrade += purchasePlan.count
   }
+
+  refreshMachineDerivedValues(machine, machineConfig, itemData.value)
+  markUnsavedChanges(true)
 }
 
 // Save to localStorage

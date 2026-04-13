@@ -85,7 +85,8 @@ export interface SpeedupBufferState {
 }
 
 export interface GameSettings {
-    maxLevel: number;
+    maxSpeedLevel: number;
+    maxEfficiencyLevel: number;
 
     speedMaxMultiplier: number;
     speedExponentK: number;
