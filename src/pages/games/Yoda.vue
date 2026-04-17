@@ -1,10 +1,10 @@
 <template>
   <div class="game-container">
     <div class="stats">
-      <p>{{ points }} | {{ Math.round(velocity) }} varv/s</p>
+      <p>{{ points }} | {{ velocity.toFixed(2) }} varv/s</p>
     </div>
 
-    <div class="spinner-wrapper" @pointerdown="handleClick">
+    <div class="spinner-wrapper" @pointerdown="handleClick" @contextmenu.prevent>
       <div class="spinner-object" :style="{ transform: `rotate(${rotation}deg)` }">
         <img
           class="spinner-image"
@@ -30,93 +30,211 @@ const rotation = ref(0)
 const velocity = ref(0)
 const points = ref(0)
 
-const CLICK_IMPULSE_MAX = 1.15
-const CLICK_IMPULSE_MIN = 0.12
-const SOFT_CAP_SPEED = 35
-const SOFT_CAP_CURVE = 1.2
-const FRICTION = 0.998
-const COAST_DELAY_MS = 450
-const MIN_SPEED = 0.015
-const SPACEBAR_REPEAT_MS = 3
+const ROTATION_HALF_LIFE_MS = 5000
+const DECAY_RATE_PER_MS = -Math.log(2) / ROTATION_HALF_LIFE_MS
+const TARGET_STABILITY_TURNS_PER_SEC = 4
+const BASE_SPEED_DEG_PER_MS = 0.006
+
+const MIN_INPUT_INTERVAL_MS = 1000 / 12
+const CLICK_ANGLE_BONUS_DEG = 1
+const CLICK_SPEED_BONUS_DEG_PER_MS = 0.008
+const CLICK_STABILITY_MULTIPLIER = Math.exp(
+  (-DECAY_RATE_PER_MS * 1000) / TARGET_STABILITY_TURNS_PER_SEC,
+)
+
+const SPRING_STIFFNESS_SQRT_PER_MS = 0.001
+const SPRING_GRACE_MS = 200
+const MIN_REVERSE_SPEED_DEG_PER_MS = (-0.11 * 360) / 1000
+const RIGHT_CLICK_BRAKE_DEG_PER_MS = 0.001
+const SPACEBAR_REPEAT_MS = 250
+
+type SpinSnapshot = {
+  timeMs: number
+  angleDeg: number
+  speedDegPerMs: number
+  turns: number
+  springOffsetDeg: number
+}
 
 let animationFrame: number | null = null
-let lastFrameTime = 0
-let lastClickTime = 0
 let isSpacebarHeld = false
 let spacebarHoldInterval: ReturnType<typeof setInterval> | null = null
 
-const getImpulseAtSpeed = (speed: number) => {
-  const normalizedSpeed = Math.pow(speed, 0.5) // Math.log1p(Math.max(speed, 0) / SOFT_CAP_SPEED)
-  const diminishingFactor = 1 / Math.pow(1 + normalizedSpeed, SOFT_CAP_CURVE)
-
-  return CLICK_IMPULSE_MIN + (CLICK_IMPULSE_MAX - CLICK_IMPULSE_MIN) * diminishingFactor
+let anchor: SpinSnapshot = {
+  timeMs: 0,
+  angleDeg: 0,
+  speedDegPerMs: BASE_SPEED_DEG_PER_MS,
+  turns: 0,
+  springOffsetDeg: 0,
 }
 
-const addSpinImpulse = () => {
-  lastClickTime = performance.now()
-  velocity.value += getImpulseAtSpeed(velocity.value)
+const normalizeAngle = (angleDeg: number) => ((angleDeg % 360) + 360) % 360
+
+const turnsFromAbsoluteAngle = (angleDeg: number) =>
+  angleDeg >= 0 ? Math.floor(angleDeg / 360) : -Math.floor(-angleDeg / 360)
+
+const integrateDecayToBaseline = (dtMs: number, startSpeedDegPerMs: number) => {
+  const startSpeedNoBaseline = startSpeedDegPerMs - BASE_SPEED_DEG_PER_MS
+  const expTerm = Math.exp(DECAY_RATE_PER_MS * dtMs)
+  const endSpeedNoBaseline = expTerm * startSpeedNoBaseline
+  const endSpeedDegPerMs = endSpeedNoBaseline + BASE_SPEED_DEG_PER_MS
+  const deltaNoBaselineDeg = (startSpeedNoBaseline / DECAY_RATE_PER_MS) * (expTerm - 1)
+  const deltaDeg = deltaNoBaselineDeg + dtMs * BASE_SPEED_DEG_PER_MS
+
+  return { deltaDeg, endSpeedDegPerMs }
 }
 
-const update = (timestamp: number) => {
-  const deltaFrames = Math.min((timestamp - lastFrameTime) / (1000 / 60), 3)
-  lastFrameTime = timestamp
-
-  if (velocity.value > MIN_SPEED) {
-    const previousRotation = rotation.value
-    rotation.value += velocity.value * deltaFrames
-
-    if (timestamp - lastClickTime > COAST_DELAY_MS) {
-      velocity.value *= Math.pow(FRICTION, deltaFrames)
+const integrateSpringRecovery = (
+  dtMs: number,
+  startSpeedDegPerMs: number,
+  startOffsetDeg: number,
+) => {
+  if (dtMs <= SPRING_GRACE_MS) {
+    const deltaDeg = startSpeedDegPerMs * dtMs
+    return {
+      deltaDeg,
+      endSpeedDegPerMs: startSpeedDegPerMs,
+      endOffsetDeg: startOffsetDeg + deltaDeg,
     }
-
-    const revolutionsGained = Math.floor(rotation.value / 360) - Math.floor(previousRotation / 360)
-    if (revolutionsGained > 0) {
-      points.value += revolutionsGained
-    }
-  } else {
-    velocity.value = 0
   }
 
-  animationFrame = requestAnimationFrame(update)
+  const graceDeltaDeg = startSpeedDegPerMs * SPRING_GRACE_MS
+  const remainingDtMs = dtMs - SPRING_GRACE_MS
+  const offsetAtSpringStartDeg = startOffsetDeg + graceDeltaDeg
+
+  if (Math.abs(offsetAtSpringStartDeg) < 1e-9) {
+    const res = integrateDecayToBaseline(remainingDtMs, startSpeedDegPerMs)
+    return {
+      deltaDeg: graceDeltaDeg + res.deltaDeg,
+      endSpeedDegPerMs: res.endSpeedDegPerMs,
+      endOffsetDeg: 0,
+    }
+  }
+
+  const phase = Math.atan(
+    -startSpeedDegPerMs / SPRING_STIFFNESS_SQRT_PER_MS / offsetAtSpringStartDeg,
+  )
+  const amplitude = offsetAtSpringStartDeg / Math.cos(phase)
+  const msUntilSpringRelease = (Math.PI / 2 - phase) / SPRING_STIFFNESS_SQRT_PER_MS
+
+  if (msUntilSpringRelease < remainingDtMs) {
+    const decayFromSpringExit = integrateDecayToBaseline(
+      remainingDtMs - msUntilSpringRelease,
+      -SPRING_STIFFNESS_SQRT_PER_MS * amplitude,
+    )
+    return {
+      deltaDeg: graceDeltaDeg - offsetAtSpringStartDeg + decayFromSpringExit.deltaDeg,
+      endSpeedDegPerMs: decayFromSpringExit.endSpeedDegPerMs,
+      endOffsetDeg: 0,
+    }
+  }
+
+  const endOffsetDeg = amplitude * Math.cos(SPRING_STIFFNESS_SQRT_PER_MS * remainingDtMs + phase)
+  const endSpeedDegPerMs =
+    -SPRING_STIFFNESS_SQRT_PER_MS *
+    amplitude *
+    Math.sin(SPRING_STIFFNESS_SQRT_PER_MS * remainingDtMs + phase)
+
+  return {
+    deltaDeg: graceDeltaDeg + endOffsetDeg - offsetAtSpringStartDeg,
+    endSpeedDegPerMs,
+    endOffsetDeg,
+  }
+}
+
+const sampleSpin = (nowMs: number): SpinSnapshot => {
+  const elapsedMs = Math.max(0, nowMs - anchor.timeMs)
+
+  const integrated =
+    anchor.springOffsetDeg < 0 || anchor.speedDegPerMs < 0
+      ? integrateSpringRecovery(elapsedMs, anchor.speedDegPerMs, anchor.springOffsetDeg)
+      : {
+          ...integrateDecayToBaseline(elapsedMs, anchor.speedDegPerMs),
+          endOffsetDeg: 0,
+        }
+
+  const absoluteAngleDeg = anchor.angleDeg + integrated.deltaDeg
+  const turns = anchor.turns + turnsFromAbsoluteAngle(absoluteAngleDeg)
+
+  return {
+    timeMs: nowMs,
+    angleDeg: normalizeAngle(absoluteAngleDeg),
+    speedDegPerMs: integrated.endSpeedDegPerMs,
+    turns,
+    springOffsetDeg: integrated.endOffsetDeg,
+  }
+}
+
+const publish = (snapshot: SpinSnapshot) => {
+  rotation.value = snapshot.angleDeg
+  velocity.value = (snapshot.speedDegPerMs * 1000) / 360
+  points.value = snapshot.turns
+}
+
+const applyInput = (isReverse: boolean) => {
+  const nowMs = performance.now()
+  const current = sampleSpin(nowMs)
+  publish(current)
+
+  if (nowMs - anchor.timeMs < MIN_INPUT_INTERVAL_MS) {
+    return
+  }
+
+  anchor = {
+    timeMs: nowMs,
+    angleDeg: isReverse ? current.angleDeg : current.angleDeg + CLICK_ANGLE_BONUS_DEG,
+    speedDegPerMs: isReverse
+      ? Math.max(current.speedDegPerMs - RIGHT_CLICK_BRAKE_DEG_PER_MS, MIN_REVERSE_SPEED_DEG_PER_MS)
+      : (current.speedDegPerMs + CLICK_SPEED_BONUS_DEG_PER_MS) * CLICK_STABILITY_MULTIPLIER,
+    turns: current.turns,
+    springOffsetDeg: current.springOffsetDeg,
+  }
+
+  publish(sampleSpin(nowMs))
 }
 
 const handleClick = (event: PointerEvent) => {
-  if (event.pointerType === 'mouse' && event.button !== 0) return
+  if (event.pointerType === 'mouse' && event.button === 2) {
+    event.preventDefault()
+    applyInput(true)
+    return
+  }
 
-  addSpinImpulse()
+  if (event.pointerType === 'mouse' && event.button !== 0) return
+  applyInput(false)
 }
 
 const stopSpacebarHold = () => {
   isSpacebarHeld = false
-
   if (spacebarHoldInterval !== null) {
     clearInterval(spacebarHoldInterval)
     spacebarHoldInterval = null
   }
 }
 
-const handleSpacebarDown = (event: KeyboardEvent) => {
-  if (event.code !== 'Space') return
+const isEditableTarget = (target: EventTarget | null) => {
+  const el = target as HTMLElement | null
+  const tagName = el?.tagName
 
-  const target = event.target as HTMLElement | null
-  const tagName = target?.tagName
-  const isEditableTarget =
+  return (
     tagName === 'INPUT' ||
     tagName === 'TEXTAREA' ||
-    target?.isContentEditable ||
-    tagName === 'SELECT'
+    tagName === 'SELECT' ||
+    Boolean(el?.isContentEditable)
+  )
+}
 
-  if (isEditableTarget) return
+const handleSpacebarDown = (event: KeyboardEvent) => {
+  if (event.code !== 'Space') return
+  if (isEditableTarget(event.target)) return
 
   event.preventDefault()
-
   if (isSpacebarHeld) return
 
   isSpacebarHeld = true
-  addSpinImpulse()
-
+  applyInput(false)
   spacebarHoldInterval = setInterval(() => {
-    addSpinImpulse()
+    applyInput(false)
   }, SPACEBAR_REPEAT_MS)
 }
 
@@ -125,11 +243,23 @@ const handleSpacebarUp = (event: KeyboardEvent) => {
   stopSpacebarHold()
 }
 
+const tick = (timestamp: number) => {
+  publish(sampleSpin(timestamp))
+  animationFrame = requestAnimationFrame(tick)
+}
+
 onMounted(() => {
-  const startTime = performance.now()
-  lastFrameTime = startTime
-  lastClickTime = startTime
-  animationFrame = requestAnimationFrame(update)
+  const nowMs = performance.now()
+  anchor = {
+    timeMs: nowMs,
+    angleDeg: 0,
+    speedDegPerMs: BASE_SPEED_DEG_PER_MS,
+    turns: 0,
+    springOffsetDeg: 0,
+  }
+
+  publish(sampleSpin(nowMs))
+  animationFrame = requestAnimationFrame(tick)
   window.addEventListener('keydown', handleSpacebarDown)
   window.addEventListener('keyup', handleSpacebarUp)
   window.addEventListener('blur', stopSpacebarHold)
