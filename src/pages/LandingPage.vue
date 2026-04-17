@@ -31,41 +31,9 @@
         </div>
 
         <div class="game-grid">
-          <div class="game-card">
-            <h3>KfKblock</h3>
-            <router-link to="/kfkblock" class="play-btn">Spela</router-link>
-          </div>
-          <div class="game-card">
-            <h3>Sudoku</h3>
-            <router-link to="/sudoku" class="play-btn">Spela</router-link>
-          </div>
-          <div class="game-card">
-            <h3>KfKbandvagn</h3>
-            <router-link to="/kfkbandvagn" class="play-btn">Spela</router-link>
-          </div>
-          <div class="game-card">
-            <h3>Snake</h3>
-            <router-link to="/snake" class="play-btn">Spela</router-link>
-          </div>
-          <div class="game-card">
-            <h3>2048</h3>
-            <router-link to="/2048" class="play-btn">Spela</router-link>
-          </div>
-          <div class="game-card">
-            <h3>Minesweeper</h3>
-            <router-link to="/minesweeper" class="play-btn">Spela</router-link>
-          </div>
-          <div class="game-card">
-            <h3>Lights Out</h3>
-            <router-link to="/lights-out" class="play-btn">Spela</router-link>
-          </div>
-          <div class="game-card">
-            <h3>Rita en Cirkel</h3>
-            <router-link to="/circle-game" class="play-btn">Spela</router-link>
-          </div>
-          <div class="game-card">
-            <h3>Ordel</h3>
-            <router-link to="/ordel" class="play-btn">Spela</router-link>
+          <div v-for="game in featuredGames" :key="game.path" class="game-card">
+            <h3>{{ game.title }}</h3>
+            <router-link :to="game.path" class="play-btn">Spela</router-link>
           </div>
         </div>
 
@@ -119,12 +87,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import HamiltonianSnake from '@/components/HamiltonianSnake.vue'
+import { landingGameLinks } from '@/router/gameCatalog'
 
-const router = useRouter()
 const themeStore = useThemeStore()
+const featuredGames = landingGameLinks
 
 const showSnakeDetails = ref(false)
 const snakeFps = ref(10) // Adjusted FPS for smoother animation

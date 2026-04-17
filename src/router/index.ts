@@ -5,10 +5,10 @@ import {
 } from "vue-router";
 import LandingPage from "@/pages/LandingPage.vue";
 import About from "@/pages/About.vue";
+import Hemliga from "@/pages/Hemliga.vue";
 import Feedback from "@/pages/Feedback.vue";
 import FeedbackAdmin from "@/pages/FeedbackAdmin.vue";
 import gameRouter from "./gamesRouter";
-import projectRouter from "./projectRouter";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -29,12 +29,16 @@ const router = createRouter({
       component: About,
     },
     {
+      path: "/hemliga",
+      name: "hemliga",
+      component: Hemliga,
+    },
+    {
       path: "/admin/feedback",
       name: "feedback-admin",
       component: FeedbackAdmin,
     },
     ...gameRouter,
-    ...projectRouter,
     {
       path: "/:pathMatch(.*)*",
       name: "not-found",
