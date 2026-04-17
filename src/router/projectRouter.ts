@@ -51,4 +51,9 @@ export default [
         name: "KanaGame",
         component: () => import("@/pages/other/KanaGame.vue"),
     },
+    {
+        path: "/sandfall",
+        name: "Sandfall",
+        component: () => import("@/pages/Kasper-Project/SandFall.vue"),
+    },
 ];
