@@ -1,11 +1,17 @@
 <template>
   <nav>
     <router-link to="/">Hem</router-link>
+    <router-link to="/about">Om sidan</router-link>
     <router-link to="/feedback">💭 Feedback</router-link>
 
     <!-- User Menu -->
-    <div class="user-menu" @mouseenter="showUserMenu = true" @mouseleave="showUserMenu = false">
-      <button class="user-icon-button">
+    <div
+      ref="userMenuRef"
+      class="user-menu"
+      @mouseenter="showUserMenu = true"
+      @mouseleave="showUserMenu = false"
+    >
+      <button class="user-icon-button" @click="showUserMenu = !showUserMenu">
         <img src="/icons/user-icon.svg" alt="User Menu" class="user-icon" />
       </button>
 
@@ -41,7 +47,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 
@@ -50,8 +56,28 @@ const themeStore = useThemeStore()
 
 const authMode = ref('') // 'login', 'signup', or ''
 const showUserMenu = ref(false) // Controls visibility of user dropdown
+const userMenuRef = ref(null)
 
 const emit = defineEmits(['updateAuthMode'])
+
+function handleOutsideClick(event) {
+  if (!showUserMenu.value) {
+    return
+  }
+
+  const clickedElement = event.target
+  if (userMenuRef.value && !userMenuRef.value.contains(clickedElement)) {
+    showUserMenu.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleOutsideClick)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleOutsideClick)
+})
 
 function setAuthMode(mode) {
   authMode.value = mode

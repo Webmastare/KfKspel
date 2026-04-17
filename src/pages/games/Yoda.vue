@@ -286,8 +286,8 @@ onUnmounted(() => {
   min-height: 100vh;
   padding: 1.5rem;
   background:
-    radial-gradient(circle at 20% 20%, var(--theme-bg-secondary), transparent 45%),
-    radial-gradient(circle at 80% 80%, var(--theme-bg-elevated), transparent 50%),
+    radial-gradient(circle at 15% 15%, rgba(45, 207, 105, 0.14), transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(12, 141, 59, 0.18), transparent 50%),
     var(--theme-bg-primary);
   color: var(--theme-text-primary);
   font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;

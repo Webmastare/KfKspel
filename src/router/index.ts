@@ -4,6 +4,7 @@ import {
   createWebHistory,
 } from "vue-router";
 import LandingPage from "@/pages/LandingPage.vue";
+import About from "@/pages/About.vue";
 import Feedback from "@/pages/Feedback.vue";
 import FeedbackAdmin from "@/pages/FeedbackAdmin.vue";
 import gameRouter from "./gamesRouter";
@@ -21,6 +22,11 @@ const router = createRouter({
       path: "/feedback",
       name: "feedback",
       component: Feedback,
+    },
+    {
+      path: "/about",
+      name: "about",
+      component: About,
     },
     {
       path: "/admin/feedback",

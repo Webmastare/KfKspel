@@ -35,6 +35,11 @@
       {{ mode === 'login' ? 'Logga In' : 'Skapa Konto' }}
     </button>
 
+    <p v-if="mode === 'signup'" class="terms-info">
+      Genom att skapa ett konto godkänner du våra
+      <router-link to="/about#villkor">villkor</router-link>.
+    </p>
+
     <p v-if="errorMessage" class="error-message">
       {{ errorMessage }}
     </p>
@@ -258,6 +263,26 @@ button {
   font-weight: 400;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   padding: 0 1rem;
+}
+
+.terms-info {
+  margin-top: 0.9rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--theme-text-secondary);
+  text-align: center;
+  padding: 0 0.4rem;
+
+  a {
+    color: var(--theme-text-primary);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+
+    &:hover {
+      color: var(--theme-modal-header);
+    }
+  }
 }
 
 @media (max-width: 480px) {

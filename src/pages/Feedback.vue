@@ -416,7 +416,10 @@ async function submitFeedback() {
 
 .feedback-container {
   min-height: 100vh;
-  background-color: var(--theme-bg-primary);
+  background:
+    radial-gradient(circle at 15% 15%, rgba(45, 207, 105, 0.14), transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(12, 141, 59, 0.18), transparent 50%),
+    var(--theme-bg-primary);
   color: var(--theme-text-primary);
   padding: 20px;
   display: flex;
