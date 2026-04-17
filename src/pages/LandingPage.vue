@@ -163,9 +163,11 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
 .landing-page {
   position: relative;
   width: 100vw;
-  min-height: 100vh;
-  background: var(--theme-bg-primary);
-  transition: background 0.3s ease;
+  min-height: calc(100vh - 3rem);
+  background:
+    radial-gradient(circle at 15% 15%, rgba(45, 207, 105, 0.1), transparent 30%),
+    radial-gradient(circle at 80% 80%, rgba(12, 141, 59, 0.14), transparent 40%),
+    var(--theme-bg-primary);
 }
 
 .background-game {
@@ -186,16 +188,18 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 2rem;
+  padding: 1.25rem 1.5rem;
   box-sizing: border-box;
   pointer-events: auto; /* Ensure overlay content is interactive */
 }
 
 .welcome-card {
   border-radius: 20px;
-  padding: 3rem;
+  padding: 1.75rem 2rem;
   max-width: 900px;
   width: 100%;
+  max-height: 100%;
+  overflow: auto;
   text-align: center;
   transition: all 0.3s ease;
   pointer-events: auto; /* Ensure card is interactive */
@@ -216,7 +220,7 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
   .subtitle {
     font-size: 1.2rem;
     color: var(--theme-text-secondary);
-    margin-bottom: 3rem;
+    margin-bottom: 1.4rem;
     font-weight: 300;
     z-index: 1;
   }
@@ -262,8 +266,8 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
 .game-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  gap: 0.8rem;
+  margin-bottom: 1.1rem;
   z-index: 3;
 }
 
@@ -607,6 +611,22 @@ function toggleVisualization(type: 'cycle' | 'path' | 'generation') {
     &:hover .slider {
       box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
     }
+  }
+}
+
+@media (max-width: 900px), (max-height: 820px) {
+  .landing-page {
+    height: auto;
+    min-height: calc(100vh - 3rem);
+  }
+
+  .overlay-content {
+    height: auto;
+    min-height: calc(100vh - 3rem);
+  }
+
+  .welcome-card {
+    max-height: none;
   }
 }
 

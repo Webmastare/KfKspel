@@ -196,6 +196,9 @@ let score = 0
 let lastTime = performance.now()
 let frameCount = 0
 
+const MAX_GRID_CELLS = 1200
+const RECURSION_YIELD_INTERVAL = 80
+
 let context: CanvasRenderingContext2D
 let intervalID: any
 let animationFrameId: number
@@ -384,6 +387,10 @@ class GameMaster {
       await this.sleep(props.generationDelay)
     }
     const unvisitedNeighbors = node.neighbors.filter((neighbor) => !neighbor.visited)
+    if (!props.showGeneration && this.mazePath.length % RECURSION_YIELD_INTERVAL === 0) {
+      await Promise.resolve()
+    }
+
     if (unvisitedNeighbors.length > 0) {
       const nextCell = unvisitedNeighbors[Math.floor(Math.random() * unvisitedNeighbors.length)]
       if (nextCell) {
@@ -670,6 +677,11 @@ class GameMaster {
       await this.sleep(props.generationDelay)
     }
     node.visited = true
+
+    if (!props.showGeneration && this.hamilPath.length % RECURSION_YIELD_INTERVAL === 0) {
+      await Promise.resolve()
+    }
+
     // If all cells are in the path, check if we can connect back to start
     if (this.hamilPath.length === rows * columns) {
       let canConnectToStart = false
@@ -898,6 +910,16 @@ function initializeCanvas() {
   let tempRows = Math.floor(canvasHeight / blockSize)
   rows = tempRows % 2 === 0 ? tempRows : tempRows - 1
   if (rows < 4) rows = 4
+
+  if (rows * columns > MAX_GRID_CELLS) {
+    const scale = Math.sqrt((rows * columns) / MAX_GRID_CELLS)
+
+    const cappedCols = Math.max(4, Math.floor(columns / scale))
+    const cappedRows = Math.max(4, Math.floor(rows / scale))
+
+    columns = cappedCols % 2 === 0 ? cappedCols : cappedCols - 1
+    rows = cappedRows % 2 === 0 ? cappedRows : cappedRows - 1
+  }
 
   blockSize = Math.max(
     1,
