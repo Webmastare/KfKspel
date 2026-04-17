@@ -1,3 +1,5 @@
+import { path } from "d3";
+
 export default [
     {
         path: "/2048",
@@ -63,5 +65,10 @@ export default [
         path: "/ordjakt",
         name: "Ordjakt",
         component: () => import("@/pages/games/HiddenWord.vue"),
+    },
+    {
+        path: "/yoda",
+        name: "Yoda.se",
+        component: () => import("@/pages/games/Yoda.vue"),
     },
 ];
