@@ -91,6 +91,14 @@ const gameCatalog: GameCatalogEntry[] = [
         showOnSecret: false,
     },
     {
+        path: "/ordhjalp",
+        name: "Ordhjalp",
+        title: "Ordhjälpen",
+        component: () => import("@/pages/games/Ordhjalp.vue"),
+        showOnLanding: true,
+        showOnSecret: false,
+    },
+    {
         path: "/ordel-embed",
         name: "OrdelEmbed",
         title: "Ordel Embed",
