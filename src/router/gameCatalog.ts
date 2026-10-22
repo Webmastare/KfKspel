@@ -224,8 +224,8 @@ const gameCatalog: GameCatalogEntry[] = [
         name: "FemElva",
         title: "FemElva",
         component: () => import("@/pages/games/FemElva.vue"),
-        showOnLanding: false,
-        showOnSecret: true,
+        showOnLanding: true,
+        showOnSecret: false,
     },
 ];
 

@@ -5,7 +5,7 @@
       <form class="controls" @submit.prevent="newGame(seedInput)">
         <label class="seed-field">
           <strong>Seed</strong>
-          <input v-model.trim="seedInput" type="text" maxlength="20" placeholder="t.ex. kfk42" />
+          <input v-model.trim="seedInput" type="text" maxlength="20" placeholder="t.ex. kfkb" />
         </label>
         <button type="submit" :disabled="!seedInput">Spela</button>
         <button type="button" title="Slumpa en ny seed" @click="newGame(randomSeed())">
@@ -160,20 +160,26 @@
       <summary>Hur funkar spelet?</summary>
       <div class="help-content">
         <p>
-          Fyll hela brädet (5 × 11) med alla bitar. Bitarna med en mörk prick sitter fast och är
-          en del av startpositionen.
+          Fyll hela brädet (5 × 11) med alla bitar. Bitarna med en mörk prick sitter fast och är en
+          del av startpositionen.
         </p>
         <ul>
           <li>Dra en bit till brädet. Släpper du den där den inte får plats åker den tillbaka.</li>
           <li>Klicka/tryck på en bit för att rotera den.</li>
           <li>Högerklicka eller använd <strong>⇋ Spegla</strong> för att spegla den.</li>
-          <li>Tangentbord: <strong>R</strong> roterar och <strong>F</strong> speglar vald bit, även medan du drar.</li>
-          <li><strong>💡 Tips</strong> lägger ut nästa bit åt dig, eller plockar bort en bit som ligger fel.</li>
+          <li>
+            Tangentbord: <strong>R</strong> roterar och <strong>F</strong> speglar vald bit, även
+            medan du drar.
+          </li>
+          <li>
+            <strong>💡 Tips</strong> lägger ut nästa bit åt dig, eller plockar bort en bit som
+            ligger fel.
+          </li>
         </ul>
         <h4>Seed och svårighet</h4>
         <p>
           Seeden bestämmer hur det lösta brädet ser ut. Svårigheten bestämmer hur många bitar du
-          själv ska lägga ut – samma seed ger alltså samma lösning på alla nivåer. Med
+          själv ska lägga ut. Samma seed ger alltså samma lösning på alla nivåer. Med
           <strong>Unik lösning</strong> väljs startbitarna så att det bara finns en lösning. Dela
           länken så får andra samma pussel.
         </p>
@@ -292,7 +298,8 @@ const loosePieceCount = computed(() => PIECES.length - (generated.value?.puzzle.
 const uniqueText = computed(() => {
   if (!generated.value) return ''
   if (difficulty.value === 'free' || !unique.value) return 'kan ha flera lösningar'
-  if (!generated.value.reachedTarget) return 'unik lösning (färre lösa bitar än nivån, hittade ingen svårare)'
+  if (!generated.value.reachedTarget)
+    return 'unik lösning (färre lösa bitar än nivån, hittade ingen svårare)'
   return 'unik lösning'
 })
 
@@ -545,7 +552,9 @@ function takeBackWrongPiece() {
     (p) =>
       !p.locked &&
       p.position &&
-      !pieceCells(p).every(([r, c]) => solution[r + p.position!.row]![c + p.position!.col] === p.id),
+      !pieceCells(p).every(
+        ([r, c]) => solution[r + p.position!.row]![c + p.position!.col] === p.id,
+      ),
   )
   if (!wrong) {
     showMessage('Det finns ingen lösning härifrån.')
